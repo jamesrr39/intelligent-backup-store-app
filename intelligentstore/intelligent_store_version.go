@@ -1,6 +1,8 @@
 package intelligentstore
 
 import (
+	"bufio"
+	"bytes"
 	"crypto/sha512"
 	"encoding/hex"
 	"encoding/json"
@@ -15,7 +17,7 @@ import (
 )
 
 type IntelligentStoreVersion struct {
-	*IntelligentStore
+	*IntelligentStoreBucket
 	versionTimestamp string
 	filesInVersion   []*FileInVersion
 }
@@ -37,13 +39,15 @@ func (r *IntelligentStoreVersion) BackupFile(fileName string, sourceFile io.Read
 	hasher.Write(sourceAsBytes)
 	hash := hex.EncodeToString(hasher.Sum(nil))
 
-	filePath := filepath.Join(r.FullPathToBase, ".backup_data", "objects", strconv.Itoa(fileSize), hash)
+	filePath := filepath.Join(r.StoreBasePath, ".backup_data", "objects", strconv.Itoa(fileSize), hash)
 
 	_, err = os.Stat(filePath)
 	if nil != err {
 		if !os.IsNotExist(err) {
+			// permissions issue or something.
 			return err
 		}
+		// file doesn't exist in store already. Write it to store.
 
 		err := os.MkdirAll(filepath.Dir(filePath), 0700)
 		if nil != err {
@@ -54,21 +58,35 @@ func (r *IntelligentStoreVersion) BackupFile(fileName string, sourceFile io.Read
 		if nil != err {
 			return err
 		}
+	} else {
+		// file already exists. Do a byte by byte comparision to make sure there isn't a collision
+		existingFile, err := os.Open(filePath)
+		if nil != err {
+			return fmt.Errorf("couldn't open existing file in store at '%s'. Error: %s", filePath, err)
+		}
+		defer existingFile.Close()
+
+		posInNewFile := 0
+		existingFileBuf := bufio.NewScanner(existingFile)
+		for existingFileBuf.Scan() {
+			existingFilePassBytes := existingFileBuf.Bytes()
+			lenPassBytes := len(existingFilePassBytes)
+			newFilePassBytes := sourceAsBytes[posInNewFile : posInNewFile+lenPassBytes]
+			if !bytes.Equal(existingFilePassBytes, newFilePassBytes) {
+				return fmt.Errorf("hash collision detected! new file '%s' and existing file '%s' have the same length and hash but do not have the same bytes", fileName, filePath)
+			}
+
+			posInNewFile += lenPassBytes
+		}
 	}
 
-	r.filesInVersion = append(r.filesInVersion, NewFileInVersion(fileSize, hash, filePath))
+	r.filesInVersion = append(r.filesInVersion, NewFileInVersion(fileSize, hash, fileName))
 
 	return nil
 }
 
 func (r *IntelligentStoreVersion) Commit() error {
-
-	err := os.MkdirAll(filepath.Join(r.IntelligentStore.FullPathToBase, ".backup_data", "versions", r.versionTimestamp), 0700)
-	if nil != err {
-		return err
-	}
-
-	filePath := filepath.Join(r.FullPathToBase, ".backup_data", "versions", r.versionTimestamp)
+	filePath := filepath.Join(r.StoreBasePath, ".backup_data", "buckets", r.IntelligentStoreBucket.BucketName, "versions", r.versionTimestamp)
 
 	versionContentsFile, err := os.Create(filePath)
 	if nil != err {
@@ -85,5 +103,5 @@ func (r *IntelligentStoreVersion) Commit() error {
 }
 
 func (r *IntelligentStoreVersion) String() string {
-	return "versionedLocalRepository:" + r.FullPathToBase
+	return "versionedLocalRepository:" + r.StoreBasePath
 }

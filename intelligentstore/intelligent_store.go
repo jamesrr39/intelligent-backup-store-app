@@ -5,7 +5,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/jamesrr39/goutil/userextra"
 )
@@ -13,14 +12,16 @@ import (
 /*
 - {root}
   - .backup_data
-	- versions
-	  - {timestamp}
+	- buckets
+	  - {bucket name}
+		- versions
+		  - {timestamp}
   	- objects
 	  - {file_length}
 		- {file_sha512}
 */
 type IntelligentStore struct {
-	FullPathToBase string
+	StoreBasePath string
 }
 
 func NewIntelligentStoreConnToExisting(pathToBase string) (*IntelligentStore, error) {
@@ -56,7 +57,7 @@ func CreateIntelligentStoreAndNewConn(pathToBase string) (*IntelligentStore, err
 		return nil, fmt.Errorf("'%s' is not an empty folder. Creating a new store requires an empty folder. Please create a new folder and create the store in there", fullPath)
 	}
 
-	versionsFolderPath := filepath.Join(fullPath, ".backup_data", "versions")
+	versionsFolderPath := filepath.Join(fullPath, ".backup_data", "buckets")
 	err = os.MkdirAll(versionsFolderPath, 0700)
 	if nil != err {
 		return nil, fmt.Errorf("couldn't create data folder for backup versions at '%s'. Error: '%s'", versionsFolderPath, err)
@@ -71,10 +72,61 @@ func CreateIntelligentStoreAndNewConn(pathToBase string) (*IntelligentStore, err
 	return &IntelligentStore{fullPath}, nil
 }
 
-func (r *IntelligentStore) Begin() *IntelligentStoreVersion {
-	versionTimestamp := time.Now().Format("2006-01-02_15-04-05")
+func (s *IntelligentStore) GetBucket(bucketName string) (*IntelligentStoreBucket, error) {
+	bucketPath := filepath.Join(s.StoreBasePath, ".backup_data", "buckets", bucketName)
+	_, err := os.Stat(bucketPath)
+	if nil != err {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("bucket '%s' does not exist", bucketName)
+		}
+		return nil, err
+	}
 
-	return &IntelligentStoreVersion{r, versionTimestamp, nil}
+	return &IntelligentStoreBucket{s, bucketName}, nil
+}
+
+func (s *IntelligentStore) CreateBucket(bucketName string) (*IntelligentStoreBucket, error) {
+	err := isValidBucketName(bucketName)
+	if nil != err {
+		return nil, err
+	}
+
+	bucketPath := filepath.Join(s.StoreBasePath, ".backup_data", "buckets", bucketName)
+	err = os.Mkdir(bucketPath, 0700)
+	if nil != err {
+		return nil, err
+	}
+
+	err = os.Mkdir(filepath.Join(bucketPath, "versions"), 0700)
+	if nil != err {
+		return nil, err
+	}
+
+	return &IntelligentStoreBucket{s, bucketName}, nil
+}
+
+func (s *IntelligentStore) GetAllBuckets() ([]*IntelligentStoreBucket, error) {
+	bucketsDirPath := filepath.Join(s.StoreBasePath, ".backup_data", "buckets")
+
+	bucketsFileInfo, err := ioutil.ReadDir(bucketsDirPath)
+	if nil != err {
+		return nil, err
+	}
+
+	var buckets []*IntelligentStoreBucket
+
+	for _, bucketFileInfo := range bucketsFileInfo {
+		if !bucketFileInfo.IsDir() {
+			return nil, fmt.Errorf("corrupted buckets folder: expected only directories in  %s, but %s is not a directory",
+				bucketsDirPath,
+				filepath.Join(bucketsDirPath, bucketFileInfo.Name()))
+		}
+
+		buckets = append(buckets, &IntelligentStoreBucket{s, bucketFileInfo.Name()})
+	}
+
+	return buckets, nil
+
 }
 
 func expandPath(pathToBase string) (string, error) {
