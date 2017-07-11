@@ -109,7 +109,7 @@ func main() {
 			return fmt.Errorf("backup finished, but there were errors")
 		}
 
-		log.Printf("backed up %d files in %d seconds\n", fileCount, time.Now().Sub(startTime))
+		log.Printf("backed up %d files in %f seconds\n", fileCount, time.Now().Sub(startTime).Seconds())
 
 		return nil
 	})
@@ -146,6 +146,33 @@ func main() {
 		}
 
 		return nil
+	})
+
+	listBucketRevisionsCommand := kingpin.Command("list-revisions", "produce a listing of all the revisions in a bucket")
+	listBucketRevisionsBucketName := listBucketRevisionsCommand.Arg("bucket name", "name of the bucket to back up into").Required().String()
+	listBucketRevisionsStoreLocation := listBucketRevisionsCommand.Arg("store location", "location of the store").Default(".").String()
+	listBucketRevisionsCommand.Action(func(ctx *kingpin.ParseContext) error {
+		store, err := intelligentstore.NewIntelligentStoreConnToExisting(*listBucketRevisionsStoreLocation)
+		if nil != err {
+			return err
+		}
+
+		bucket, err := store.GetBucket(*listBucketRevisionsBucketName)
+		if nil != err {
+			return err
+		}
+
+		revisions, err := bucket.GetRevisions()
+		if nil != err {
+			return err
+		}
+
+		for _, revision := range revisions {
+			fmt.Println(revision.Format(time.ANSIC))
+		}
+
+		return nil
+
 	})
 
 	kingpin.Parse()

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"time"
 )
@@ -64,4 +65,33 @@ func (b *IntelligentStoreBucket) GetLatestVersionTime() (*time.Time, error) {
 
 	return &highestAsTime, nil
 
+}
+
+func (b *IntelligentStoreBucket) GetRevisions() ([]time.Time, error) {
+	versionsFileInfos, err := ioutil.ReadDir(filepath.Join(b.bucketPath(), "versions"))
+	if nil != err {
+		return nil, err
+	}
+
+	if 0 == len(versionsFileInfos) {
+		return nil, ErrNoRevisionsForBucket
+	}
+
+	var timestamps []time.Time
+
+	for _, fileInfo := range versionsFileInfos {
+		ts, err := strconv.ParseInt(fileInfo.Name(), 10, 64)
+		if nil != err {
+			return nil, fmt.Errorf("couldn't understand revision '%s' of bucket '%s'. Error: '%s'", fileInfo.Name(), b.BucketName, err)
+		}
+
+		tsAsTime := time.Unix(ts, 0)
+		timestamps = append(timestamps, tsAsTime)
+	}
+
+	sort.Slice(timestamps, func(i, j int) bool {
+		return timestamps[i].Sub(timestamps[j]) > 0
+	})
+
+	return timestamps, nil
 }

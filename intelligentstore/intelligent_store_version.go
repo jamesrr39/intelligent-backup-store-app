@@ -19,7 +19,7 @@ import (
 type IntelligentStoreVersion struct {
 	*IntelligentStoreBucket
 	versionTimestamp string
-	filesInVersion   []*FileInVersion
+	filesInVersion   []*FileInVersion // TODO awkward relationship
 }
 
 // TODO: test for >4GB file
@@ -66,17 +66,12 @@ func (r *IntelligentStoreVersion) BackupFile(fileName string, sourceFile io.Read
 		}
 		defer existingFile.Close()
 
-		posInNewFile := 0
-		existingFileBuf := bufio.NewScanner(existingFile)
-		for existingFileBuf.Scan() {
-			existingFilePassBytes := existingFileBuf.Bytes()
-			lenPassBytes := len(existingFilePassBytes)
-			newFilePassBytes := sourceAsBytes[posInNewFile : posInNewFile+lenPassBytes]
-			if !bytes.Equal(existingFilePassBytes, newFilePassBytes) {
-				return fmt.Errorf("hash collision detected! new file '%s' and existing file '%s' have the same length and hash but do not have the same bytes", fileName, filePath)
-			}
-
-			posInNewFile += lenPassBytes
+		areTheSameBytes, err := areFilesTheSameBytes(sourceAsBytes, existingFile)
+		if nil != err {
+			return err
+		}
+		if !areTheSameBytes {
+			return fmt.Errorf("hash collision detected! new file '%s' and existing file '%s' have the same length and hash but do not have the same bytes", fileName, filePath)
 		}
 	}
 
@@ -102,6 +97,45 @@ func (r *IntelligentStoreVersion) Commit() error {
 	return nil
 }
 
+func (r *IntelligentStoreVersion) GetFilesInRevision() ([]*FileInVersion, error) {
+	filePath := filepath.Join(r.bucketPath(), "versions", r.versionTimestamp)
+	revisionDataFile, err := os.Open(filePath)
+	if nil != err {
+		return nil, fmt.Errorf("couldn't open revision data file at '%s'. Error: '%s'", filePath, err)
+	}
+	defer revisionDataFile.Close()
+
+	var filesInVersion []*FileInVersion
+	err = json.NewDecoder(revisionDataFile).Decode(&filesInVersion)
+	if nil != err {
+		return nil, err
+	}
+
+	return filesInVersion, nil
+}
+
 func (r *IntelligentStoreVersion) String() string {
 	return "versionedLocalRepository:" + r.StoreBasePath
+}
+
+func (r *IntelligentStoreVersion) getPathToRevisionFile() string {
+	return filepath.Join(r.bucketPath())
+}
+
+func areFilesTheSameBytes(sourceAsBytes []byte, existingFile io.Reader) (bool, error) {
+
+	posInNewFile := 0
+	existingFileBuf := bufio.NewScanner(existingFile)
+	for existingFileBuf.Scan() {
+		existingFilePassBytes := existingFileBuf.Bytes()
+		lenPassBytes := len(existingFilePassBytes)
+		newFilePassBytes := sourceAsBytes[posInNewFile : posInNewFile+lenPassBytes]
+		if !bytes.Equal(existingFilePassBytes, newFilePassBytes) {
+			return false, nil
+		}
+
+		posInNewFile += lenPassBytes
+	}
+
+	return true, nil
 }
