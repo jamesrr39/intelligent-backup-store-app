@@ -1,7 +1,6 @@
 package intelligentstore
 
 import (
-	"bufio"
 	"bytes"
 	"crypto/sha512"
 	"encoding/hex"
@@ -9,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -41,6 +41,8 @@ func (r *IntelligentStoreVersion) BackupFile(fileName string, sourceFile io.Read
 
 	filePath := filepath.Join(r.StoreBasePath, ".backup_data", "objects", strconv.Itoa(fileSize), hash)
 
+	log.Printf("backing up %s\n", fileName)
+
 	_, err = os.Stat(filePath)
 	if nil != err {
 		if !os.IsNotExist(err) {
@@ -54,6 +56,7 @@ func (r *IntelligentStoreVersion) BackupFile(fileName string, sourceFile io.Read
 			return err
 		}
 
+		log.Printf("writing %s to %s\n", fileName, filePath)
 		err = ioutil.WriteFile(filePath, sourceAsBytes, 0700)
 		if nil != err {
 			return err
@@ -66,11 +69,9 @@ func (r *IntelligentStoreVersion) BackupFile(fileName string, sourceFile io.Read
 		}
 		defer existingFile.Close()
 
-		areTheSameBytes, err := areFilesTheSameBytes(sourceAsBytes, existingFile)
-		if nil != err {
-			return err
-		}
+		areTheSameBytes := areFilesTheSameBytes(sourceAsBytes, existingFile)
 		if !areTheSameBytes {
+			log.Printf("DUMP: %v\nsourceAsBytes len: %d\n", r.filesInVersion, len(sourceAsBytes))
 			return fmt.Errorf("hash collision detected! new file '%s' and existing file '%s' have the same length and hash but do not have the same bytes", fileName, filePath)
 		}
 	}
@@ -122,20 +123,12 @@ func (r *IntelligentStoreVersion) getPathToRevisionFile() string {
 	return filepath.Join(r.bucketPath())
 }
 
-func areFilesTheSameBytes(sourceAsBytes []byte, existingFile io.Reader) (bool, error) {
+// TODO more efficient implementation
+func areFilesTheSameBytes(sourceAsBytes []byte, existingFile io.Reader) bool {
 
-	posInNewFile := 0
-	existingFileBuf := bufio.NewScanner(existingFile)
-	for existingFileBuf.Scan() {
-		existingFilePassBytes := existingFileBuf.Bytes()
-		lenPassBytes := len(existingFilePassBytes)
-		newFilePassBytes := sourceAsBytes[posInNewFile : posInNewFile+lenPassBytes]
-		if !bytes.Equal(existingFilePassBytes, newFilePassBytes) {
-			return false, nil
-		}
-
-		posInNewFile += lenPassBytes
+	existingBytes, err := ioutil.ReadAll(existingFile)
+	if nil != err {
+		panic(err)
 	}
-
-	return true, nil
+	return bytes.Equal(sourceAsBytes, existingBytes)
 }
