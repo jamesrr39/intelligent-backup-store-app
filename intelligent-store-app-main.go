@@ -3,12 +3,15 @@ package main
 import (
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore"
+	"github.com/jamesrr39/intelligent-backup-store-app/storewebserver"
 	kingpin "gopkg.in/alecthomas/kingpin.v2"
 )
 
@@ -173,6 +176,32 @@ func main() {
 
 		return nil
 
+	})
+
+	startWebappCommand := kingpin.Command("start-webapp", "start a webapplication")
+	startWebappPort := startWebappCommand.Flag("port", "port to run the webapp on").Default("8080").Int()
+	startWebappStoreLocation := startWebappCommand.Arg("store location", "location of the store").Default(".").String()
+	startWebappCommand.Action(func(ctx *kingpin.ParseContext) error {
+		store, err := intelligentstore.NewIntelligentStoreConnToExisting(*startWebappStoreLocation)
+		if nil != err {
+			return err
+		}
+
+		server := &http.Server{
+			ReadTimeout:       5 * time.Second,
+			WriteTimeout:      10 * time.Second,
+			ReadHeaderTimeout: 5 * time.Second,
+			Addr:              ":" + strconv.Itoa(*startWebappPort),
+			Handler:           storewebserver.NewStoreWebServer(store),
+		}
+
+		log.Printf("starting server on %s\n", server.Addr)
+		err = server.ListenAndServe()
+		if nil != err {
+			return err
+		}
+
+		return nil
 	})
 
 	kingpin.Parse()

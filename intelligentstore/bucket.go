@@ -11,8 +11,8 @@ import (
 )
 
 type IntelligentStoreBucket struct {
-	*IntelligentStore
-	BucketName string
+	*IntelligentStore `json:"-"`
+	BucketName        string `json:"name"`
 }
 
 func (b *IntelligentStoreBucket) Begin() *IntelligentStoreVersion {
