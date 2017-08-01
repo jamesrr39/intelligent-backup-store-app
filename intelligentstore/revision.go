@@ -1,0 +1,56 @@
+package intelligentstore
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
+	"io/ioutil"
+	"os"
+	"path/filepath"
+)
+
+type IntelligentStoreRevision struct {
+	*Bucket          `json:"-"`
+	VersionTimestamp string           `json:"versionTimestamp"`
+	FilesInVersion   []*FileInVersion `json:"files"`
+}
+
+func (r *IntelligentStoreRevision) GetFilesInRevision() ([]*FileInVersion, error) {
+	filePath := filepath.Join(r.bucketPath(), "versions", r.VersionTimestamp)
+	revisionDataFile, err := os.Open(filePath)
+	if nil != err {
+		return nil, fmt.Errorf("couldn't open revision data file at '%s'. Error: '%s'", filePath, err)
+	}
+	defer revisionDataFile.Close()
+
+	var filesInVersion []*FileInVersion
+	err = json.NewDecoder(revisionDataFile).Decode(&filesInVersion)
+	if nil != err {
+		return nil, err
+	}
+
+	return filesInVersion, nil
+}
+
+func (r *IntelligentStoreRevision) String() string {
+	var s string
+	for _, file := range r.FilesInVersion {
+		s += file.FilePath + " | "
+	}
+	return s
+}
+
+func (r *IntelligentStoreRevision) getPathToRevisionFile() string {
+	return filepath.Join(r.bucketPath())
+}
+
+// TODO more efficient implementation
+func areFilesTheSameBytes(sourceAsBytes []byte, existingFile io.Reader) bool {
+
+	existingBytes, err := ioutil.ReadAll(existingFile)
+	if nil != err {
+		panic(err)
+	}
+	return bytes.Equal(sourceAsBytes, existingBytes)
+}

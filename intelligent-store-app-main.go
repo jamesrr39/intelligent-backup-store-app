@@ -165,7 +165,7 @@ func main() {
 			return err
 		}
 
-		revisions, err := bucket.GetRevisions()
+		revisions, err := bucket.GetRevisionsTimestamps()
 		if nil != err {
 			return err
 		}

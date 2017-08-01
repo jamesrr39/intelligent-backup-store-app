@@ -1,28 +1,34 @@
 package intelligentstore
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"time"
+
+	"github.com/jamesrr39/goutil/dirtraversal"
 )
 
-type IntelligentStoreBucket struct {
+// Bucket represents an organisational area of the Store.
+type Bucket struct {
 	*IntelligentStore `json:"-"`
 	BucketName        string `json:"name"`
 }
 
-func (b *IntelligentStoreBucket) Begin() *IntelligentStoreVersion {
-	versionTimestamp := strconv.FormatInt(time.Now().Unix(), 10)
+// Begin creates a new Transaction to create a new revision of files in the Bucket.
+func (bucket *Bucket) Begin() *Transaction {
+	versionTimestamp := strconv.FormatInt(bucket.nowProvider().Unix(), 10)
 
-	return &IntelligentStoreVersion{b, versionTimestamp, nil}
+	return &Transaction{&IntelligentStoreRevision{bucket, versionTimestamp, nil}}
 }
 
-func (b *IntelligentStoreBucket) bucketPath() string {
-	return filepath.Join(b.StoreBasePath, ".backup_data", "buckets", b.BucketName)
+func (bucket *Bucket) bucketPath() string {
+	return filepath.Join(bucket.StoreBasePath, ".backup_data", "buckets", bucket.BucketName)
 }
 
 func isValidBucketName(name string) error {
@@ -34,13 +40,17 @@ func isValidBucketName(name string) error {
 		return errors.New("bucket name must be less than 100 chars")
 	}
 
+	if dirtraversal.IsTryingToTraverseUp(name) {
+		return ErrIllegalDirectoryTraversal
+	}
+
 	return nil
 }
 
 var ErrNoRevisionsForBucket = errors.New("no revisions for this bucket yet")
 
-func (b *IntelligentStoreBucket) GetLatestVersionTime() (*time.Time, error) {
-	versionsFileInfos, err := ioutil.ReadDir(filepath.Join(b.bucketPath(), "versions"))
+func (bucket *Bucket) GetLatestVersionTime() (*time.Time, error) {
+	versionsFileInfos, err := ioutil.ReadDir(filepath.Join(bucket.bucketPath(), "versions"))
 	if nil != err {
 		return nil, err
 	}
@@ -53,7 +63,7 @@ func (b *IntelligentStoreBucket) GetLatestVersionTime() (*time.Time, error) {
 	for _, fileInfo := range versionsFileInfos {
 		ts, err := strconv.ParseInt(fileInfo.Name(), 10, 64)
 		if nil != err {
-			return nil, fmt.Errorf("couldn't understand revision '%s' of bucket '%s'. Error: '%s'", fileInfo.Name(), b.BucketName, err)
+			return nil, fmt.Errorf("couldn't understand revision '%s' of bucket '%s'. Error: '%s'", fileInfo.Name(), bucket.BucketName, err)
 		}
 
 		if ts > highestTs {
@@ -67,8 +77,8 @@ func (b *IntelligentStoreBucket) GetLatestVersionTime() (*time.Time, error) {
 
 }
 
-func (b *IntelligentStoreBucket) GetRevisions() ([]time.Time, error) {
-	versionsFileInfos, err := ioutil.ReadDir(filepath.Join(b.bucketPath(), "versions"))
+func (bucket *Bucket) GetRevisionsTimestamps() ([]time.Time, error) {
+	versionsFileInfos, err := ioutil.ReadDir(filepath.Join(bucket.bucketPath(), "versions"))
 	if nil != err {
 		return nil, err
 	}
@@ -82,7 +92,7 @@ func (b *IntelligentStoreBucket) GetRevisions() ([]time.Time, error) {
 	for _, fileInfo := range versionsFileInfos {
 		ts, err := strconv.ParseInt(fileInfo.Name(), 10, 64)
 		if nil != err {
-			return nil, fmt.Errorf("couldn't understand revision '%s' of bucket '%s'. Error: '%s'", fileInfo.Name(), b.BucketName, err)
+			return nil, fmt.Errorf("couldn't understand revision '%s' of bucket '%s'. Error: '%s'", fileInfo.Name(), bucket.BucketName, err)
 		}
 
 		tsAsTime := time.Unix(ts, 0)
@@ -94,4 +104,34 @@ func (b *IntelligentStoreBucket) GetRevisions() ([]time.Time, error) {
 	})
 
 	return timestamps, nil
+}
+
+func (bucket *Bucket) GetRevisions() ([]*IntelligentStoreRevision, error) {
+	versionsFolderPath := filepath.Join(bucket.bucketPath(), "versions")
+
+	versionsFileInfos, err := ioutil.ReadDir(versionsFolderPath)
+	if nil != err {
+		return nil, err
+	}
+
+	var versions []*IntelligentStoreRevision
+	for _, versionFileInfo := range versionsFileInfos {
+		// TODO concurrency
+		revisionFilePath := filepath.Join(versionsFolderPath, versionFileInfo.Name())
+		file, err := os.Open(revisionFilePath)
+		if nil != err {
+			return nil, fmt.Errorf("couldn't open '%s'. Error: '%s'", revisionFilePath, err)
+		}
+		defer file.Close()
+
+		var files []*FileInVersion
+		err = json.NewDecoder(file).Decode(&files)
+		if nil != err {
+			return nil, fmt.Errorf("couldn't decode '%s'. Error: '%s'", revisionFilePath, err)
+		}
+
+		versions = append(versions, &IntelligentStoreRevision{bucket, versionFileInfo.Name(), files})
+	}
+
+	return versions, nil
 }

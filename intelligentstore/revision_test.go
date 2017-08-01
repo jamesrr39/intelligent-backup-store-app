@@ -13,7 +13,7 @@ func Test_areFilesTheSame(t *testing.T) {
 	fileB := bytes.NewBuffer([]byte("abc\ndef"))
 
 	result := areFilesTheSameBytes(bytesA, fileB)
-	assert.True(t, result)
+	assert.False(t, result)
 
 	fileC := bytes.NewBuffer([]byte("abd"))
 

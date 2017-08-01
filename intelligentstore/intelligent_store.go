@@ -9,19 +9,10 @@ import (
 	"github.com/jamesrr39/goutil/userextra"
 )
 
-/*
-- {root}
-  - .backup_data
-	- buckets
-	  - {bucket name}
-		- versions
-		  - {timestamp}
-  	- objects
-	  - {file_length}
-		- {file_sha512}
-*/
+// IntelligentStore represents the object to interact with the underlying storage
 type IntelligentStore struct {
 	StoreBasePath string
+	nowProvider
 }
 
 func NewIntelligentStoreConnToExisting(pathToBase string) (*IntelligentStore, error) {
@@ -42,7 +33,7 @@ func NewIntelligentStoreConnToExisting(pathToBase string) (*IntelligentStore, er
 		return nil, fmt.Errorf("store data directory is not a directory (either wrong path, or corrupted)")
 	}
 
-	return &IntelligentStore{fullPath}, nil
+	return &IntelligentStore{fullPath, prodNowProvider}, nil
 }
 
 func CreateIntelligentStoreAndNewConn(pathToBase string) (*IntelligentStore, error) {
@@ -69,10 +60,10 @@ func CreateIntelligentStoreAndNewConn(pathToBase string) (*IntelligentStore, err
 		return nil, fmt.Errorf("couldn't create data folder for backup objects at '%s'. Error: '%s'", objectsFolderPath, err)
 	}
 
-	return &IntelligentStore{fullPath}, nil
+	return &IntelligentStore{fullPath, prodNowProvider}, nil
 }
 
-func (s *IntelligentStore) GetBucket(bucketName string) (*IntelligentStoreBucket, error) {
+func (s *IntelligentStore) GetBucket(bucketName string) (*Bucket, error) {
 	bucketPath := filepath.Join(s.StoreBasePath, ".backup_data", "buckets", bucketName)
 	_, err := os.Stat(bucketPath)
 	if nil != err {
@@ -82,10 +73,10 @@ func (s *IntelligentStore) GetBucket(bucketName string) (*IntelligentStoreBucket
 		return nil, err
 	}
 
-	return &IntelligentStoreBucket{s, bucketName}, nil
+	return &Bucket{s, bucketName}, nil
 }
 
-func (s *IntelligentStore) CreateBucket(bucketName string) (*IntelligentStoreBucket, error) {
+func (s *IntelligentStore) CreateBucket(bucketName string) (*Bucket, error) {
 	err := isValidBucketName(bucketName)
 	if nil != err {
 		return nil, err
@@ -102,10 +93,10 @@ func (s *IntelligentStore) CreateBucket(bucketName string) (*IntelligentStoreBuc
 		return nil, err
 	}
 
-	return &IntelligentStoreBucket{s, bucketName}, nil
+	return &Bucket{s, bucketName}, nil
 }
 
-func (s *IntelligentStore) GetAllBuckets() ([]*IntelligentStoreBucket, error) {
+func (s *IntelligentStore) GetAllBuckets() ([]*Bucket, error) {
 	bucketsDirPath := filepath.Join(s.StoreBasePath, ".backup_data", "buckets")
 
 	bucketsFileInfo, err := ioutil.ReadDir(bucketsDirPath)
@@ -113,7 +104,7 @@ func (s *IntelligentStore) GetAllBuckets() ([]*IntelligentStoreBucket, error) {
 		return nil, err
 	}
 
-	var buckets []*IntelligentStoreBucket
+	var buckets []*Bucket
 
 	for _, bucketFileInfo := range bucketsFileInfo {
 		if !bucketFileInfo.IsDir() {
@@ -122,7 +113,7 @@ func (s *IntelligentStore) GetAllBuckets() ([]*IntelligentStoreBucket, error) {
 				filepath.Join(bucketsDirPath, bucketFileInfo.Name()))
 		}
 
-		buckets = append(buckets, &IntelligentStoreBucket{s, bucketFileInfo.Name()})
+		buckets = append(buckets, &Bucket{s, bucketFileInfo.Name()})
 	}
 
 	return buckets, nil

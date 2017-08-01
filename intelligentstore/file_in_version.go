@@ -1,9 +1,9 @@
 package intelligentstore
 
 type FileInVersion struct {
-	Size       int
-	fileSha512 string
-	FilePath   string
+	Size       int    `json:"size"`
+	FileSha512 string `json:"sha512"`
+	FilePath   string `json:"path"`
 }
 
 func NewFileInVersion(size int, fileSha512, filePath string) *FileInVersion {
