@@ -2,6 +2,7 @@ package storewebserver
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -22,6 +23,9 @@ func NewBucketService(store *intelligentstore.IntelligentStore) *BucketService {
 			return
 		}
 
+		log.Println("bucket listing")
+		w.Header().Set("Content-Type", "application/json")
+
 		err = json.NewEncoder(w).Encode(buckets)
 		if nil != err {
 			http.Error(w, err.Error(), 500)
@@ -38,13 +42,13 @@ func NewBucketService(store *intelligentstore.IntelligentStore) *BucketService {
 			return
 		}
 
-		revisionTimestamps, err := bucket.GetRevisions()
+		revisions, err := bucket.GetRevisions()
 		if nil != err {
 			http.Error(w, err.Error(), 500)
 			return
 		}
 
-		err = json.NewEncoder(w).Encode(revisionTimestamps)
+		err = json.NewEncoder(w).Encode(revisions)
 		if nil != err {
 			http.Error(w, err.Error(), 500)
 			return

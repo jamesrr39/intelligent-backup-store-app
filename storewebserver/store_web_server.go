@@ -16,7 +16,10 @@ func NewStoreWebServer(store *intelligentstore.IntelligentStore) *StoreWebServer
 	router := mux.NewRouter()
 
 	bucketsHandler := NewBucketService(store)
-	router.PathPrefix("/buckets/").Handler(http.StripPrefix("/buckets", bucketsHandler))
+	router.PathPrefix("/api/buckets/").Handler(http.StripPrefix("/api/buckets", bucketsHandler))
+	router.PathPrefix("/").Handler(http.StripPrefix("/", http.FileServer(http.Dir("storewebserver/static")))) // TODO dev mode & production packaging
+
+	//mainRouter.PathPrefix("/").Handler(http.StripPrefix("/", http.FileServer(http.Dir("static"))))
 
 	return &StoreWebServer{store, router}
 }
