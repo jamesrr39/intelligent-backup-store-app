@@ -1,6 +1,7 @@
 define([
-  "jquery"
-], function($){
+  "jquery",
+  "handlebars"
+], function($, Handlebars){
 
   var bucketListTemplate = Handlebars.compile([
     "<table class='table'>",

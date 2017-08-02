@@ -1,6 +1,7 @@
 requirejs.config({
   paths: {
-    jquery: "libs/jquery-3.2.1"
+    jquery: "libs/jquery-3.2.1",
+    handlebars: "libs/handlebars-4.0.10"
   }
 });
 
