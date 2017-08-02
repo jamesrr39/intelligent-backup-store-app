@@ -12,8 +12,7 @@ import (
 
 type IntelligentStoreRevision struct {
 	*Bucket          `json:"-"`
-	VersionTimestamp string  `json:"versionTimestamp"`
-	FilesInVersion   []*File `json:"files"`
+	VersionTimestamp string `json:"versionTimestamp"`
 }
 
 func (r *IntelligentStoreRevision) GetFilesInRevision() ([]*File, error) {
@@ -31,14 +30,6 @@ func (r *IntelligentStoreRevision) GetFilesInRevision() ([]*File, error) {
 	}
 
 	return filesInVersion, nil
-}
-
-func (r *IntelligentStoreRevision) String() string {
-	var s string
-	for _, file := range r.FilesInVersion {
-		s += file.FilePath + " | "
-	}
-	return s
 }
 
 func (r *IntelligentStoreRevision) getPathToRevisionFile() string {

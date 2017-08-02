@@ -31,7 +31,7 @@ type Bucket struct {
 func (bucket *Bucket) Begin() *Transaction {
 	versionTimestamp := strconv.FormatInt(bucket.nowProvider().Unix(), 10)
 
-	return &Transaction{&IntelligentStoreRevision{bucket, versionTimestamp, nil}}
+	return &Transaction{&IntelligentStoreRevision{bucket, versionTimestamp}, nil}
 }
 
 func (bucket *Bucket) bucketPath() string {
@@ -137,7 +137,7 @@ func (bucket *Bucket) GetRevisions() ([]*IntelligentStoreRevision, error) {
 			return nil, fmt.Errorf("couldn't decode '%s'. Error: '%s'", revisionFilePath, err)
 		}
 
-		versions = append(versions, &IntelligentStoreRevision{bucket, versionFileInfo.Name(), files})
+		versions = append(versions, &IntelligentStoreRevision{bucket, versionFileInfo.Name()})
 	}
 
 	return versions, nil

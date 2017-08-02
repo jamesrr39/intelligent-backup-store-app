@@ -16,6 +16,7 @@ import (
 
 type Transaction struct {
 	*IntelligentStoreRevision
+	FilesInVersion []*File
 }
 
 // TODO: test for >4GB file
@@ -70,7 +71,6 @@ func (transaction *Transaction) BackupFile(fileName string, sourceFile io.Reader
 
 		areTheSameBytes := areFilesTheSameBytes(sourceAsBytes, existingFile)
 		if !areTheSameBytes {
-			log.Printf("DUMP: %v\nsourceAsBytes len: %d\n", transaction.FilesInVersion, len(sourceAsBytes))
 			return fmt.Errorf("hash collision detected! new file '%s' and existing file '%s' have the same length and hash but do not have the same bytes", fileName, filePath)
 		}
 	}
