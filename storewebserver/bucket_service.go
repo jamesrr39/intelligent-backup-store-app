@@ -3,6 +3,7 @@ package storewebserver
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore"
@@ -25,6 +26,11 @@ func NewBucketService(store *intelligentstore.IntelligentStore) *BucketService {
 	return bucketService
 }
 
+type bucketSummary struct {
+	Name           string `json:"name"`
+	LastRevisionTs int64  `json:"lastRevisionTs"`
+}
+
 func (s *BucketService) handleGetAll(w http.ResponseWriter, r *http.Request) {
 	buckets, err := s.store.GetAllBuckets()
 	if nil != err {
@@ -34,7 +40,23 @@ func (s *BucketService) handleGetAll(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 
-	err = json.NewEncoder(w).Encode(buckets)
+	if 0 == len(buckets) {
+		w.Write([]byte("[]"))
+		return
+	}
+
+	var bucketsSummaries []*bucketSummary
+	var latestRevisionTime *time.Time
+	for _, bucket := range buckets {
+		latestRevisionTime, err = bucket.GetLatestVersionTime()
+		if nil != err {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		bucketsSummaries = append(bucketsSummaries, &bucketSummary{bucket.BucketName, latestRevisionTime.Unix()})
+	}
+
+	err = json.NewEncoder(w).Encode(bucketsSummaries)
 	if nil != err {
 		http.Error(w, err.Error(), 500)
 		return

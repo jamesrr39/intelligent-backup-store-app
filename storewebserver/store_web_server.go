@@ -7,11 +7,13 @@ import (
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore"
 )
 
+// StoreWebServer represents a handler handling requests for a store.
 type StoreWebServer struct {
 	store  *intelligentstore.IntelligentStore
 	router *mux.Router
 }
 
+// NewStoreWebServer creates a StoreWebServer and sets up the routing for the services it provides.
 func NewStoreWebServer(store *intelligentstore.IntelligentStore) *StoreWebServer {
 	router := mux.NewRouter()
 

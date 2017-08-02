@@ -11,7 +11,9 @@ define([
             "<td>",
               "{{name}}",
             "</td>",
-            "<td class='revisions-listing'></td>",
+            "<td>",
+            "{{lastRevisionDate}}",
+            "</td>",
           "</tr>",
         "{{/buckets}}",
       "</tbody>",
@@ -23,11 +25,14 @@ define([
   return function(){
 
     function renderBucketListing(buckets, $container) {
-      $container.html(bucketListTemplate({buckets: buckets}));
-      buckets.forEach((bucket, index) => {
-        var $element = $container.find(".revisions-listing").eq(index);
-        renderBucketRevisions(bucket, $element);
-      });
+      $container.html(bucketListTemplate({
+        buckets: buckets.map(function(bucket) {
+          return {
+            name: bucket.name,
+            lastRevisionDate: new Date(bucket.lastRevisionTs * 1000).toLocaleString()
+          }
+        })
+      }));
     }
 
     function renderBucketRevisions(bucket, $element) {
