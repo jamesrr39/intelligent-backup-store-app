@@ -1,11 +1,9 @@
 package intelligentstore
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -123,20 +121,6 @@ func (bucket *Bucket) GetRevisions() ([]*IntelligentStoreRevision, error) {
 
 	var versions []*IntelligentStoreRevision
 	for _, versionFileInfo := range versionsFileInfos {
-		// TODO concurrency
-		revisionFilePath := filepath.Join(versionsFolderPath, versionFileInfo.Name())
-		file, err := os.Open(revisionFilePath)
-		if nil != err {
-			return nil, fmt.Errorf("couldn't open '%s'. Error: '%s'", revisionFilePath, err)
-		}
-		defer file.Close()
-
-		var files []*File
-		err = json.NewDecoder(file).Decode(&files)
-		if nil != err {
-			return nil, fmt.Errorf("couldn't decode '%s'. Error: '%s'", revisionFilePath, err)
-		}
-
 		versions = append(versions, &IntelligentStoreRevision{bucket, versionFileInfo.Name()})
 	}
 
