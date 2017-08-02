@@ -9,7 +9,9 @@ define([
         "{{#buckets}}",
           "<tr>",
             "<td>",
+              "<a href='#/buckets/{{encodedName}}'>",
               "{{name}}",
+              "</a>",
             "</td>",
             "<td>",
             "{{lastRevisionDate}}",
@@ -28,22 +30,13 @@ define([
       $container.html(bucketListTemplate({
         buckets: buckets.map(function(bucket) {
           return {
+            encodedName: encodeURIComponent(bucket.name),
             name: bucket.name,
             lastRevisionDate: new Date(bucket.lastRevisionTs * 1000).toLocaleString()
           }
         })
       }));
     }
-
-    function renderBucketRevisions(bucket, $element) {
-      $.ajax("/api/buckets/" + bucket.name).then(function(revisions) {
-        $element.html(JSON.stringify(revisions));
-      }).fail(function(xhr) {
-        $element.html(errTemplate({
-          message: "Error fetching revisions data: " + xhr.responseText
-        }));
-      });
-    };
 
     return {
       render: function($container) {

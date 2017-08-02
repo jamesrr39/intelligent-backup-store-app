@@ -22,6 +22,7 @@ func NewBucketService(store *intelligentstore.IntelligentStore) *BucketService {
 
 	router.HandleFunc("/", bucketService.handleGetAll)
 	router.HandleFunc("/{bucketName}", bucketService.handleGet)
+	router.HandleFunc("/{bucketName}/{revisionTs}", bucketService.handleGetRevision)
 
 	return bucketService
 }
@@ -83,6 +84,21 @@ func (s *BucketService) handleGet(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), 500)
 		return
 	}
+}
+
+func (s *BucketService) handleGetRevision(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+
+	bucketName := vars["bucketName"]
+	revisionTs := vars["revisionTs"]
+
+	bucket, err := s.store.GetBucket(bucketName)
+	if nil != err {
+		http.Error(w, err.Error(), 500) //TODO error code 404
+		return
+	}
+
+	bucket.get
 }
 
 func (s *BucketService) ServeHTTP(w http.ResponseWriter, r *http.Request) {

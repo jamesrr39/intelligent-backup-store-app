@@ -7,22 +7,29 @@ requirejs.config({
 
 define([
   "jquery",
-  "./BucketListingView"
-], function($, BucketListingView){
+  "./BucketListingView",
+  "./BucketView"
+], function($, BucketListingView, BucketView){
 
   var bucketListingView = new BucketListingView();
+
   var $contentEl = $("#content");
 
 	window.onhashchange = function(){
-		var hash = window.location.hash;
+		var hashFragments = window.location.hash.substring(2).split("/"); // remove the '#/' at the start of the hash
 
-		if (hash.startsWith("#/buckets")) {
-			bucketListingView.render($contentEl);
-      return;
+    switch (hashFragments[0]) {
+      case "buckets":
+        if (hashFragments[1]) {
+          var bucketView = new BucketView(hashFragments[1]);
+          bucketView.render();
+          return
+        }
+        bucketListingView.render($contentEl);
+        return;
+      default:
+        bucketListingView.render($contentEl);
 		}
-
-    // default
-    bucketListingView.render($contentEl);
 	}
 
 	// render start screen depending on start hash location
