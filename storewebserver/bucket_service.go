@@ -2,60 +2,65 @@ package storewebserver
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 
 	"github.com/gorilla/mux"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore"
 )
 
+// BucketService handles HTTP requests to get bucket information.
 type BucketService struct {
 	store  *intelligentstore.IntelligentStore
 	router *mux.Router
 }
 
+// NewBucketService creates a new BucketService and a router for handling requests.
 func NewBucketService(store *intelligentstore.IntelligentStore) *BucketService {
 	router := mux.NewRouter()
-	router.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		buckets, err := store.GetAllBuckets()
-		if nil != err {
-			http.Error(w, err.Error(), 500)
-			return
-		}
+	bucketService := &BucketService{store, router}
 
-		log.Println("bucket listing")
-		w.Header().Set("Content-Type", "application/json")
+	router.HandleFunc("/", bucketService.handleGetAll)
+	router.HandleFunc("/{bucketName}", bucketService.handleGet)
 
-		err = json.NewEncoder(w).Encode(buckets)
-		if nil != err {
-			http.Error(w, err.Error(), 500)
-			return
-		}
-	})
+	return bucketService
+}
 
-	router.HandleFunc("/{bucketName}", func(w http.ResponseWriter, r *http.Request) {
-		bucketName := mux.Vars(r)["bucketName"]
+func (s *BucketService) handleGetAll(w http.ResponseWriter, r *http.Request) {
+	buckets, err := s.store.GetAllBuckets()
+	if nil != err {
+		http.Error(w, err.Error(), 500)
+		return
+	}
 
-		bucket, err := store.GetBucket(bucketName)
-		if nil != err {
-			http.Error(w, err.Error(), 500) //TODO error code 404
-			return
-		}
+	w.Header().Set("Content-Type", "application/json")
 
-		revisions, err := bucket.GetRevisions()
-		if nil != err {
-			http.Error(w, err.Error(), 500)
-			return
-		}
+	err = json.NewEncoder(w).Encode(buckets)
+	if nil != err {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+}
 
-		err = json.NewEncoder(w).Encode(revisions)
-		if nil != err {
-			http.Error(w, err.Error(), 500)
-			return
-		}
-	})
+func (s *BucketService) handleGet(w http.ResponseWriter, r *http.Request) {
+	bucketName := mux.Vars(r)["bucketName"]
 
-	return &BucketService{store, router}
+	bucket, err := s.store.GetBucket(bucketName)
+	if nil != err {
+		http.Error(w, err.Error(), 500) //TODO error code 404
+		return
+	}
+
+	revisionsTimestamps, err := bucket.GetRevisionsTimestamps()
+	if nil != err {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	err = json.NewEncoder(w).Encode(revisionsTimestamps)
+	if nil != err {
+		http.Error(w, err.Error(), 500)
+		return
+	}
 }
 
 func (s *BucketService) ServeHTTP(w http.ResponseWriter, r *http.Request) {

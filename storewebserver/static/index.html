@@ -7,38 +7,11 @@
 	</head>
 	<body>
 		Store webapp
-		
-		<div id="content">
-			
-		</div>
-		
-		
-		
-		<script>
-		
-		var bucketListTemplate = Handlebars.compile("<table class='table'>{{#buckets}}<tr><td>{{name}}</td></tr>{{/buckets}}<tbody></tbody></table>");
-		
-		var errTemplate = Handlebars.compile("<div class='alert alert-danger'>{{message}}</div>");
-		
-		function renderBucketListing(buckets) {	
-			document.getElementById("content").innerHTML = bucketListTemplate({buckets: buckets});
-		}
-			
-		$.ajax("/api/buckets/").then(function(buckets){
 
-			window.onhashchange = function(){
-				var hash = window.location.hash;
-				
-				if (hash.startsWith("#/buckets")) {
-					renderBucketListing(buckets);
-				}
-			}
-			
-			// render start screen depending on start hash location
-			window.onhashchange();
-		}).fail(function(xhr) {
-			document.getElementById("content").innerHTML = errTemplate({message: "Error fetching buckets data: " + xhr.responseText});
-		});
-		</script>
+		<div id="content">
+
+		</div>
+
+		<script data-main="main.js" src="libs/require-2.3.4.js"></script>
 	</body>
 </html>
