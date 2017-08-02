@@ -1,7 +1,7 @@
 package intelligentstore
 
 import (
-	"crypto/sha512"
+	"crypto/sha1"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -10,7 +10,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"strconv"
 
 	"github.com/jamesrr39/goutil/dirtraversal"
 )
@@ -30,15 +29,18 @@ func (transaction *Transaction) BackupFile(fileName string, sourceFile io.Reader
 		return err
 	}
 
-	fileSize := len(sourceAsBytes)
-
-	hasher := sha512.New()
+	hasher := sha1.New()
 	hasher.Write(sourceAsBytes)
 	hash := hex.EncodeToString(hasher.Sum(nil))
 
-	filePath := filepath.Join(transaction.StoreBasePath, ".backup_data", "objects", strconv.Itoa(fileSize), hash)
+	filePath := filepath.Join(
+		transaction.StoreBasePath,
+		".backup_data",
+		"objects",
+		hash[0:2],
+		hash[2:])
 
-	log.Printf("backing up %s\n", fileName)
+	log.Printf("backing up %s into %s\n", fileName, filePath)
 
 	_, err = os.Stat(filePath)
 	if nil != err {
@@ -73,7 +75,7 @@ func (transaction *Transaction) BackupFile(fileName string, sourceFile io.Reader
 		}
 	}
 
-	transaction.FilesInVersion = append(transaction.FilesInVersion, NewFileInVersion(fileSize, hash, fileName))
+	transaction.FilesInVersion = append(transaction.FilesInVersion, NewFileInVersion(hash, fileName))
 
 	return nil
 }

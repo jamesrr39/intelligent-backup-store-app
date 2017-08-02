@@ -12,11 +12,11 @@ import (
 
 type IntelligentStoreRevision struct {
 	*Bucket          `json:"-"`
-	VersionTimestamp string           `json:"versionTimestamp"`
-	FilesInVersion   []*FileInVersion `json:"files"`
+	VersionTimestamp string  `json:"versionTimestamp"`
+	FilesInVersion   []*File `json:"files"`
 }
 
-func (r *IntelligentStoreRevision) GetFilesInRevision() ([]*FileInVersion, error) {
+func (r *IntelligentStoreRevision) GetFilesInRevision() ([]*File, error) {
 	filePath := filepath.Join(r.bucketPath(), "versions", r.VersionTimestamp)
 	revisionDataFile, err := os.Open(filePath)
 	if nil != err {
@@ -24,7 +24,7 @@ func (r *IntelligentStoreRevision) GetFilesInRevision() ([]*FileInVersion, error
 	}
 	defer revisionDataFile.Close()
 
-	var filesInVersion []*FileInVersion
+	var filesInVersion []*File
 	err = json.NewDecoder(revisionDataFile).Decode(&filesInVersion)
 	if nil != err {
 		return nil, err

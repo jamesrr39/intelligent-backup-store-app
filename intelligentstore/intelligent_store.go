@@ -76,6 +76,7 @@ func (s *IntelligentStore) GetBucket(bucketName string) (*Bucket, error) {
 	return &Bucket{s, bucketName}, nil
 }
 
+// TODO: filesystem-safe names
 func (s *IntelligentStore) CreateBucket(bucketName string) (*Bucket, error) {
 	err := isValidBucketName(bucketName)
 	if nil != err {

@@ -1,11 +1,12 @@
 package intelligentstore
 
-type FileInVersion struct {
-	Size       int    `json:"size"`
-	FileSha512 string `json:"sha512"`
-	FilePath   string `json:"path"`
+// File represents a file and it's storage location metadata.
+type File struct {
+	FileSha1 string `json:"sha1"`
+	FilePath string `json:"path"`
 }
 
-func NewFileInVersion(size int, fileSha512, filePath string) *FileInVersion {
-	return &FileInVersion{size, fileSha512, filePath}
+// NewFileInVersion creates an instance of File.
+func NewFileInVersion(fileSha1, filePath string) *File {
+	return &File{fileSha1, filePath}
 }

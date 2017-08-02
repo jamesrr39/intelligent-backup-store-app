@@ -14,6 +14,13 @@ import (
 	"github.com/jamesrr39/goutil/dirtraversal"
 )
 
+var (
+	// ErrBucketRequiresAName is an error signifying a zero-length string has been passed as a bucket name.
+	ErrBucketRequiresAName = errors.New("bucket requires a name")
+	// ErrBucketNameOver100Chars is an error signifying the bucket name requested is too long.
+	ErrBucketNameOver100Chars = errors.New("bucket name must be a maximum of 100 characters")
+)
+
 // Bucket represents an organisational area of the Store.
 type Bucket struct {
 	*IntelligentStore `json:"-"`
@@ -33,11 +40,11 @@ func (bucket *Bucket) bucketPath() string {
 
 func isValidBucketName(name string) error {
 	if "" == name {
-		return errors.New("bucket requires a name")
+		return ErrBucketRequiresAName
 	}
 
 	if len(name) > 100 {
-		return errors.New("bucket name must be less than 100 chars")
+		return ErrBucketNameOver100Chars
 	}
 
 	if dirtraversal.IsTryingToTraverseUp(name) {
@@ -124,7 +131,7 @@ func (bucket *Bucket) GetRevisions() ([]*IntelligentStoreRevision, error) {
 		}
 		defer file.Close()
 
-		var files []*FileInVersion
+		var files []*File
 		err = json.NewDecoder(file).Decode(&files)
 		if nil != err {
 			return nil, fmt.Errorf("couldn't decode '%s'. Error: '%s'", revisionFilePath, err)

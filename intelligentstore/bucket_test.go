@@ -35,3 +35,22 @@ func Test_bucketPath(t *testing.T) {
 
 	assert.Equal(t, "/a/b/.backup_data/buckets/test bucket", bucket.bucketPath())
 }
+
+func Test_isValidBucketName(t *testing.T) {
+	noNameErr := isValidBucketName("")
+	assert.Equal(t, ErrBucketRequiresAName, noNameErr)
+
+	longName := ""
+	for i := 0; i < 101; i++ {
+		longName += "a"
+	}
+
+	longNameErr := isValidBucketName(longName)
+	assert.Equal(t, ErrBucketNameOver100Chars, longNameErr)
+
+	traverseUpErr := isValidBucketName("a/../b/../../up bucket")
+	assert.Equal(t, ErrIllegalDirectoryTraversal, traverseUpErr)
+
+	err := isValidBucketName("abå ör")
+	assert.Nil(t, err)
+}
