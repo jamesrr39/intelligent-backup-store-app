@@ -1,7 +1,7 @@
 package intelligentstore
 
 import (
-	"crypto/sha1"
+	"crypto/sha512"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -10,17 +10,20 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/jamesrr39/goutil/dirtraversal"
 )
 
 type Transaction struct {
-	*IntelligentStoreRevision
+	*Revision
 	FilesInVersion []*File
 }
 
 // TODO: test for >4GB file
 func (transaction *Transaction) BackupFile(fileName string, sourceFile io.Reader) error {
+	fileName = strings.TrimPrefix(fileName, string(filepath.Separator))
+
 	if dirtraversal.IsTryingToTraverseUp(fileName) {
 		return ErrIllegalDirectoryTraversal
 	}
@@ -30,7 +33,7 @@ func (transaction *Transaction) BackupFile(fileName string, sourceFile io.Reader
 		return err
 	}
 
-	hasher := sha1.New()
+	hasher := sha512.New()
 	hasher.Write(sourceAsBytes)
 	hash := hex.EncodeToString(hasher.Sum(nil))
 

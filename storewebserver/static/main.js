@@ -22,7 +22,7 @@ define([
       case "buckets":
         if (hashFragments[1]) {
           var bucketView = new BucketView(hashFragments[1]);
-          bucketView.render();
+          bucketView.render($contentEl);
           return
         }
         bucketListingView.render($contentEl);

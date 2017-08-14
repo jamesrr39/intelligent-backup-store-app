@@ -134,7 +134,7 @@ func main() {
 		for _, bucket := range buckets {
 			var latestRevDisplay string
 
-			latestRev, err := bucket.GetLatestVersionTime()
+			latestRevision, err := bucket.GetLatestRevision()
 			if nil != err {
 				if intelligentstore.ErrNoRevisionsForBucket == err {
 					latestRevDisplay = err.Error()
@@ -142,7 +142,12 @@ func main() {
 					return err
 				}
 			} else {
-				latestRevDisplay = latestRev.Format(time.ANSIC)
+				latestRevTs, err := strconv.ParseInt(latestRevision.VersionTimestamp, 10, 64)
+				if nil != err {
+					return err
+				}
+
+				latestRevDisplay = time.Unix(latestRevTs, 0).Format(time.ANSIC)
 			}
 
 			fmt.Printf("%s | %s\n", bucket.BucketName, latestRevDisplay)

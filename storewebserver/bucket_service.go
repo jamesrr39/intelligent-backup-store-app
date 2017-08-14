@@ -2,8 +2,9 @@ package storewebserver
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
-	"time"
+	"strconv"
 
 	"github.com/gorilla/mux"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore"
@@ -13,16 +14,23 @@ import (
 type BucketService struct {
 	store  *intelligentstore.IntelligentStore
 	router *mux.Router
+	openTransactionsMap
 }
+
+type openTransactionsMap map[string]*intelligentstore.Transaction
 
 // NewBucketService creates a new BucketService and a router for handling requests.
 func NewBucketService(store *intelligentstore.IntelligentStore) *BucketService {
 	router := mux.NewRouter()
-	bucketService := &BucketService{store, router}
+	bucketService := &BucketService{store, router, make(openTransactionsMap)}
 
 	router.HandleFunc("/", bucketService.handleGetAll)
-	router.HandleFunc("/{bucketName}", bucketService.handleGet)
-	router.HandleFunc("/{bucketName}/{revisionTs}", bucketService.handleGetRevision)
+	router.HandleFunc("/{bucketName}", bucketService.handleGet).Methods("GET")
+	router.HandleFunc("/{bucketName}", bucketService.handleCreateRevision).Methods("POST")
+	router.HandleFunc("/{bucketName}/{revisionTs}/upload/{encodedFilePath}", bucketService.handleUploadFile).Methods("POST")
+	router.HandleFunc("/{bucketName}/{revisionTs}/commit", bucketService.handleCommitTransaction).Methods("POST")
+
+	router.HandleFunc("/{bucketName}/{revisionTs}", bucketService.handleGetRevision).Methods("GET")
 
 	return bucketService
 }
@@ -30,6 +38,11 @@ func NewBucketService(store *intelligentstore.IntelligentStore) *BucketService {
 type bucketSummary struct {
 	Name           string `json:"name"`
 	LastRevisionTs int64  `json:"lastRevisionTs"`
+}
+
+type revisionInfoWithFiles struct {
+	LastRevisionTs int64                    `json:"revisionTs"`
+	Files          []*intelligentstore.File `json:"files"`
 }
 
 func (s *BucketService) handleGetAll(w http.ResponseWriter, r *http.Request) {
@@ -47,14 +60,21 @@ func (s *BucketService) handleGetAll(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var bucketsSummaries []*bucketSummary
-	var latestRevisionTime *time.Time
+	var latestRevision *intelligentstore.Revision
+	var latestRevisionTs int64
 	for _, bucket := range buckets {
-		latestRevisionTime, err = bucket.GetLatestVersionTime()
+		latestRevision, err = bucket.GetLatestRevision()
 		if nil != err {
 			http.Error(w, err.Error(), 500)
 			return
 		}
-		bucketsSummaries = append(bucketsSummaries, &bucketSummary{bucket.BucketName, latestRevisionTime.Unix()})
+
+		latestRevisionTs, err = strconv.ParseInt(latestRevision.VersionTimestamp, 10, 64)
+		if nil != err {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		bucketsSummaries = append(bucketsSummaries, &bucketSummary{bucket.BucketName, latestRevisionTs})
 	}
 
 	err = json.NewEncoder(w).Encode(bucketsSummaries)
@@ -90,15 +110,131 @@ func (s *BucketService) handleGetRevision(w http.ResponseWriter, r *http.Request
 	vars := mux.Vars(r)
 
 	bucketName := vars["bucketName"]
-	revisionTs := vars["revisionTs"]
+	revisionTsString := vars["revisionTs"]
 
 	bucket, err := s.store.GetBucket(bucketName)
 	if nil != err {
-		http.Error(w, err.Error(), 500) //TODO error code 404
+		if intelligentstore.ErrBucketDoesNotExist == err {
+			http.Error(w, fmt.Sprintf("couldn't find bucket '%s'. Error: %s", bucketName, err), 404)
+			return
+		}
+		http.Error(w, err.Error(), 500)
 		return
 	}
 
-	bucket.get
+	var revision *intelligentstore.Revision
+	if "latest" == revisionTsString {
+		revision, err = bucket.GetLatestRevision()
+		if nil != err {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+	} else {
+		panic("not implemented yet")
+	}
+
+	revisionTs, err := strconv.ParseInt(revision.VersionTimestamp, 10, 64)
+	if nil != err {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	files, err := revision.GetFilesInRevision()
+	if nil != err {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	data := &revisionInfoWithFiles{revisionTs, files}
+
+	w.Header().Set("Content-Type", "application/json")
+	err = json.NewEncoder(w).Encode(data)
+	if nil != err {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+}
+
+func (s *BucketService) handleCreateRevision(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+
+	bucketName := vars["bucketName"]
+
+	bucket, err := s.store.GetBucket(bucketName)
+	if nil != err {
+		if intelligentstore.ErrBucketDoesNotExist == err {
+			http.Error(w, fmt.Sprintf("couldn't find bucket '%s'. Error: %s", bucketName, err), 404)
+			return
+		}
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	transaction := bucket.Begin()
+	s.openTransactionsMap[bucket.BucketName+"__"+transaction.VersionTimestamp] = transaction
+
+	w.Write([]byte(transaction.VersionTimestamp))
+}
+
+func (s *BucketService) handleUploadFile(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+
+	bucketName := vars["bucketName"]
+	revisionTsString := vars["revisionTs"]
+	encodedFilePath := vars["encodedFilePath"]
+
+	bucket, err := s.store.GetBucket(bucketName)
+	if nil != err {
+		if intelligentstore.ErrBucketDoesNotExist == err {
+			http.Error(w, fmt.Sprintf("couldn't find bucket '%s'. Error: %s", bucketName, err), 404)
+			return
+		}
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	transaction := s.openTransactionsMap[bucket.BucketName+"__"+revisionTsString]
+	if nil == transaction {
+		http.Error(w, fmt.Sprintf("there is no open transaction for bucket %s and revisionTs %s", bucket.BucketName, revisionTsString), 400)
+		return
+	}
+
+	err = transaction.BackupFile(encodedFilePath, r.Body)
+	if nil != err {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	r.Body.Close()
+}
+
+func (s *BucketService) handleCommitTransaction(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+
+	bucketName := vars["bucketName"]
+	revisionTsString := vars["revisionTs"]
+
+	bucket, err := s.store.GetBucket(bucketName)
+	if nil != err {
+		if intelligentstore.ErrBucketDoesNotExist == err {
+			http.Error(w, fmt.Sprintf("couldn't find bucket '%s'. Error: %s", bucketName, err), 404)
+			return
+		}
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	transaction := s.openTransactionsMap[bucketName+"__"+revisionTsString]
+	if nil == transaction {
+		http.Error(w, fmt.Sprintf("there is no open transaction for bucket %s and revisionTs %s", bucket.BucketName, revisionTsString), 400)
+		return
+	}
+
+	err = transaction.Commit()
+	if nil != err {
+		http.Error(w, "failed to commit transaction. Error: "+err.Error(), 500)
+		return
+	}
+	s.openTransactionsMap[bucketName+"__"+revisionTsString] = nil
 }
 
 func (s *BucketService) ServeHTTP(w http.ResponseWriter, r *http.Request) {

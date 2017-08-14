@@ -9,7 +9,7 @@ define([
       "<p>Showing the latest revision</p>",
       "<div class='file-listing'>",
         "{{#files}}",
-          "{{filePath}}",
+          "<div style='float: left; margin: 5px; padding: 3px; border: 1px solid orange;'>{{path}}</div>",
         "{{/files}}",
       "</div>",
     "</div>"

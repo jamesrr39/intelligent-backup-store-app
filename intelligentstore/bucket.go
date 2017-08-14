@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -29,7 +30,7 @@ type Bucket struct {
 func (bucket *Bucket) Begin() *Transaction {
 	versionTimestamp := strconv.FormatInt(bucket.nowProvider().Unix(), 10)
 
-	return &Transaction{&IntelligentStoreRevision{bucket, versionTimestamp}, nil}
+	return &Transaction{&Revision{bucket, versionTimestamp}, nil}
 }
 
 func (bucket *Bucket) bucketPath() string {
@@ -54,7 +55,7 @@ func isValidBucketName(name string) error {
 
 var ErrNoRevisionsForBucket = errors.New("no revisions for this bucket yet")
 
-func (bucket *Bucket) GetLatestVersionTime() (*time.Time, error) {
+func (bucket *Bucket) GetLatestRevision() (*Revision, error) {
 	versionsFileInfos, err := ioutil.ReadDir(filepath.Join(bucket.bucketPath(), "versions"))
 	if nil != err {
 		return nil, err
@@ -76,9 +77,7 @@ func (bucket *Bucket) GetLatestVersionTime() (*time.Time, error) {
 		}
 	}
 
-	highestAsTime := time.Unix(highestTs, 0)
-
-	return &highestAsTime, nil
+	return &Revision{bucket, strconv.FormatInt(highestTs, 10)}, nil
 
 }
 
@@ -111,7 +110,7 @@ func (bucket *Bucket) GetRevisionsTimestamps() ([]time.Time, error) {
 	return timestamps, nil
 }
 
-func (bucket *Bucket) GetRevisions() ([]*IntelligentStoreRevision, error) {
+func (bucket *Bucket) GetRevisions() ([]*Revision, error) {
 	versionsFolderPath := filepath.Join(bucket.bucketPath(), "versions")
 
 	versionsFileInfos, err := ioutil.ReadDir(versionsFolderPath)
@@ -119,10 +118,22 @@ func (bucket *Bucket) GetRevisions() ([]*IntelligentStoreRevision, error) {
 		return nil, err
 	}
 
-	var versions []*IntelligentStoreRevision
+	var versions []*Revision
 	for _, versionFileInfo := range versionsFileInfos {
-		versions = append(versions, &IntelligentStoreRevision{bucket, versionFileInfo.Name()})
+		versions = append(versions, &Revision{bucket, versionFileInfo.Name()})
 	}
 
 	return versions, nil
+}
+
+func (bucket *Bucket) GetRevision(revisionTimeStamp int64) (*Revision, error) {
+	versionsFolderPath := filepath.Join(bucket.bucketPath(), "versions")
+	timestampAsString := strconv.FormatInt(revisionTimeStamp, 10)
+
+	_, err := os.Stat(filepath.Join(versionsFolderPath, timestampAsString))
+	if nil != err {
+		return nil, err
+	}
+
+	return &Revision{bucket, timestampAsString}, nil
 }

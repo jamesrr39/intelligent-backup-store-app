@@ -10,12 +10,14 @@ import (
 	"path/filepath"
 )
 
-type IntelligentStoreRevision struct {
+// Revision represents a revision of a set of files
+type Revision struct {
 	*Bucket          `json:"-"`
 	VersionTimestamp string `json:"versionTimestamp"`
 }
 
-func (r *IntelligentStoreRevision) GetFilesInRevision() ([]*File, error) {
+// GetFilesInRevision gets a list of files in this revision
+func (r *Revision) GetFilesInRevision() ([]*File, error) {
 	filePath := filepath.Join(r.bucketPath(), "versions", r.VersionTimestamp)
 	revisionDataFile, err := os.Open(filePath)
 	if nil != err {
@@ -32,7 +34,7 @@ func (r *IntelligentStoreRevision) GetFilesInRevision() ([]*File, error) {
 	return filesInVersion, nil
 }
 
-func (r *IntelligentStoreRevision) getPathToRevisionFile() string {
+func (r *Revision) getPathToRevisionFile() string {
 	return filepath.Join(r.bucketPath())
 }
 

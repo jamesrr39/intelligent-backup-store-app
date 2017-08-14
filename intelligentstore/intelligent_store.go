@@ -68,7 +68,7 @@ func (s *IntelligentStore) GetBucket(bucketName string) (*Bucket, error) {
 	_, err := os.Stat(bucketPath)
 	if nil != err {
 		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("bucket '%s' does not exist", bucketName)
+			return nil, ErrBucketDoesNotExist
 		}
 		return nil, err
 	}
