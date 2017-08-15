@@ -1,13 +1,18 @@
 package storewebserver
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"strconv"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/gorilla/mux"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore"
+
+	"github.com/jamesrr39/intelligent-backup-store-app/serialisation"
 )
 
 // BucketService handles HTTP requests to get bucket information.
@@ -26,9 +31,9 @@ func NewBucketService(store *intelligentstore.IntelligentStore) *BucketService {
 
 	router.HandleFunc("/", bucketService.handleGetAll)
 	router.HandleFunc("/{bucketName}", bucketService.handleGet).Methods("GET")
-	router.HandleFunc("/{bucketName}", bucketService.handleCreateRevision).Methods("POST")
-	router.HandleFunc("/{bucketName}/{revisionTs}/upload/{encodedFilePath}", bucketService.handleUploadFile).Methods("POST")
-	router.HandleFunc("/{bucketName}/{revisionTs}/commit", bucketService.handleCommitTransaction).Methods("POST")
+	router.HandleFunc("/{bucketName}/upload", bucketService.handleCreateRevision).Methods("GET")
+	router.HandleFunc("/{bucketName}/upload/{revisionTs}/file", bucketService.handleUploadFile).Methods("POST")
+	router.HandleFunc("/{bucketName}/upload/{revisionTs}/commit", bucketService.handleCommitTransaction).Methods("GET")
 
 	router.HandleFunc("/{bucketName}/{revisionTs}", bucketService.handleGetRevision).Methods("GET")
 
@@ -181,7 +186,6 @@ func (s *BucketService) handleUploadFile(w http.ResponseWriter, r *http.Request)
 
 	bucketName := vars["bucketName"]
 	revisionTsString := vars["revisionTs"]
-	encodedFilePath := vars["encodedFilePath"]
 
 	bucket, err := s.store.GetBucket(bucketName)
 	if nil != err {
@@ -199,12 +203,24 @@ func (s *BucketService) handleUploadFile(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	err = transaction.BackupFile(encodedFilePath, r.Body)
+	bodyBytes, err := ioutil.ReadAll(r.Body)
+	if nil != err {
+		http.Error(w, fmt.Sprintf("couldn't read response body. Error: '%s'", err), 400)
+		return
+	}
+	defer r.Body.Close()
+
+	var uploadedFile serialisation.UploadedFile
+	err = proto.Unmarshal(bodyBytes, &uploadedFile)
+	if nil != err {
+		http.Error(w, fmt.Sprintf("couldn't unmarshall message. Error: '%s'", err), 400)
+	}
+
+	err = transaction.BackupFile(uploadedFile.Filename, bytes.NewBuffer(uploadedFile.File))
 	if nil != err {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	r.Body.Close()
 }
 
 func (s *BucketService) handleCommitTransaction(w http.ResponseWriter, r *http.Request) {

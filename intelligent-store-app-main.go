@@ -4,14 +4,14 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore"
+	"github.com/jamesrr39/intelligent-backup-store-app/localupload"
 	"github.com/jamesrr39/intelligent-backup-store-app/storewebserver"
+	"github.com/jamesrr39/intelligent-backup-store-app/webuploadclient"
 	kingpin "gopkg.in/alecthomas/kingpin.v2"
 )
 
@@ -51,70 +51,12 @@ func main() {
 	backupBucketName := backupIntoCommand.Arg("bucket name", "name of the bucket to back up into").Required().String()
 	backupFromLocation := backupIntoCommand.Arg("backup from location", "location to backup from").Default(".").String()
 	backupIntoCommand.Action(func(ctx *kingpin.ParseContext) error {
-		startTime := time.Now()
-
-		store, err := intelligentstore.NewIntelligentStoreConnToExisting(*backupStoreLocation)
-		if nil != err {
-			return err
+		if strings.HasPrefix(*backupStoreLocation, "http://") || strings.HasPrefix(*backupStoreLocation, "https://") {
+			client := webuploadclient.NewWebUploadClient(*backupStoreLocation, *backupBucketName)
+			return client.BackupFolder(*backupFromLocation)
+		} else {
+			return localupload.UploadToStore(*backupStoreLocation, *backupBucketName, *backupFromLocation)
 		}
-
-		bucket, err := store.GetBucket(*backupBucketName)
-		if nil != err {
-			return err
-		}
-
-		backupTx := bucket.Begin()
-
-		errCount := 0
-		fileCount := 0
-
-		absBackupFromLocation, err := filepath.Abs(*backupFromLocation)
-		if nil != err {
-			return err
-		}
-
-		err = filepath.Walk(absBackupFromLocation, func(path string, fileInfo os.FileInfo, err error) error {
-			if nil != err {
-				return err
-			}
-
-			if fileInfo.IsDir() {
-				return nil
-			}
-
-			file, err := os.Open(path)
-			if nil != err {
-				log.Printf("couldn't backup '%s'. Error: %s\n", path, err)
-				errCount++
-				return nil
-			}
-			defer file.Close()
-
-			err = backupTx.BackupFile(strings.TrimPrefix(path, absBackupFromLocation), file)
-			if nil != err {
-				return err
-			}
-
-			fileCount++
-
-			return nil
-		})
-		if nil != err {
-			return err
-		}
-
-		err = backupTx.Commit()
-		if nil != err {
-			return err
-		}
-
-		if 0 != errCount {
-			return fmt.Errorf("backup finished, but there were errors")
-		}
-
-		log.Printf("backed up %d files in %f seconds\n", fileCount, time.Now().Sub(startTime).Seconds())
-
-		return nil
 	})
 
 	listBucketsCommand := kingpin.Command("list-buckets", "produce a listing of all the buckets and the last backup time")

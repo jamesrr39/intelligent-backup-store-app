@@ -1,0 +1,7 @@
+syntax = "proto3";
+package serialisation;
+
+message UploadedFile {
+  string filename = 1;
+  bytes file = 2;
+}
