@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/gorilla/mux"
@@ -24,6 +25,11 @@ type BucketService struct {
 
 type openTransactionsMap map[string]*intelligentstore.Transaction
 
+type subDirInfo struct {
+	Name            string `json:"name"`
+	NestedFileCount int64  `json:"nestedFileCount"`
+}
+
 // NewBucketService creates a new BucketService and a router for handling requests.
 func NewBucketService(store *intelligentstore.IntelligentStore) *BucketService {
 	router := mux.NewRouter()
@@ -35,8 +41,7 @@ func NewBucketService(store *intelligentstore.IntelligentStore) *BucketService {
 	router.HandleFunc("/{bucketName}/upload/{revisionTs}/file", bucketService.handleUploadFile).Methods("POST")
 	router.HandleFunc("/{bucketName}/upload/{revisionTs}/commit", bucketService.handleCommitTransaction).Methods("GET")
 
-	router.HandleFunc("/{bucketName}/{revisionTs}", bucketService.handleGetRevision).Methods("GET")
-
+	router.PathPrefix("/{bucketName}/{revisionTs}").HandlerFunc(bucketService.handleGetRevision).Methods("GET")
 	return bucketService
 }
 
@@ -48,6 +53,7 @@ type bucketSummary struct {
 type revisionInfoWithFiles struct {
 	LastRevisionTs int64                    `json:"revisionTs"`
 	Files          []*intelligentstore.File `json:"files"`
+	Dirs           []*subDirInfo            `json:"dirs"`
 }
 
 func (s *BucketService) handleGetAll(w http.ResponseWriter, r *http.Request) {
@@ -144,13 +150,42 @@ func (s *BucketService) handleGetRevision(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	files, err := revision.GetFilesInRevision()
+	allFiles, err := revision.GetFilesInRevision()
 	if nil != err {
 		http.Error(w, err.Error(), 500)
 		return
 	}
 
-	data := &revisionInfoWithFiles{revisionTs, files}
+	rootDir := strings.TrimPrefix(r.URL.Query().Get("rootDir"), "/")
+
+	files := []*intelligentstore.File{}
+
+	type subDirInfoMap map[string]int64 // map[name]nestedFileCount
+	dirnames := subDirInfoMap{}         // dirname[nested file count]
+	for _, file := range allFiles {
+		if !strings.HasPrefix(file.FilePath, rootDir) {
+			// not in this root dir
+			continue
+		}
+
+		relativeFilePath := strings.TrimPrefix(strings.TrimPrefix(file.FilePath, rootDir), "/")
+
+		indexOfSlash := strings.Index(relativeFilePath, "/")
+		if indexOfSlash != -1 {
+			// file is inside a dir (not in the root folder)
+			dirnames[relativeFilePath[0:indexOfSlash]]++
+		} else {
+			// file is in the dir we're searching inside
+			files = append(files, file)
+		}
+	}
+
+	dirs := []*subDirInfo{}
+	for dirname, nestedFileCount := range dirnames {
+		dirs = append(dirs, &subDirInfo{dirname, nestedFileCount})
+	}
+
+	data := &revisionInfoWithFiles{revisionTs, files, dirs}
 
 	w.Header().Set("Content-Type", "application/json")
 	err = json.NewEncoder(w).Encode(data)

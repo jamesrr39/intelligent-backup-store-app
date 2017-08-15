@@ -7,6 +7,11 @@ define([
     "<div>",
       "<h3>{{bucketName}}</h3>",
       "<p>Showing the latest revision</p>",
+      "<div class='dir-listing'>",
+        "{{#dirs}}",
+          "<div style='float: left; margin: 5px; padding: 3px; border: 1px solid orange;'>{{name}} ({{nestedFileCount}})</div>",
+        "{{/dirs}}",
+      "</div>",
       "<div class='file-listing'>",
         "{{#files}}",
           "<div style='float: left; margin: 5px; padding: 3px; border: 1px solid orange;'>{{path}}</div>",
@@ -29,12 +34,18 @@ define([
     return {
       render($container) {
         $.ajax("/api/buckets/" + encodeURIComponent(bucketName) + "/latest").then(function(data) {
-          $container.html(template(data));
+          $container.html(template({
+            bucketName: data.bucketName,
+            files: data.files.sort(function(a, b){
+              return a.path.toUpperCase() > b.path.toUpperCase();
+            }),
+            dirs: data.dirs.sort(function(a, b){
+              return a.name.toUpperCase() > b.name.toUpperCase();
+            })
+          }));
         }).fail(function() {
           throw new Error("failed to get bucket latest info");
         });
-
-
       }
     };
   };
