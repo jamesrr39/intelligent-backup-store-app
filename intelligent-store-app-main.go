@@ -126,7 +126,7 @@ func main() {
 	})
 
 	startWebappCommand := kingpin.Command("start-webapp", "start a webapplication")
-	startWebappPort := startWebappCommand.Flag("port", "port to run the webapp on").Default("8080").Int()
+	startWebappAddr := startWebappCommand.Flag("address", "custom address to expose the webapp to. Example: ':8081': expose to everyone on port 8081").Default("localhost:8080").String()
 	startWebappStoreLocation := startWebappCommand.Arg("store location", "location of the store").Default(".").String()
 	startWebappCommand.Action(func(ctx *kingpin.ParseContext) error {
 		store, err := intelligentstore.NewIntelligentStoreConnToExisting(*startWebappStoreLocation)
@@ -138,7 +138,7 @@ func main() {
 			ReadTimeout:       5 * time.Second,
 			WriteTimeout:      10 * time.Second,
 			ReadHeaderTimeout: 5 * time.Second,
-			Addr:              ":" + strconv.Itoa(*startWebappPort),
+			Addr:              *startWebappAddr,
 			Handler:           storewebserver.NewStoreWebServer(store),
 		}
 
