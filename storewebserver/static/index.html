@@ -2,27 +2,38 @@
 	<head>
 		<title>Store</title>
 		<link rel="stylesheet" href="/libs/bootstrap-4.0.0-alpha.6.css" />
+		<link rel="stylesheet" href="/libs/font-awesome-4.7.0.css" />
 		<style type="text/css">
-			#notifications-container {
-				position: absolute;
-				top: 0px;
-				right: 0px;
-			}
-
-			.dir-listing .dir {
-				background-color: lightblue;
+			.listing-container .dir,
+			.listing-container .file {
 				float: left;
 				margin: 5px;
 				padding: 3px;
+				text-overflow: ellipsis;
+				overflow: hidden;
+				width: 200px;
 			}
 
-			.file-listing .file {
-				 float: left;
-				 margin: 5px;
-				 padding: 3px;
-				 border: 1px solid orange;'
+			.listing-container .thumbnail {
+					height: 175px;
 			}
 
+			.listing-container .name {
+				height: 45px;
+			}
+
+			.listing-container .dir {
+				height: 45px;
+				background-color: lightblue;
+			}
+
+			.listing-container .file {
+				background-color: lightgrey;
+			}
+
+			.listing-container .icon {
+				margin: 3px;
+			}
 		</style>
 	</head>
 	<body>
