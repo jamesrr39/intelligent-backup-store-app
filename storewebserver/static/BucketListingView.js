@@ -1,7 +1,8 @@
 define([
   "jquery",
-  "handlebars"
-], function($, Handlebars){
+  "handlebars",
+  "./ErrorView"
+], function($, Handlebars, ErrorView){
 
   var bucketListTemplate = Handlebars.compile([
     "<table class='table'>",
@@ -22,8 +23,6 @@ define([
     "</table>"
   ].join(""));
 
-  var errTemplate = Handlebars.compile("<div class='alert alert-danger'>{{message}}</div>");
-
   return function(){
 
     function renderBucketListing(buckets, $container) {
@@ -43,9 +42,7 @@ define([
     		$.ajax("/api/buckets/").then(function(buckets){
           renderBucketListing(buckets, $container);
         }).fail(function(xhr) {
-    			$container.html(errTemplate({
-            message: "Error fetching buckets data: " + xhr.responseText
-          }));
+    			$container.html(new ErrorView("Error fetching buckets data: " + xhr.responseText).render());
     		});
       }
     };

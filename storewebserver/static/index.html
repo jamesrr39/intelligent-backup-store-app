@@ -2,13 +2,33 @@
 	<head>
 		<title>Store</title>
 		<link rel="stylesheet" href="/libs/bootstrap-4.0.0-alpha.6.css" />
+		<style type="text/css">
+			#notifications-container {
+				position: absolute;
+				top: 0px;
+				right: 0px;
+			}
+
+			.dir-listing .dir {
+				background-color: lightblue;
+				float: left;
+				margin: 5px;
+				padding: 3px;
+			}
+
+			.file-listing .file {
+				 float: left;
+				 margin: 5px;
+				 padding: 3px;
+				 border: 1px solid orange;'
+			}
+
+		</style>
 	</head>
 	<body>
 		Store webapp
 
-		<div id="content">
-
-		</div>
+		<div id="content"></div>
 
 		<script data-main="main.js" src="libs/require-2.3.4.js"></script>
 	</body>

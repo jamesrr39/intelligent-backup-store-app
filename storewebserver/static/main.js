@@ -17,11 +17,22 @@ define([
 
 	window.onhashchange = function(){
 		var hashFragments = window.location.hash.substring(2).split("/"); // remove the '#/' at the start of the hash
+    var bucketName;
+    var revisionStr;
+    var rootDir;
 
     switch (hashFragments[0]) {
       case "buckets":
-        if (hashFragments[1]) {
-          var bucketView = new BucketView(hashFragments[1]);
+        bucketName = hashFragments[1];
+        revisionStr = hashFragments[2];
+        if (!revisionStr) {
+          window.location.hash = window.location.hash + "/latest";
+          return;
+        }
+        rootDir = hashFragments.slice(3).join("/");
+
+        if (bucketName) {
+          var bucketView = new BucketView(bucketName, revisionStr, rootDir);
           bucketView.render($contentEl);
           return
         }
