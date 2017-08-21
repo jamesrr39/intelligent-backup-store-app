@@ -8,6 +8,11 @@ define([
     "<div>",
       "<h3>{{bucketName}}</h3>",
       "<p>Showing the latest revision</p>",
+      "<p>",
+        "{{#dirLevels}}",
+          "/<a href='{{url}}'>{{name}}</a>",
+        "{{/dirLevels}}",
+      "</p>",
       "<div class='listing-container'>",
         "<div style='clear: both'>",
           "{{#dirs}}",
@@ -55,6 +60,8 @@ define([
         }
 
         $.ajax(url).then(function(data) {
+          var dirLevels = rootDir.split("/");
+
           $container.html(template({
             bucketName: data.bucketName,
             files: data.files.sort(function(a, b){
@@ -71,7 +78,15 @@ define([
                 revisionStr: revisionStr
               }, dir);
             }),
-            revisionStr: revisionStr
+            revisionStr: revisionStr,
+            dirLevels: dirLevels.map(function(dirLevelName, index) {
+              var relativePath = dirLevels.slice(0, index +1).join("/");
+
+              return {
+                url: "#/buckets/" + bucketName + "/" + revisionStr + "/" + relativePath,
+                name: dirLevelName
+              };
+            })
           }));
         }).fail(function(xhr) {
           $container.html(new ErrorView("Error fetching revisions data: " + xhr.responseText).render());
