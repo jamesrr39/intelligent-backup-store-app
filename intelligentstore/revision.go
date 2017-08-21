@@ -2,7 +2,7 @@ package intelligentstore
 
 import (
 	"bytes"
-	"encoding/json"
+	"encoding/gob"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -26,7 +26,7 @@ func (r *Revision) GetFilesInRevision() ([]*File, error) {
 	defer revisionDataFile.Close()
 
 	var filesInVersion []*File
-	err = json.NewDecoder(revisionDataFile).Decode(&filesInVersion)
+	err = gob.NewDecoder(revisionDataFile).Decode(&filesInVersion)
 	if nil != err {
 		return nil, err
 	}

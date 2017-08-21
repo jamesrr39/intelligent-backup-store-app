@@ -2,8 +2,8 @@ package intelligentstore
 
 import (
 	"crypto/sha512"
+	"encoding/gob"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -92,7 +92,7 @@ func (transaction *Transaction) Commit() error {
 	}
 	defer versionContentsFile.Close()
 
-	err = json.NewEncoder(versionContentsFile).Encode(transaction.FilesInVersion)
+	err = gob.NewEncoder(versionContentsFile).Encode(transaction.FilesInVersion)
 	if nil != err {
 		return err
 	}
