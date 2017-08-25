@@ -1,11 +1,8 @@
 package intelligentstore
 
 import (
-	"bytes"
 	"encoding/gob"
 	"fmt"
-	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 )
@@ -36,14 +33,4 @@ func (r *Revision) GetFilesInRevision() ([]*File, error) {
 
 func (r *Revision) getPathToRevisionFile() string {
 	return filepath.Join(r.bucketPath())
-}
-
-// TODO more efficient implementation
-func areFilesTheSameBytes(sourceAsBytes []byte, existingFile io.Reader) bool {
-
-	existingBytes, err := ioutil.ReadAll(existingFile)
-	if nil != err {
-		panic(err)
-	}
-	return bytes.Equal(sourceAsBytes, existingBytes)
 }

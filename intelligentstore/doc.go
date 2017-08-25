@@ -8,6 +8,6 @@ package intelligentstore
 		- versions
 		  - {timestamp}
   	- objects
-		  - {first 2 characters of file_sha1}
-        - {last 38 characters of file_sha1}
+		  - {first 2 characters of file_sha512}
+        - {last 38 characters of file_sha512}
 */

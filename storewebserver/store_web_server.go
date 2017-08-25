@@ -28,4 +28,5 @@ func NewStoreWebServer(store *intelligentstore.IntelligentStore) *StoreWebServer
 
 func (s *StoreWebServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.router.ServeHTTP(w, r)
+	r.Body.Close()
 }

@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
 	"github.com/jamesrr39/intelligent-backup-store-app/localupload"
 	"github.com/jamesrr39/intelligent-backup-store-app/storewebserver"
 	"github.com/jamesrr39/intelligent-backup-store-app/webuploadclient"
@@ -50,13 +52,29 @@ func main() {
 	backupStoreLocation := backupIntoCommand.Arg("store location", "location of the store").Required().String()
 	backupBucketName := backupIntoCommand.Arg("bucket name", "name of the bucket to back up into").Required().String()
 	backupFromLocation := backupIntoCommand.Arg("backup from location", "location to backup from").Default(".").String()
+	backupDryRun := backupIntoCommand.Flag("dry-run", "dry run?").Default("false").Bool()
+	backupExcludesMatcherLocation := backupIntoCommand.Flag("exclude", "path to a file with glob-style patterns to exclude files").Default("").String()
 	backupIntoCommand.Action(func(ctx *kingpin.ParseContext) error {
 		if strings.HasPrefix(*backupStoreLocation, "http://") || strings.HasPrefix(*backupStoreLocation, "https://") {
 			client := webuploadclient.NewWebUploadClient(*backupStoreLocation, *backupBucketName)
-			return client.BackupFolder(*backupFromLocation)
-		} else {
-			return localupload.UploadToStore(*backupStoreLocation, *backupBucketName, *backupFromLocation)
+
+			excludeMatcher := &excludesmatcher.ExcludesMatcher{}
+			if *backupExcludesMatcherLocation != "" {
+				excludeFile, err := os.Open(*backupExcludesMatcherLocation)
+				if nil != err {
+					return err
+				}
+				defer excludeFile.Close()
+
+				excludeMatcher, err = excludesmatcher.NewExcludesMatcherFromReader(excludeFile)
+				if nil != err {
+					return err
+				}
+			}
+			return client.BackupFolder(*backupFromLocation, excludeMatcher, *backupDryRun)
 		}
+
+		return localupload.UploadToStore(*backupStoreLocation, *backupBucketName, *backupFromLocation)
 	})
 
 	listBucketsCommand := kingpin.Command("list-buckets", "produce a listing of all the buckets and the last backup time")

@@ -1,9 +1,8 @@
 package intelligentstore
 
 import (
-	"crypto/sha512"
+	"bytes"
 	"encoding/gob"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -33,16 +32,17 @@ func (transaction *Transaction) BackupFile(fileName string, sourceFile io.Reader
 		return err
 	}
 
-	hasher := sha512.New()
-	hasher.Write(sourceAsBytes)
-	hash := hex.EncodeToString(hasher.Sum(nil))
+	hash, err := NewHash(bytes.NewBuffer(sourceAsBytes))
+	if nil != err {
+		return err
+	}
 
 	filePath := filepath.Join(
 		transaction.StoreBasePath,
 		".backup_data",
 		"objects",
-		hash[0:2],
-		hash[2:])
+		hash.FirstChunk(),
+		hash.Remainder())
 
 	log.Printf("backing up %s into %s\n", fileName, filePath)
 
@@ -71,16 +71,33 @@ func (transaction *Transaction) BackupFile(fileName string, sourceFile io.Reader
 			return fmt.Errorf("couldn't open existing file in store at '%s'. Error: %s", filePath, err)
 		}
 		defer existingFile.Close()
-
-		areTheSameBytes := areFilesTheSameBytes(sourceAsBytes, existingFile)
-		if !areTheSameBytes {
-			return fmt.Errorf("hash collision detected! new file '%s' and existing file '%s' have the same length and hash but do not have the same bytes", fileName, filePath)
-		}
 	}
 
 	transaction.FilesInVersion = append(transaction.FilesInVersion, NewFileInVersion(hash, fileName))
 
 	return nil
+}
+
+func (transaction *Transaction) AddAlreadyExistingHash(fileDescriptor *File) (bool, error) {
+	isTryingToTraverse := dirtraversal.IsTryingToTraverseUp(string(fileDescriptor.Hash))
+	if isTryingToTraverse {
+		return false, fmt.Errorf("%s is attempting to traverse up the filesystem tree, which is not allowed (and this is not a hash)", fileDescriptor.Hash)
+	}
+
+	bucketsDirPath := filepath.Join(transaction.StoreBasePath, ".backup_data", "objects")
+
+	filePath := filepath.Join(bucketsDirPath, fileDescriptor.Hash.FirstChunk(), fileDescriptor.Hash.Remainder())
+	_, err := os.Stat(filePath)
+	if nil != err {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("couldn't detect if %s is already in the index. Error: %s", fileDescriptor.Hash, err)
+	}
+
+	// the hash already exists, we can add it to the transaction
+	transaction.FilesInVersion = append(transaction.FilesInVersion, fileDescriptor)
+	return true, nil
 }
 
 func (transaction *Transaction) Commit() error {

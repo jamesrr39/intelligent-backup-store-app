@@ -14,8 +14,8 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/gorilla/mux"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore"
-
 	"github.com/jamesrr39/intelligent-backup-store-app/serialisation"
+	"github.com/jamesrr39/intelligent-backup-store-app/serialisation/protogenerated"
 )
 
 // BucketService handles HTTP requests to get bucket information.
@@ -202,6 +202,7 @@ func (s *BucketService) handleGetRevision(w http.ResponseWriter, r *http.Request
 }
 
 func (s *BucketService) handleCreateRevision(w http.ResponseWriter, r *http.Request) {
+
 	vars := mux.Vars(r)
 
 	bucketName := vars["bucketName"]
@@ -219,7 +220,54 @@ func (s *BucketService) handleCreateRevision(w http.ResponseWriter, r *http.Requ
 	transaction := bucket.Begin()
 	s.openTransactionsMap[bucket.BucketName+"__"+transaction.VersionTimestamp] = transaction
 
-	w.Write([]byte(transaction.VersionTimestamp))
+	requestBytes, err := ioutil.ReadAll(r.Body)
+	if nil != err {
+		http.Error(w, "couldn;t read request body. Error: "+err.Error(), 400)
+		return
+	}
+
+	var openTxRequest protogenerated.OpenTxRequest
+	err = proto.Unmarshal(requestBytes, &openTxRequest)
+	if nil != err {
+		http.Error(w, "couldn't unmarshall proto of request body. Error: "+err.Error(), 400)
+		return
+	}
+
+	var fileDetectorsForRequiredFiles *protogenerated.FileDescriptorProtoList
+	var hashAlreadyExists bool
+
+	for _, fileDescriptorProto := range openTxRequest.FileDescriptorList.FileDescriptorList {
+		fileDescriptor := serialisation.FileDescriptorProtoToFileDescriptor(fileDescriptorProto)
+
+		hashAlreadyExists, err = transaction.AddAlreadyExistingHash(fileDescriptor)
+		if nil != err {
+			http.Error(w, fmt.Sprintf("error detecting if a hash for %s (%s) already exists", fileDescriptor.Hash, fileDescriptor.FilePath), 500)
+			return
+		}
+
+		// if a file for the hash already exists, the transaction adds it to the files in version and we don't need it from the client
+		if !hashAlreadyExists {
+			fileDetectorsForRequiredFiles.FileDescriptorList = append(
+				fileDetectorsForRequiredFiles.FileDescriptorList,
+				fileDescriptorProto)
+		}
+	}
+
+	openTxReponse := &protogenerated.OpenTxResponse{
+		RevisionStr:        transaction.VersionTimestamp,
+		FileDescriptorList: fileDetectorsForRequiredFiles,
+	}
+
+	responseBytes, err := proto.Marshal(openTxReponse)
+	if nil != err {
+		http.Error(w, fmt.Sprintf("couldn't marshall response for the files the server requires. Error: %s", err), 500)
+		return
+	}
+
+	_, err = w.Write([]byte(responseBytes))
+	if nil != err {
+		log.Printf("failed to send a response back to the client for files required to open transaction. Bucket: '%s', Revision: '%s'. Error: %s\n", bucketName, transaction.VersionTimestamp, err)
+	}
 }
 
 func (s *BucketService) handleUploadFile(w http.ResponseWriter, r *http.Request) {
@@ -251,13 +299,15 @@ func (s *BucketService) handleUploadFile(w http.ResponseWriter, r *http.Request)
 	}
 	defer r.Body.Close()
 
-	var uploadedFile serialisation.UploadedFile
+	var uploadedFile protogenerated.FileProto
 	err = proto.Unmarshal(bodyBytes, &uploadedFile)
 	if nil != err {
 		http.Error(w, fmt.Sprintf("couldn't unmarshall message. Error: '%s'", err), 400)
 	}
 
-	err = transaction.BackupFile(uploadedFile.Filename, bytes.NewBuffer(uploadedFile.File))
+	err = transaction.BackupFile(
+		uploadedFile.Descriptor_.Filename,
+		bytes.NewBuffer(uploadedFile.Contents))
 	if nil != err {
 		http.Error(w, err.Error(), 500)
 		return
