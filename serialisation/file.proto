@@ -1,0 +1,25 @@
+syntax = "proto3";
+package serialisation;
+
+message FileDescriptorProto {
+  string filename = 1;
+  string hash = 2;
+}
+
+message FileProto {
+  FileDescriptorProto descriptor = 1;
+  bytes contents = 2;
+}
+
+message FileDescriptorProtoList {
+  repeated FileDescriptorProto fileDescriptorList = 1;
+}
+
+message OpenTxRequest {
+  FileDescriptorProtoList fileDescriptorList = 1;
+}
+
+message OpenTxResponse {
+  string revisionStr = 1;
+  FileDescriptorProtoList FileDescriptorList = 2;
+}
