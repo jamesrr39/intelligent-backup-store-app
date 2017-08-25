@@ -14,6 +14,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
+	"github.com/jamesrr39/intelligent-backup-store-app/serialisation"
 	"github.com/jamesrr39/intelligent-backup-store-app/serialisation/protogenerated"
 )
 
@@ -77,7 +78,7 @@ func (c *WebUploadClient) BackupFolder(folderPath string, excludeFilesMatcher *e
 	}
 
 	// open transaction
-	revisionStr, err := c.openTx(fileList)
+	revisionStr, filesToSendDescriptors, err := c.openTx(fileList)
 	if nil != err {
 		return err
 	}
@@ -85,8 +86,10 @@ func (c *WebUploadClient) BackupFolder(folderPath string, excludeFilesMatcher *e
 
 	var filesSuccessfullyBackedUpCount int64
 	var filesFailedToBackup []*intelligentstore.FileDescriptor
+	amountOfFilesToSend := len(filesToSendDescriptors)
+	filesAlreadyOnServerCount := totalFilesToUpload - int64(amountOfFilesToSend)
 
-	for _, fileDescriptor := range fileList {
+	for _, fileDescriptor := range filesToSendDescriptors {
 		err = c.backupFile(folderPath, revisionStr, fileDescriptor)
 		if nil != err {
 			filesFailedToBackup = append(filesFailedToBackup, fileDescriptor)
@@ -97,7 +100,11 @@ func (c *WebUploadClient) BackupFolder(folderPath string, excludeFilesMatcher *e
 
 		filesProcessedSoFar := filesSuccessfullyBackedUpCount + int64(len(filesFailedToBackup))
 		if (filesProcessedSoFar % 10) == 0 {
-			log.Printf("%d of %d files processed\n", filesProcessedSoFar, totalFilesToUpload)
+			log.Printf("%d of %d files processed (%f%% complete) (%d were already on the server)\n",
+				filesProcessedSoFar,
+				amountOfFilesToSend,
+				float64(filesProcessedSoFar)/float64(amountOfFilesToSend),
+				filesAlreadyOnServerCount)
 		}
 	}
 
@@ -108,6 +115,75 @@ func (c *WebUploadClient) BackupFolder(folderPath string, excludeFilesMatcher *e
 	}
 
 	return nil
+}
+
+// openTx opens a transaction with the server and sends a list of files it wants to back up
+func (c *WebUploadClient) openTx(fileDescriptors []*intelligentstore.FileDescriptor) (string, []*intelligentstore.FileDescriptor, error) {
+	protoFileDescriptors := &protogenerated.FileDescriptorProtoList{}
+	for _, descriptor := range fileDescriptors {
+		descriptorProto := &protogenerated.FileDescriptorProto{
+			Filename: descriptor.FilePath,
+			Hash:     string(descriptor.Hash),
+		}
+
+		protoFileDescriptors.FileDescriptorList = append(protoFileDescriptors.FileDescriptorList, descriptorProto)
+	}
+
+	openTxRequest := &protogenerated.OpenTxRequest{
+		FileDescriptorList: protoFileDescriptors,
+	}
+
+	openTxRequestBodyBytes, err := proto.Marshal(openTxRequest)
+	if nil != err {
+		return "", nil, err
+	}
+
+	openTxClient := http.Client{Timeout: time.Second * 20}
+
+	openTxURL := c.storeURL + "/api/buckets/" + c.bucketName + "/upload"
+	resp, err := openTxClient.Post(
+		openTxURL,
+		"application/octet-stream",
+		bytes.NewBuffer(openTxRequestBodyBytes))
+	if nil != err {
+		return "", nil, fmt.Errorf("couln't POST to %s. Error: %s", openTxURL, err)
+	}
+	defer resp.Body.Close()
+
+	// read the response body now; we will need it whether the response was good or bad.
+	respBytes, respReadErr := ioutil.ReadAll(resp.Body)
+
+	if 200 != resp.StatusCode {
+		var respErrMessage string
+		if nil == respReadErr {
+			respErrMessage = string(respBytes)
+		} else {
+			respErrMessage = fmt.Sprintf("couldn't read response error message. Error: %s", respReadErr)
+		}
+
+		return "", nil, fmt.Errorf(
+			"expected 200 (OK) repsonse code for open transaction, but received '%s' on POSTing to %s. Message body: %s",
+			resp.Status, openTxURL, respErrMessage)
+	}
+
+	if nil != respReadErr {
+		return "", nil, fmt.Errorf("couldn't read OpenTx response. Error: %s", err)
+	}
+
+	var openTxResponse protogenerated.OpenTxResponse
+	err = proto.Unmarshal(respBytes, &openTxResponse)
+	if nil != err {
+		return "", nil, fmt.Errorf("couldn't unmarshal OpenTx response. Error: %s", err)
+	}
+
+	var filesToSendDescriptors []*intelligentstore.FileDescriptor
+	for _, fileDescriptorProto := range openTxResponse.FileDescriptorList.FileDescriptorList {
+		filesToSendDescriptors = append(
+			filesToSendDescriptors,
+			serialisation.FileDescriptorProtoToFileDescriptor(fileDescriptorProto))
+	}
+	log.Printf("created a new version: %s\n", openTxResponse.RevisionStr)
+	return openTxResponse.RevisionStr, filesToSendDescriptors, nil
 }
 
 func (c *WebUploadClient) backupFile(basePath, revisionStr string, fileDescriptor *intelligentstore.FileDescriptor) error {
@@ -148,50 +224,6 @@ func (c *WebUploadClient) backupFile(basePath, revisionStr string, fileDescripto
 			respBodyBytes)
 	}
 	return nil
-}
-
-// openTx opens a transaction with the server and sends a list of files it wants to back up
-func (c *WebUploadClient) openTx(fileDescriptors []*intelligentstore.FileDescriptor) (string, error) {
-	var protoFileDescriptors *protogenerated.FileDescriptorProtoList
-	for _, descriptor := range fileDescriptors {
-		descriptorProto := &protogenerated.FileDescriptorProto{
-			Filename: descriptor.FilePath,
-			Hash:     string(descriptor.Hash),
-		}
-
-		protoFileDescriptors.FileDescriptorList = append(protoFileDescriptors.FileDescriptorList, descriptorProto)
-	}
-
-	fileDescriptorListBytes, err := proto.Marshal(protoFileDescriptors)
-	if nil != err {
-		return "", err
-	}
-
-	openTxClient := http.Client{Timeout: time.Second * 20}
-
-	openTxURL := c.storeURL + "/api/buckets/" + c.bucketName + "/upload"
-	resp, err := openTxClient.Post(openTxURL, "application/octet-stream", bytes.NewBuffer(fileDescriptorListBytes))
-	if nil != err {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	if 200 != resp.StatusCode {
-		return "", fmt.Errorf("expected 200 (OK) repsonse code for open transaction, but received '%s'", resp.Status)
-	}
-
-	respBytes, err := ioutil.ReadAll(resp.Body)
-	if nil != err {
-		return "", err
-	}
-
-	var openTxResponse protogenerated.OpenTxResponse
-	err = proto.Unmarshal(respBytes, &openTxResponse)
-	if nil != err {
-		return "", err
-	}
-
-	return string(respBytes), nil
 }
 
 func (c *WebUploadClient) commitTx(revisionStr string) error {

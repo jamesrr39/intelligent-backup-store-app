@@ -13,7 +13,7 @@ message FileProto {
 }
 
 message FileDescriptorProtoList {
-  repeated FileDescriptorProto fileDescriptorList = 1;
+  repeated FileDescriptorProto fileDescriptorList = 1; // TODO rename to fileDescriptors
 }
 
 message OpenTxRequest {

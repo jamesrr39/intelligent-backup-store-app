@@ -39,7 +39,7 @@ func NewBucketService(store *intelligentstore.IntelligentStore) *BucketService {
 
 	router.HandleFunc("/", bucketService.handleGetAll)
 	router.HandleFunc("/{bucketName}", bucketService.handleGet).Methods("GET")
-	router.HandleFunc("/{bucketName}/upload", bucketService.handleCreateRevision).Methods("GET")
+	router.HandleFunc("/{bucketName}/upload", bucketService.handleCreateRevision).Methods("POST")
 	router.HandleFunc("/{bucketName}/upload/{revisionTs}/file", bucketService.handleUploadFile).Methods("POST")
 	router.HandleFunc("/{bucketName}/upload/{revisionTs}/commit", bucketService.handleCommitTransaction).Methods("GET")
 
@@ -222,18 +222,18 @@ func (s *BucketService) handleCreateRevision(w http.ResponseWriter, r *http.Requ
 
 	requestBytes, err := ioutil.ReadAll(r.Body)
 	if nil != err {
-		http.Error(w, "couldn;t read request body. Error: "+err.Error(), 400)
+		http.Error(w, "couldn't read request body. Error: "+err.Error(), 400)
 		return
 	}
 
 	var openTxRequest protogenerated.OpenTxRequest
 	err = proto.Unmarshal(requestBytes, &openTxRequest)
 	if nil != err {
-		http.Error(w, "couldn't unmarshall proto of request body. Error: "+err.Error(), 400)
+		http.Error(w, "couldn't unmarshal proto of request body. Error: "+err.Error(), 400)
 		return
 	}
 
-	var fileDetectorsForRequiredFiles *protogenerated.FileDescriptorProtoList
+	fileDetectorsForRequiredFiles := &protogenerated.FileDescriptorProtoList{}
 	var hashAlreadyExists bool
 
 	for _, fileDescriptorProto := range openTxRequest.FileDescriptorList.FileDescriptorList {
@@ -302,7 +302,7 @@ func (s *BucketService) handleUploadFile(w http.ResponseWriter, r *http.Request)
 	var uploadedFile protogenerated.FileProto
 	err = proto.Unmarshal(bodyBytes, &uploadedFile)
 	if nil != err {
-		http.Error(w, fmt.Sprintf("couldn't unmarshall message. Error: '%s'", err), 400)
+		http.Error(w, fmt.Sprintf("couldn't unmarshal message. Error: '%s'", err), 400)
 	}
 
 	err = transaction.BackupFile(
