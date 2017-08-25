@@ -53,9 +53,9 @@ type bucketSummary struct {
 }
 
 type revisionInfoWithFiles struct {
-	LastRevisionTs int64                    `json:"revisionTs"`
-	Files          []*intelligentstore.File `json:"files"`
-	Dirs           []*subDirInfo            `json:"dirs"`
+	LastRevisionTs int64                              `json:"revisionTs"`
+	Files          []*intelligentstore.FileDescriptor `json:"files"`
+	Dirs           []*subDirInfo                      `json:"dirs"`
 }
 
 func (s *BucketService) handleGetAll(w http.ResponseWriter, r *http.Request) {
@@ -164,7 +164,7 @@ func (s *BucketService) handleGetRevision(w http.ResponseWriter, r *http.Request
 		return
 	}
 	log.Printf("rootdir: %s\n", rootDir)
-	files := []*intelligentstore.File{}
+	files := []*intelligentstore.FileDescriptor{}
 
 	type subDirInfoMap map[string]int64 // map[name]nestedFileCount
 	dirnames := subDirInfoMap{}         // dirname[nested file count]

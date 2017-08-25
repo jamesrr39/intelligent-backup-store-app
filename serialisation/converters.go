@@ -6,7 +6,7 @@ import (
 )
 
 // FileDescriptorProtoToFileDescriptor turns the protobuf object of a File Descriptor into a intelligentstore.FileDescriptor
-func FileDescriptorProtoToFileDescriptor(fileDescriptorProto *protogenerated.FileDescriptorProto) *intelligentstore.File {
+func FileDescriptorProtoToFileDescriptor(fileDescriptorProto *protogenerated.FileDescriptorProto) *intelligentstore.FileDescriptor {
 	return intelligentstore.NewFileInVersion(
 		intelligentstore.Hash(fileDescriptorProto.Hash),
 		fileDescriptorProto.Filename,

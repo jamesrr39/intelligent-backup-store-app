@@ -30,7 +30,7 @@ func NewWebUploadClient(storeURL, bucketName string) *WebUploadClient {
 
 // BackupFolder backs up a directory on the local machine to the bucket in the store in the WebUploadClient
 func (c *WebUploadClient) BackupFolder(folderPath string, excludeFilesMatcher *excludesmatcher.ExcludesMatcher, dryRun bool) error {
-	var fileList []*intelligentstore.File
+	var fileList []*intelligentstore.FileDescriptor
 
 	var totalFilesToUpload int64
 	var totalBytesToUpload int64
@@ -84,7 +84,7 @@ func (c *WebUploadClient) BackupFolder(folderPath string, excludeFilesMatcher *e
 	log.Println("opened Tx. Rev: " + revisionStr)
 
 	var filesSuccessfullyBackedUpCount int64
-	var filesFailedToBackup []*intelligentstore.File
+	var filesFailedToBackup []*intelligentstore.FileDescriptor
 
 	for _, fileDescriptor := range fileList {
 		err = c.backupFile(folderPath, revisionStr, fileDescriptor)
@@ -110,7 +110,7 @@ func (c *WebUploadClient) BackupFolder(folderPath string, excludeFilesMatcher *e
 	return nil
 }
 
-func (c *WebUploadClient) backupFile(basePath, revisionStr string, fileDescriptor *intelligentstore.File) error {
+func (c *WebUploadClient) backupFile(basePath, revisionStr string, fileDescriptor *intelligentstore.FileDescriptor) error {
 
 	client := http.Client{Timeout: time.Hour}
 	fileContents, err := ioutil.ReadFile(fileDescriptor.FilePath)
@@ -151,7 +151,7 @@ func (c *WebUploadClient) backupFile(basePath, revisionStr string, fileDescripto
 }
 
 // openTx opens a transaction with the server and sends a list of files it wants to back up
-func (c *WebUploadClient) openTx(fileDescriptors []*intelligentstore.File) (string, error) {
+func (c *WebUploadClient) openTx(fileDescriptors []*intelligentstore.FileDescriptor) (string, error) {
 	var protoFileDescriptors *protogenerated.FileDescriptorProtoList
 	for _, descriptor := range fileDescriptors {
 		descriptorProto := &protogenerated.FileDescriptorProto{
@@ -209,7 +209,7 @@ func (c *WebUploadClient) commitTx(revisionStr string) error {
 	return nil
 }
 
-func descriptorToProto(descriptor *intelligentstore.File) *protogenerated.FileDescriptorProto {
+func descriptorToProto(descriptor *intelligentstore.FileDescriptor) *protogenerated.FileDescriptorProto {
 	return &protogenerated.FileDescriptorProto{
 		Filename: descriptor.FilePath,
 		Hash:     string(descriptor.Hash),

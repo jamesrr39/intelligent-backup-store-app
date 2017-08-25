@@ -14,7 +14,7 @@ type Revision struct {
 }
 
 // GetFilesInRevision gets a list of files in this revision
-func (r *Revision) GetFilesInRevision() ([]*File, error) {
+func (r *Revision) GetFilesInRevision() ([]*FileDescriptor, error) {
 	filePath := filepath.Join(r.bucketPath(), "versions", r.VersionTimestamp)
 	revisionDataFile, err := os.Open(filePath)
 	if nil != err {
@@ -22,7 +22,7 @@ func (r *Revision) GetFilesInRevision() ([]*File, error) {
 	}
 	defer revisionDataFile.Close()
 
-	var filesInVersion []*File
+	var filesInVersion []*FileDescriptor
 	err = gob.NewDecoder(revisionDataFile).Decode(&filesInVersion)
 	if nil != err {
 		return nil, err

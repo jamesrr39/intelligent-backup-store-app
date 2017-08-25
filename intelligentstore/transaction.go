@@ -16,7 +16,7 @@ import (
 
 type Transaction struct {
 	*Revision
-	FilesInVersion []*File
+	FilesInVersion []*FileDescriptor
 }
 
 // TODO: test for >4GB file
@@ -78,7 +78,7 @@ func (transaction *Transaction) BackupFile(fileName string, sourceFile io.Reader
 	return nil
 }
 
-func (transaction *Transaction) AddAlreadyExistingHash(fileDescriptor *File) (bool, error) {
+func (transaction *Transaction) AddAlreadyExistingHash(fileDescriptor *FileDescriptor) (bool, error) {
 	isTryingToTraverse := dirtraversal.IsTryingToTraverseUp(string(fileDescriptor.Hash))
 	if isTryingToTraverse {
 		return false, fmt.Errorf("%s is attempting to traverse up the filesystem tree, which is not allowed (and this is not a hash)", fileDescriptor.Hash)
