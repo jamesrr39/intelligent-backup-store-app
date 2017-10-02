@@ -1,3 +1,5 @@
+// @APIVersion 1.0.0
+// @APITitle IntelligentStore Server
 package main
 
 import (
@@ -55,26 +57,26 @@ func main() {
 	backupDryRun := backupIntoCommand.Flag("dry-run", "dry run?").Default("false").Bool()
 	backupExcludesMatcherLocation := backupIntoCommand.Flag("exclude", "path to a file with glob-style patterns to exclude files").Default("").String()
 	backupIntoCommand.Action(func(ctx *kingpin.ParseContext) error {
+		excludeMatcher := &excludesmatcher.ExcludesMatcher{}
+		if *backupExcludesMatcherLocation != "" {
+			excludeFile, err := os.Open(*backupExcludesMatcherLocation)
+			if nil != err {
+				return err
+			}
+			defer excludeFile.Close()
+
+			excludeMatcher, err = excludesmatcher.NewExcludesMatcherFromReader(excludeFile)
+			if nil != err {
+				return err
+			}
+		}
+
 		if strings.HasPrefix(*backupStoreLocation, "http://") || strings.HasPrefix(*backupStoreLocation, "https://") {
 			client := webuploadclient.NewWebUploadClient(*backupStoreLocation, *backupBucketName)
-
-			excludeMatcher := &excludesmatcher.ExcludesMatcher{}
-			if *backupExcludesMatcherLocation != "" {
-				excludeFile, err := os.Open(*backupExcludesMatcherLocation)
-				if nil != err {
-					return err
-				}
-				defer excludeFile.Close()
-
-				excludeMatcher, err = excludesmatcher.NewExcludesMatcherFromReader(excludeFile)
-				if nil != err {
-					return err
-				}
-			}
 			return client.BackupFolder(*backupFromLocation, excludeMatcher, *backupDryRun)
 		}
 
-		return localupload.UploadToStore(*backupStoreLocation, *backupBucketName, *backupFromLocation)
+		return localupload.UploadToStore(*backupStoreLocation, *backupBucketName, *backupFromLocation, excludeMatcher)
 	})
 
 	listBucketsCommand := kingpin.Command("list-buckets", "produce a listing of all the buckets and the last backup time")

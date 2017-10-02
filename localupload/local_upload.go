@@ -1,6 +1,7 @@
 package localupload
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -9,9 +10,10 @@ import (
 	"time"
 
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
 )
 
-func UploadToStore(backupStoreLocation, backupBucketName, backupFromLocation string) error {
+func UploadToStore(backupStoreLocation, backupBucketName, backupFromLocation string, excludeMatcher *excludesmatcher.ExcludesMatcher) error {
 	startTime := time.Now()
 
 	store, err := intelligentstore.NewIntelligentStoreConnToExisting(backupStoreLocation)
@@ -26,7 +28,7 @@ func UploadToStore(backupStoreLocation, backupBucketName, backupFromLocation str
 
 	backupTx := bucket.Begin()
 
-	errCount := 0
+	var errs []error
 	fileCount := 0
 
 	absBackupFromLocation, err := filepath.Abs(backupFromLocation)
@@ -43,17 +45,28 @@ func UploadToStore(backupStoreLocation, backupBucketName, backupFromLocation str
 			return nil
 		}
 
+		relativeFilePath := strings.TrimPrefix(strings.TrimPrefix(path, absBackupFromLocation), string(filepath.Separator))
+		log.Printf("relativeFilePath: '%s'\n", relativeFilePath)
+		if excludeMatcher.Matches(relativeFilePath) {
+			log.Printf("ignoring '%s' (excluded by matcher)\n", relativeFilePath)
+			return nil
+		}
+
 		file, err := os.Open(path)
 		if nil != err {
-			log.Printf("couldn't backup '%s'. Error: %s\n", path, err)
-			errCount++
+			errMessage := fmt.Sprintf("couldn't open '%s'. Error: %s", path, err)
+			log.Println(errMessage)
+			errs = append(errs, errors.New(errMessage))
 			return nil
 		}
 		defer file.Close()
 
-		err = backupTx.BackupFile(strings.TrimPrefix(path, absBackupFromLocation), file)
+		err = backupTx.BackupFile(relativeFilePath, file)
 		if nil != err {
-			return err
+			errMessage := fmt.Sprintf("couldn't backup '%s'. Error: %s", path, err)
+			log.Println(errMessage)
+			errs = append(errs, errors.New(errMessage))
+			return nil
 		}
 
 		fileCount++
@@ -69,8 +82,14 @@ func UploadToStore(backupStoreLocation, backupBucketName, backupFromLocation str
 		return err
 	}
 
-	if 0 != errCount {
-		return fmt.Errorf("backup finished, but there were errors")
+	if 0 != len(errs) {
+		errMessage := fmt.Sprintf("backup finished, but there were %d errors:\n", len(errs))
+
+		for _, err := range errs {
+			errMessage += err.Error() + "\n"
+		}
+
+		return errors.New(errMessage)
 	}
 
 	log.Printf("backed up %d files in %f seconds\n", fileCount, time.Now().Sub(startTime).Seconds())
