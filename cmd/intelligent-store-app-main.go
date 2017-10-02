@@ -1,5 +1,3 @@
-// @APIVersion 1.0.0
-// @APITitle IntelligentStore Server
 package main
 
 import (
@@ -19,6 +17,7 @@ import (
 	kingpin "gopkg.in/alecthomas/kingpin.v2"
 )
 
+//go:generate swagger generate spec
 func main() {
 	initCommand := kingpin.Command("init", "create a new store")
 	initStoreLocation := initCommand.Arg("store location", "location of the store").Default(".").String()

@@ -20,8 +20,8 @@ import (
 
 // BucketService handles HTTP requests to get bucket information.
 type BucketService struct {
-	store  *intelligentstore.IntelligentStore
-	router *mux.Router
+	store *intelligentstore.IntelligentStore
+	http.Handler
 	openTransactionsMap
 }
 
@@ -37,8 +37,16 @@ func NewBucketService(store *intelligentstore.IntelligentStore) *BucketService {
 	router := mux.NewRouter()
 	bucketService := &BucketService{store, router, make(openTransactionsMap)}
 
+	// swagger:route GET /api/buckets/ bucket listBuckets
+	//     Produces:
+	//     - application/json
 	router.HandleFunc("/", bucketService.handleGetAll)
+
+	// swagger:route GET /api/buckets/{bucketName} bucket getBucket
+	//     Produces:
+	//     - application/json
 	router.HandleFunc("/{bucketName}", bucketService.handleGet).Methods("GET")
+
 	router.HandleFunc("/{bucketName}/upload", bucketService.handleCreateRevision).Methods("POST")
 	router.HandleFunc("/{bucketName}/upload/{revisionTs}/file", bucketService.handleUploadFile).Methods("POST")
 	router.HandleFunc("/{bucketName}/upload/{revisionTs}/commit", bucketService.handleCommitTransaction).Methods("GET")
@@ -58,6 +66,8 @@ type revisionInfoWithFiles struct {
 	Dirs           []*subDirInfo                      `json:"dirs"`
 }
 
+// @Title Get Latest Buckets Information
+// @Success 200 {object} string &quot;Success&quot;
 func (s *BucketService) handleGetAll(w http.ResponseWriter, r *http.Request) {
 	buckets, err := s.store.GetAllBuckets()
 	if nil != err {
@@ -341,8 +351,4 @@ func (s *BucketService) handleCommitTransaction(w http.ResponseWriter, r *http.R
 		return
 	}
 	s.openTransactionsMap[bucketName+"__"+revisionTsString] = nil
-}
-
-func (s *BucketService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	s.router.ServeHTTP(w, r)
 }

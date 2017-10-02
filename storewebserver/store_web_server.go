@@ -9,8 +9,8 @@ import (
 
 // StoreWebServer represents a handler handling requests for a store.
 type StoreWebServer struct {
-	store  *intelligentstore.IntelligentStore
-	router *mux.Router
+	store *intelligentstore.IntelligentStore
+	http.Handler
 }
 
 // NewStoreWebServer creates a StoreWebServer and sets up the routing for the services it provides.
@@ -21,12 +21,5 @@ func NewStoreWebServer(store *intelligentstore.IntelligentStore) *StoreWebServer
 	router.PathPrefix("/api/buckets/").Handler(http.StripPrefix("/api/buckets", bucketsHandler))
 	router.PathPrefix("/").Handler(http.StripPrefix("/", http.FileServer(http.Dir("storewebserver/static")))) // TODO dev mode & production packaging
 
-	//mainRouter.PathPrefix("/").Handler(http.StripPrefix("/", http.FileServer(http.Dir("static"))))
-
 	return &StoreWebServer{store, router}
-}
-
-func (s *StoreWebServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	s.router.ServeHTTP(w, r)
-	r.Body.Close()
 }
