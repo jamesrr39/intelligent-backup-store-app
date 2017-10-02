@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -16,7 +17,7 @@ func Test_Begin(t *testing.T) {
 		return time.Date(year, 1, 2, 3, 4, 5, 6, time.UTC)
 	}
 
-	store := &IntelligentStore{"", testNowProvider}
+	store := &IntelligentStore{"", testNowProvider, afero.NewMemMapFs()}
 	bucket := &Bucket{store, "test bucket"}
 	transaction := bucket.Begin()
 

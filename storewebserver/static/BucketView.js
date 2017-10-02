@@ -33,7 +33,7 @@ define([
                 "pic",
               "</div>",
               "<div class='name'>",
-                "{{path}}",
+                "{{name}}",
               "</div>",
             "</div>",
           "{{/files}}",
@@ -56,7 +56,7 @@ define([
       render($container) {
         var url = "/api/buckets/" + encodeURIComponent(bucketName) + "/" + revisionStr;
         if (rootDir) {
-          url += "?rootDir=" + encodeURIComponent(rootDir);
+          url += "?rootDir=" + encodeURIComponent("/" + rootDir);
         }
 
         $.ajax(url).then(function(data) {
@@ -66,6 +66,12 @@ define([
             bucketName: data.bucketName,
             files: data.files.sort(function(a, b){
               return a.path.toUpperCase() > b.path.toUpperCase();
+            }).map(function(file) {
+              var lastSlashIndex = file.path.lastIndexOf("/");
+
+              return {
+                name: (lastSlashIndex === -1) ? file.path : file.path.substring(lastSlashIndex+1) 
+              }
             }),
             dirs: data.dirs.sort(function(a, b){
               return a.name.toUpperCase() > b.name.toUpperCase();

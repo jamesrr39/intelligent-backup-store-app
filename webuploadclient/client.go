@@ -46,6 +46,11 @@ func (c *WebUploadClient) BackupFolder(folderPath string, excludeFilesMatcher *e
 			return nil
 		}
 
+		if !fileInfo.Mode().IsRegular() {
+			// skip symlinks
+			return nil
+		}
+
 		relativeFilePath := strings.TrimPrefix(strings.TrimPrefix(path, folderPath), string(filepath.Separator))
 
 		if excludeFilesMatcher.Matches(relativeFilePath) {
@@ -53,6 +58,8 @@ func (c *WebUploadClient) BackupFolder(folderPath string, excludeFilesMatcher *e
 			log.Printf("skipping %s\n", relativeFilePath)
 			return nil
 		}
+
+		log.Printf("adding %s to the file descriptor list\n", relativeFilePath)
 
 		totalFilesToUpload++
 		totalBytesToUpload += fileInfo.Size()
@@ -103,7 +110,7 @@ func (c *WebUploadClient) BackupFolder(folderPath string, excludeFilesMatcher *e
 			log.Printf("%d of %d files processed (%f%% complete) (%d were already on the server)\n",
 				filesProcessedSoFar,
 				amountOfFilesToSend,
-				float64(filesProcessedSoFar)/float64(amountOfFilesToSend),
+				100*float64(filesProcessedSoFar)/float64(amountOfFilesToSend),
 				filesAlreadyOnServerCount)
 		}
 	}

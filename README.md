@@ -18,3 +18,7 @@ This is the structure of the upload process. The proper nouns are protobuf messa
 2. Server responds with an OpenTxResponse, with a `revision` ID string, and the list of files the client needs to send. Files that were in the original request but not in this response are already in the server, and adding the records of these files are
 3. Client sends lots of separate HTTP requests with FileProto messages for all the files the server needs.
 4. When finished sending files (and receiving responses for all previous HTTP calls), the client should call the Commit endpoint.
+
+## Design Philosophy
+
+1. Disk space is cheap nowadays, but not unlimited. Some people are using pay-per-GB space. It should be possible to delete old backups, without the overhead of storing the same file twice.

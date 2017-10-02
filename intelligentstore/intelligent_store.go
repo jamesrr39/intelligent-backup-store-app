@@ -1,71 +1,83 @@
 package intelligentstore
 
 import (
+	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
-	"github.com/jamesrr39/goutil/userextra"
+	"github.com/spf13/afero"
+)
+
+var (
+	ErrStoreDirectoryNotDirectory = errors.New("store data directory is not a directory (either wrong path, or corrupted)")
+	ErrStoreNotInitedYet          = errors.New("IntelligentStore not initialised yet. Use init to create a new store")
 )
 
 // IntelligentStore represents the object to interact with the underlying storage
 type IntelligentStore struct {
 	StoreBasePath string
 	nowProvider
+	fs afero.Fs
 }
 
 func NewIntelligentStoreConnToExisting(pathToBase string) (*IntelligentStore, error) {
-	fullPath, err := expandPath(pathToBase)
-	if nil != err {
-		return nil, err
-	}
+	return newIntelligentStoreConnToExisting(pathToBase, afero.NewOsFs())
+}
 
-	fileInfo, err := os.Stat(filepath.Join(fullPath, ".backup_data"))
+func newIntelligentStoreConnToExisting(pathToBase string, fs afero.Fs) (*IntelligentStore, error) {
+	fileInfo, err := fs.Stat(filepath.Join(pathToBase, ".backup_data"))
 	if nil != err {
 		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("IntelligentStore not initialised yet. Use init to create a new store")
+			return nil, ErrStoreNotInitedYet
 		}
 		return nil, err
 	}
 
 	if !fileInfo.IsDir() {
-		return nil, fmt.Errorf("store data directory is not a directory (either wrong path, or corrupted)")
+		return nil, ErrStoreDirectoryNotDirectory
 	}
 
-	return &IntelligentStore{fullPath, prodNowProvider}, nil
+	return &IntelligentStore{pathToBase, prodNowProvider, fs}, nil
 }
 
 func CreateIntelligentStoreAndNewConn(pathToBase string) (*IntelligentStore, error) {
-	fullPath, err := expandPath(pathToBase)
+	return createIntelligentStoreAndNewConn(pathToBase, afero.NewOsFs())
+}
 
-	fileInfos, err := ioutil.ReadDir(fullPath)
+func createIntelligentStoreAndNewConn(pathToBase string, fs afero.Fs) (*IntelligentStore, error) {
+	fileInfos, err := afero.ReadDir(fs, pathToBase)
 	if nil != err {
-		return nil, fmt.Errorf("couldn't get a file listing for '%s'. Error: '%s'", fullPath, err)
+		return nil, fmt.Errorf("couldn't get a file listing for '%s'. Error: '%s'", pathToBase, err)
 	}
 
 	if 0 != len(fileInfos) {
-		return nil, fmt.Errorf("'%s' is not an empty folder. Creating a new store requires an empty folder. Please create a new folder and create the store in there", fullPath)
+		return nil, fmt.Errorf(
+			"'%s' is not an empty folder. Creating a new store requires an empty folder. Please create a new folder and create the store in there",
+			pathToBase)
 	}
 
-	versionsFolderPath := filepath.Join(fullPath, ".backup_data", "buckets")
-	err = os.MkdirAll(versionsFolderPath, 0700)
+	versionsFolderPath := filepath.Join(pathToBase, ".backup_data", "buckets")
+	err = fs.MkdirAll(versionsFolderPath, 0700)
 	if nil != err {
-		return nil, fmt.Errorf("couldn't create data folder for backup versions at '%s'. Error: '%s'", versionsFolderPath, err)
+		return nil, fmt.Errorf(
+			"couldn't create data folder for backup versions at '%s'. Error: '%s'",
+			versionsFolderPath,
+			err)
 	}
 
-	objectsFolderPath := filepath.Join(fullPath, ".backup_data", "objects")
-	err = os.MkdirAll(objectsFolderPath, 0700)
+	objectsFolderPath := filepath.Join(pathToBase, ".backup_data", "objects")
+	err = fs.MkdirAll(objectsFolderPath, 0700)
 	if nil != err {
 		return nil, fmt.Errorf("couldn't create data folder for backup objects at '%s'. Error: '%s'", objectsFolderPath, err)
 	}
 
-	return &IntelligentStore{fullPath, prodNowProvider}, nil
+	return &IntelligentStore{pathToBase, prodNowProvider, fs}, nil
 }
 
 func (s *IntelligentStore) GetBucket(bucketName string) (*Bucket, error) {
 	bucketPath := filepath.Join(s.StoreBasePath, ".backup_data", "buckets", bucketName)
-	_, err := os.Stat(bucketPath)
+	_, err := s.fs.Stat(bucketPath)
 	if nil != err {
 		if os.IsNotExist(err) {
 			return nil, ErrBucketDoesNotExist
@@ -84,12 +96,12 @@ func (s *IntelligentStore) CreateBucket(bucketName string) (*Bucket, error) {
 	}
 
 	bucketPath := filepath.Join(s.StoreBasePath, ".backup_data", "buckets", bucketName)
-	err = os.Mkdir(bucketPath, 0700)
+	err = s.fs.Mkdir(bucketPath, 0700)
 	if nil != err {
 		return nil, err
 	}
 
-	err = os.Mkdir(filepath.Join(bucketPath, "versions"), 0700)
+	err = s.fs.Mkdir(filepath.Join(bucketPath, "versions"), 0700)
 	if nil != err {
 		return nil, err
 	}
@@ -100,7 +112,7 @@ func (s *IntelligentStore) CreateBucket(bucketName string) (*Bucket, error) {
 func (s *IntelligentStore) GetAllBuckets() ([]*Bucket, error) {
 	bucketsDirPath := filepath.Join(s.StoreBasePath, ".backup_data", "buckets")
 
-	bucketsFileInfo, err := ioutil.ReadDir(bucketsDirPath)
+	bucketsFileInfo, err := afero.ReadDir(s.fs, bucketsDirPath)
 	if nil != err {
 		return nil, err
 	}
@@ -119,18 +131,4 @@ func (s *IntelligentStore) GetAllBuckets() ([]*Bucket, error) {
 
 	return buckets, nil
 
-}
-
-func expandPath(pathToBase string) (string, error) {
-	userExpandedPath, err := userextra.ExpandUser(pathToBase)
-	if nil != err {
-		return "", err
-	}
-
-	fullPath, err := filepath.Abs(userExpandedPath)
-	if nil != err {
-		return "", err
-	}
-
-	return fullPath, nil
 }

@@ -158,12 +158,11 @@ func (s *BucketService) handleGetRevision(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	rootDir, err := url.QueryUnescape(strings.TrimPrefix(r.URL.Query().Get("rootDir"), "/"))
+	rootDir, err := url.QueryUnescape(r.URL.Query().Get("rootDir"))
 	if nil != err {
 		http.Error(w, "couldn't unescape rootDir. Error: "+err.Error(), 400)
 		return
 	}
-	log.Printf("rootdir: %s\n", rootDir)
 	files := []*intelligentstore.FileDescriptor{}
 
 	type subDirInfoMap map[string]int64 // map[name]nestedFileCount
