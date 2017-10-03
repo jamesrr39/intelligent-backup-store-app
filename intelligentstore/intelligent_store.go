@@ -3,6 +3,7 @@ package intelligentstore
 import (
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 
@@ -22,10 +23,10 @@ type IntelligentStore struct {
 }
 
 func NewIntelligentStoreConnToExisting(pathToBase string) (*IntelligentStore, error) {
-	return newIntelligentStoreConnToExisting(pathToBase, afero.NewOsFs())
+	return newIntelligentStoreConnToExisting(pathToBase, prodNowProvider, afero.NewOsFs())
 }
 
-func newIntelligentStoreConnToExisting(pathToBase string, fs afero.Fs) (*IntelligentStore, error) {
+func newIntelligentStoreConnToExisting(pathToBase string, nowFunc nowProvider, fs afero.Fs) (*IntelligentStore, error) {
 	fileInfo, err := fs.Stat(filepath.Join(pathToBase, ".backup_data"))
 	if nil != err {
 		if os.IsNotExist(err) {
@@ -38,14 +39,14 @@ func newIntelligentStoreConnToExisting(pathToBase string, fs afero.Fs) (*Intelli
 		return nil, ErrStoreDirectoryNotDirectory
 	}
 
-	return &IntelligentStore{pathToBase, prodNowProvider, fs}, nil
+	return &IntelligentStore{pathToBase, nowFunc, fs}, nil
 }
 
 func CreateIntelligentStoreAndNewConn(pathToBase string) (*IntelligentStore, error) {
-	return createIntelligentStoreAndNewConn(pathToBase, afero.NewOsFs())
+	return createIntelligentStoreAndNewConn(pathToBase, prodNowProvider, afero.NewOsFs())
 }
 
-func createIntelligentStoreAndNewConn(pathToBase string, fs afero.Fs) (*IntelligentStore, error) {
+func createIntelligentStoreAndNewConn(pathToBase string, nowFunc nowProvider, fs afero.Fs) (*IntelligentStore, error) {
 	fileInfos, err := afero.ReadDir(fs, pathToBase)
 	if nil != err {
 		return nil, fmt.Errorf("couldn't get a file listing for '%s'. Error: '%s'", pathToBase, err)
@@ -72,7 +73,7 @@ func createIntelligentStoreAndNewConn(pathToBase string, fs afero.Fs) (*Intellig
 		return nil, fmt.Errorf("couldn't create data folder for backup objects at '%s'. Error: '%s'", objectsFolderPath, err)
 	}
 
-	return &IntelligentStore{pathToBase, prodNowProvider, fs}, nil
+	return &IntelligentStore{pathToBase, nowFunc, fs}, nil
 }
 
 func (s *IntelligentStore) GetBucket(bucketName string) (*Bucket, error) {
@@ -101,7 +102,9 @@ func (s *IntelligentStore) CreateBucket(bucketName string) (*Bucket, error) {
 		return nil, err
 	}
 
-	err = s.fs.Mkdir(filepath.Join(bucketPath, "versions"), 0700)
+	versionsDirPath := filepath.Join(bucketPath, "versions")
+	log.Printf("creating %s\n", versionsDirPath)
+	err = s.fs.Mkdir(versionsDirPath, 0700)
 	if nil != err {
 		return nil, err
 	}

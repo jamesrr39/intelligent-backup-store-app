@@ -40,12 +40,12 @@ func NewBucketService(store *intelligentstore.IntelligentStore) *BucketService {
 	// swagger:route GET /api/buckets/ bucket listBuckets
 	//     Produces:
 	//     - application/json
-	router.HandleFunc("/", bucketService.handleGetAll)
+	router.HandleFunc("/", bucketService.handleGetAllBuckets)
 
 	// swagger:route GET /api/buckets/{bucketName} bucket getBucket
 	//     Produces:
 	//     - application/json
-	router.HandleFunc("/{bucketName}", bucketService.handleGet).Methods("GET")
+	router.HandleFunc("/{bucketName}", bucketService.handleGetBucket).Methods("GET")
 
 	router.HandleFunc("/{bucketName}/upload", bucketService.handleCreateRevision).Methods("POST")
 	router.HandleFunc("/{bucketName}/upload/{revisionTs}/file", bucketService.handleUploadFile).Methods("POST")
@@ -57,7 +57,7 @@ func NewBucketService(store *intelligentstore.IntelligentStore) *BucketService {
 
 type bucketSummary struct {
 	Name           string `json:"name"`
-	LastRevisionTs int64  `json:"lastRevisionTs"`
+	LastRevisionTs *int64 `json:"lastRevisionTs"`
 }
 
 type revisionInfoWithFiles struct {
@@ -68,7 +68,7 @@ type revisionInfoWithFiles struct {
 
 // @Title Get Latest Buckets Information
 // @Success 200 {object} string &quot;Success&quot;
-func (s *BucketService) handleGetAll(w http.ResponseWriter, r *http.Request) {
+func (s *BucketService) handleGetAllBuckets(w http.ResponseWriter, r *http.Request) {
 	buckets, err := s.store.GetAllBuckets()
 	if nil != err {
 		http.Error(w, err.Error(), 500)
@@ -84,19 +84,18 @@ func (s *BucketService) handleGetAll(w http.ResponseWriter, r *http.Request) {
 
 	var bucketsSummaries []*bucketSummary
 	var latestRevision *intelligentstore.Revision
-	var latestRevisionTs int64
+	var latestRevisionTs *int64
 	for _, bucket := range buckets {
 		latestRevision, err = bucket.GetLatestRevision()
 		if nil != err {
-			http.Error(w, err.Error(), 500)
-			return
+			if intelligentstore.ErrNoRevisionsForBucket != err {
+				http.Error(w, err.Error(), 500)
+				return
+			}
+		} else {
+			latestRevisionTs = &latestRevision.VersionTimestamp
 		}
 
-		latestRevisionTs, err = strconv.ParseInt(latestRevision.VersionTimestamp, 10, 64)
-		if nil != err {
-			http.Error(w, err.Error(), 500)
-			return
-		}
 		bucketsSummaries = append(bucketsSummaries, &bucketSummary{bucket.BucketName, latestRevisionTs})
 	}
 
@@ -107,7 +106,7 @@ func (s *BucketService) handleGetAll(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *BucketService) handleGet(w http.ResponseWriter, r *http.Request) {
+func (s *BucketService) handleGetBucket(w http.ResponseWriter, r *http.Request) {
 	bucketName := mux.Vars(r)["bucketName"]
 
 	bucket, err := s.store.GetBucket(bucketName)
@@ -148,15 +147,15 @@ func (s *BucketService) handleGetRevision(w http.ResponseWriter, r *http.Request
 	var revision *intelligentstore.Revision
 	if "latest" == revisionTsString {
 		revision, err = bucket.GetLatestRevision()
+	} else {
+		var revisionTimestamp int64
+		revisionTimestamp, err = strconv.ParseInt(revisionTsString, 10, 64)
 		if nil != err {
-			http.Error(w, err.Error(), 500)
+			http.Error(w, fmt.Sprintf("couldn't convert '%s' to a timestamp. Error: '%s'", revisionTsString, err), 400)
 			return
 		}
-	} else {
-		panic("not implemented yet")
+		revision, err = bucket.GetRevision(revisionTimestamp)
 	}
-
-	revisionTs, err := strconv.ParseInt(revision.VersionTimestamp, 10, 64)
 	if nil != err {
 		http.Error(w, err.Error(), 500)
 		return
@@ -175,9 +174,12 @@ func (s *BucketService) handleGetRevision(w http.ResponseWriter, r *http.Request
 	}
 	files := []*intelligentstore.FileDescriptor{}
 
+	log.Printf("rootDir: '%s'\n", rootDir)
+
 	type subDirInfoMap map[string]int64 // map[name]nestedFileCount
 	dirnames := subDirInfoMap{}         // dirname[nested file count]
 	for _, file := range allFiles {
+		log.Printf("filepath: '%s'\n", file.FilePath)
 		if !strings.HasPrefix(file.FilePath, rootDir) {
 			// not in this root dir
 			continue
@@ -200,7 +202,7 @@ func (s *BucketService) handleGetRevision(w http.ResponseWriter, r *http.Request
 		dirs = append(dirs, &subDirInfo{dirname, nestedFileCount})
 	}
 
-	data := &revisionInfoWithFiles{revisionTs, files, dirs}
+	data := &revisionInfoWithFiles{revision.VersionTimestamp, files, dirs}
 
 	w.Header().Set("Content-Type", "application/json")
 	err = json.NewEncoder(w).Encode(data)
@@ -227,7 +229,7 @@ func (s *BucketService) handleCreateRevision(w http.ResponseWriter, r *http.Requ
 	}
 
 	transaction := bucket.Begin()
-	s.openTransactionsMap[bucket.BucketName+"__"+transaction.VersionTimestamp] = transaction
+	s.openTransactionsMap[bucket.BucketName+"__"+strconv.FormatInt(transaction.VersionTimestamp, 10)] = transaction
 
 	requestBytes, err := ioutil.ReadAll(r.Body)
 	if nil != err {
@@ -263,7 +265,7 @@ func (s *BucketService) handleCreateRevision(w http.ResponseWriter, r *http.Requ
 	}
 
 	openTxReponse := &protogenerated.OpenTxResponse{
-		RevisionStr:        transaction.VersionTimestamp,
+		RevisionStr:        strconv.FormatInt(transaction.VersionTimestamp, 10),
 		FileDescriptorList: fileDetectorsForRequiredFiles,
 	}
 

@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/jamesrr39/goutil/dirtraversal"
@@ -101,7 +102,13 @@ func (transaction *Transaction) AddAlreadyExistingHash(fileDescriptor *FileDescr
 }
 
 func (transaction *Transaction) Commit() error {
-	filePath := filepath.Join(transaction.StoreBasePath, ".backup_data", "buckets", transaction.BucketName, "versions", transaction.VersionTimestamp)
+	filePath := filepath.Join(
+		transaction.StoreBasePath,
+		".backup_data",
+		"buckets",
+		transaction.BucketName,
+		"versions",
+		strconv.FormatInt(transaction.VersionTimestamp, 10))
 
 	versionContentsFile, err := os.Create(filePath)
 	if nil != err {

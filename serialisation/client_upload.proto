@@ -13,7 +13,7 @@ message FileProto {
 }
 
 message FileDescriptorProtoList {
-  repeated FileDescriptorProto fileDescriptorList = 1; // TODO rename to fileDescriptors
+  repeated FileDescriptorProto fileDescriptors = 1;
 }
 
 message OpenTxRequest {
@@ -21,6 +21,6 @@ message OpenTxRequest {
 }
 
 message OpenTxResponse {
-  string revisionStr = 1;
+  uint64 revisionStr = 1;
   FileDescriptorProtoList FileDescriptorList = 2;
 }

@@ -1,7 +1,6 @@
 package intelligentstore
 
 import (
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -10,7 +9,10 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/pkg/errors"
+
 	"github.com/jamesrr39/goutil/dirtraversal"
+	"github.com/spf13/afero"
 )
 
 var (
@@ -28,7 +30,7 @@ type Bucket struct {
 
 // Begin creates a new Transaction to create a new revision of files in the Bucket.
 func (bucket *Bucket) Begin() *Transaction {
-	versionTimestamp := strconv.FormatInt(bucket.nowProvider().Unix(), 10)
+	versionTimestamp := bucket.nowProvider().Unix()
 
 	return &Transaction{&Revision{bucket, versionTimestamp}, nil}
 }
@@ -55,8 +57,13 @@ func isValidBucketName(name string) error {
 
 var ErrNoRevisionsForBucket = errors.New("no revisions for this bucket yet")
 
+// GetLatestRevision returns the latest Revision of this bucket.
+// error could be either ErrNoRevisionsForBucket or an FS-related error.
 func (bucket *Bucket) GetLatestRevision() (*Revision, error) {
-	versionsFileInfos, err := ioutil.ReadDir(filepath.Join(bucket.bucketPath(), "versions"))
+	versionsDirPath := filepath.Join(bucket.bucketPath(), "versions")
+	versionsFileInfos, err := afero.ReadDir(
+		bucket.IntelligentStore.fs,
+		versionsDirPath)
 	if nil != err {
 		return nil, err
 	}
@@ -77,7 +84,7 @@ func (bucket *Bucket) GetLatestRevision() (*Revision, error) {
 		}
 	}
 
-	return &Revision{bucket, strconv.FormatInt(highestTs, 10)}, nil
+	return &Revision{bucket, highestTs}, nil
 
 }
 
@@ -120,7 +127,11 @@ func (bucket *Bucket) GetRevisions() ([]*Revision, error) {
 
 	var versions []*Revision
 	for _, versionFileInfo := range versionsFileInfos {
-		versions = append(versions, &Revision{bucket, versionFileInfo.Name()})
+		revisionTs, err := strconv.ParseInt(versionFileInfo.Name(), 10, 64)
+		if nil != err {
+			return nil, errors.Wrapf(err, "couldn't parse '%s' to a revision timestamp", versionFileInfo.Name())
+		}
+		versions = append(versions, &Revision{bucket, revisionTs})
 	}
 
 	return versions, nil
@@ -135,5 +146,5 @@ func (bucket *Bucket) GetRevision(revisionTimeStamp int64) (*Revision, error) {
 		return nil, err
 	}
 
-	return &Revision{bucket, timestampAsString}, nil
+	return &Revision{bucket, revisionTimeStamp}, nil
 }
