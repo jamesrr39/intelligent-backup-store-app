@@ -16,28 +16,43 @@ import (
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
 	"github.com/jamesrr39/intelligent-backup-store-app/serialisation"
 	"github.com/jamesrr39/intelligent-backup-store-app/serialisation/protogenerated"
+	"github.com/pkg/errors"
+	"github.com/spf13/afero"
 )
 
 // WebUploadClient represents an http client for uploading files to an IntelligentStore
 type WebUploadClient struct {
-	storeURL   string
-	bucketName string
+	storeURL       string
+	bucketName     string
+	folderPath     string
+	excludeMatcher *excludesmatcher.ExcludesMatcher
+	fs             afero.Fs
 }
 
 // NewWebUploadClient creates a new WebUploadClient
-func NewWebUploadClient(storeURL, bucketName string) *WebUploadClient {
-	return &WebUploadClient{storeURL, bucketName}
+func NewWebUploadClient(
+	storeURL, bucketName, folderPath string,
+	excludeMatcher *excludesmatcher.ExcludesMatcher,
+) *WebUploadClient {
+
+	return &WebUploadClient{
+		storeURL,
+		bucketName,
+		folderPath,
+		excludeMatcher,
+		afero.NewOsFs(),
+	}
 }
 
 // BackupFolder backs up a directory on the local machine to the bucket in the store in the WebUploadClient
-func (c *WebUploadClient) BackupFolder(folderPath string, excludeFilesMatcher *excludesmatcher.ExcludesMatcher, dryRun bool) error {
+func (c *WebUploadClient) UploadToStore() error {
 	var fileList []*intelligentstore.FileDescriptor
 
 	var totalFilesToUpload int64
 	var totalBytesToUpload int64
 
 	// build file list
-	err := filepath.Walk(folderPath, func(path string, fileInfo os.FileInfo, err error) error {
+	err := afero.Walk(c.fs, c.folderPath, func(path string, fileInfo os.FileInfo, err error) error {
 		if nil != err {
 			return err
 		}
@@ -51,9 +66,9 @@ func (c *WebUploadClient) BackupFolder(folderPath string, excludeFilesMatcher *e
 			return nil
 		}
 
-		relativeFilePath := strings.TrimPrefix(strings.TrimPrefix(path, folderPath), string(filepath.Separator))
+		relativeFilePath := intelligentstore.NewRelativePath(strings.TrimPrefix(path, c.folderPath))
 
-		if excludeFilesMatcher.Matches(relativeFilePath) {
+		if c.excludeMatcher.Matches(relativeFilePath) {
 			// skip excluded file
 			log.Printf("skipping %s\n", relativeFilePath)
 			return nil
@@ -64,7 +79,13 @@ func (c *WebUploadClient) BackupFolder(folderPath string, excludeFilesMatcher *e
 		totalFilesToUpload++
 		totalBytesToUpload += fileInfo.Size()
 
-		fileDescriptor, err := intelligentstore.NewFileFromFilePath(path)
+		file, err := c.fs.Open(path)
+		if nil != err {
+			return err
+		}
+		defer file.Close()
+
+		fileDescriptor, err := intelligentstore.NewFileDescriptorFromReader(relativeFilePath, file)
 		if nil != err {
 			return err
 		}
@@ -75,13 +96,6 @@ func (c *WebUploadClient) BackupFolder(folderPath string, excludeFilesMatcher *e
 	})
 	if nil != err {
 		return err
-	}
-
-	if dryRun {
-		log.Printf("files to back up: %d, %d bytes.\nExiting (dry run)",
-			totalFilesToUpload,
-			totalBytesToUpload)
-		return nil
 	}
 
 	// open transaction
@@ -97,7 +111,7 @@ func (c *WebUploadClient) BackupFolder(folderPath string, excludeFilesMatcher *e
 	filesAlreadyOnServerCount := totalFilesToUpload - int64(amountOfFilesToSend)
 
 	for _, fileDescriptor := range filesToSendDescriptors {
-		err = c.backupFile(folderPath, revisionStr, fileDescriptor)
+		err = c.backupFile(revisionStr, fileDescriptor)
 		if nil != err {
 			filesFailedToBackup = append(filesFailedToBackup, fileDescriptor)
 			log.Printf("failed to backup %s. Error: %s\n", fileDescriptor, err)
@@ -129,7 +143,7 @@ func (c *WebUploadClient) openTx(fileDescriptors []*intelligentstore.FileDescrip
 	protoFileDescriptors := &protogenerated.FileDescriptorProtoList{}
 	for _, descriptor := range fileDescriptors {
 		descriptorProto := &protogenerated.FileDescriptorProto{
-			Filename: descriptor.FilePath,
+			Filename: string(descriptor.RelativePath),
 			Hash:     string(descriptor.Hash),
 		}
 
@@ -193,12 +207,15 @@ func (c *WebUploadClient) openTx(fileDescriptors []*intelligentstore.FileDescrip
 	return openTxResponse.RevisionStr, filesToSendDescriptors, nil
 }
 
-func (c *WebUploadClient) backupFile(basePath, revisionStr string, fileDescriptor *intelligentstore.FileDescriptor) error {
+func (c *WebUploadClient) backupFile(revisionStr string, fileDescriptor *intelligentstore.FileDescriptor) error {
+	log.Printf("BACKING UP %s\n", fileDescriptor.RelativePath)
 
 	client := http.Client{Timeout: time.Hour}
-	fileContents, err := ioutil.ReadFile(fileDescriptor.FilePath)
+	fileContents, err := afero.ReadFile(c.fs, filepath.Join(
+		c.folderPath,
+		string(fileDescriptor.RelativePath)))
 	if nil != err {
-		return err
+		return errors.Wrapf(err, "couldn't read file at %s", fileDescriptor.RelativePath)
 	}
 
 	protoBufFile := &protogenerated.FileProto{
@@ -208,14 +225,14 @@ func (c *WebUploadClient) backupFile(basePath, revisionStr string, fileDescripto
 
 	marshalledFile, err := proto.Marshal(protoBufFile)
 	if nil != err {
-		return err
+		return errors.Wrapf(err, "couldn't marshall file at %s to protobuf", fileDescriptor.RelativePath)
 	}
 
 	uploadURL := fmt.Sprintf("%s/api/buckets/%s/upload/%s/file",
 		c.storeURL, c.bucketName, revisionStr)
 	resp, err := client.Post(uploadURL, "application/octet-stream", bytes.NewBuffer(marshalledFile))
 	if nil != err {
-		return err
+		return errors.Wrapf(err, "couldn't send file at %s to remote Store server", fileDescriptor.RelativePath)
 	}
 	defer resp.Body.Close()
 
@@ -225,7 +242,7 @@ func (c *WebUploadClient) backupFile(basePath, revisionStr string, fileDescripto
 			respBodyBytes = []byte(fmt.Sprintf("couldn't read response body. Error: '%s'", err))
 		}
 		return fmt.Errorf("expected 200 (OK) repsonse code for file upload for '%s' to '%s', but received '%s'. Response Text: '%s'",
-			fileDescriptor.FilePath,
+			string(fileDescriptor.RelativePath),
 			uploadURL,
 			resp.Status,
 			respBodyBytes)
@@ -237,12 +254,24 @@ func (c *WebUploadClient) commitTx(revisionStr string) error {
 	commitTxClient := http.Client{Timeout: time.Second * 20}
 	resp, err := commitTxClient.Get(c.storeURL + "/api/buckets/" + c.bucketName + "/upload/" + revisionStr + "/commit")
 	if nil != err {
-		return err
+		return errors.Wrap(err, "couldn't commit upload transaction")
 	}
 	defer resp.Body.Close()
 
 	if 200 != resp.StatusCode {
-		return fmt.Errorf("expected 200 (OK) repsonse code for commit, but received '%s'", resp.Status)
+		var errorMessageBodyByteString string
+		bodyBytes, err := ioutil.ReadAll(resp.Body)
+		if nil != err {
+			errorMessageBodyByteString = fmt.Sprintf(
+				"couldn't read response body. Error: %s", err)
+		} else {
+			errorMessageBodyByteString = fmt.Sprintf(
+				"response text: '%s'", string(bodyBytes))
+		}
+		return fmt.Errorf(
+			"expected 200 (OK) repsonse code for commit, but received '%s'. Response Text: '%s'",
+			resp.Status,
+			errorMessageBodyByteString)
 	}
 
 	return nil
@@ -250,7 +279,7 @@ func (c *WebUploadClient) commitTx(revisionStr string) error {
 
 func descriptorToProto(descriptor *intelligentstore.FileDescriptor) *protogenerated.FileDescriptorProto {
 	return &protogenerated.FileDescriptorProto{
-		Filename: descriptor.FilePath,
+		Filename: string(descriptor.RelativePath),
 		Hash:     string(descriptor.Hash),
 	}
 }

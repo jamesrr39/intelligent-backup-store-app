@@ -1,21 +1,23 @@
 package intelligentstore
 
+import "io"
+
 // FileDescriptor represents a file and it's storage location metadata.
 type FileDescriptor struct {
-	Hash     Hash   `json:"hash"`
-	FilePath string `json:"path"`
+	Hash         Hash `json:"hash"`
+	RelativePath `json:"path"`
 }
 
 // NewFileInVersion creates an instance of File.
-func NewFileInVersion(hash Hash, filePath string) *FileDescriptor {
-	return &FileDescriptor{hash, filePath}
+func NewFileInVersion(hash Hash, relativePath RelativePath) *FileDescriptor {
+	return &FileDescriptor{hash, relativePath}
 }
 
-func NewFileFromFilePath(filePath string) (*FileDescriptor, error) {
-	hash, err := NewHashFromFilePath(filePath)
+func NewFileDescriptorFromReader(relativePath RelativePath, reader io.Reader) (*FileDescriptor, error) {
+	hash, err := NewHash(reader)
 	if nil != err {
 		return nil, err
 	}
 
-	return NewFileInVersion(hash, filePath), nil
+	return NewFileInVersion(hash, relativePath), nil
 }

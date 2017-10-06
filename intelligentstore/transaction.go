@@ -13,6 +13,8 @@ import (
 	"strings"
 
 	"github.com/jamesrr39/goutil/dirtraversal"
+	"github.com/pkg/errors"
+	"github.com/spf13/afero"
 )
 
 type Transaction struct {
@@ -47,7 +49,7 @@ func (transaction *Transaction) BackupFile(fileName string, sourceFile io.Reader
 
 	log.Printf("backing up %s into %s\n", fileName, filePath)
 
-	_, err = os.Stat(filePath)
+	_, err = transaction.fs.Stat(filePath)
 	if nil != err {
 		if !os.IsNotExist(err) {
 			// permissions issue or something.
@@ -55,26 +57,26 @@ func (transaction *Transaction) BackupFile(fileName string, sourceFile io.Reader
 		}
 		// file doesn't exist in store already. Write it to store.
 
-		err := os.MkdirAll(filepath.Dir(filePath), 0700)
+		err := transaction.fs.MkdirAll(filepath.Dir(filePath), 0700)
 		if nil != err {
 			return err
 		}
 
 		log.Printf("writing %s to %s\n", fileName, filePath)
-		err = ioutil.WriteFile(filePath, sourceAsBytes, 0700)
+		err = afero.WriteFile(transaction.fs, filePath, sourceAsBytes, 0700)
 		if nil != err {
 			return err
 		}
 	} else {
 		// file already exists. Do a byte by byte comparision to make sure there isn't a collision
-		existingFile, err := os.Open(filePath)
+		existingFile, err := transaction.fs.Open(filePath)
 		if nil != err {
 			return fmt.Errorf("couldn't open existing file in store at '%s'. Error: %s", filePath, err)
 		}
 		defer existingFile.Close()
 	}
 
-	transaction.FilesInVersion = append(transaction.FilesInVersion, NewFileInVersion(hash, fileName))
+	transaction.FilesInVersion = append(transaction.FilesInVersion, NewFileInVersion(hash, NewRelativePath(fileName)))
 
 	return nil
 }
@@ -110,15 +112,22 @@ func (transaction *Transaction) Commit() error {
 		"versions",
 		strconv.FormatInt(transaction.VersionTimestamp, 10))
 
-	versionContentsFile, err := os.Create(filePath)
+	versionContentsFile, err := transaction.fs.Create(filePath)
 	if nil != err {
 		return fmt.Errorf("couldn't write version summary file at '%s'. Error: '%s'", filePath, err)
 	}
 	defer versionContentsFile.Close()
 
+	log.Printf("files written to version: %v\n", transaction.FilesInVersion)
+
 	err = gob.NewEncoder(versionContentsFile).Encode(transaction.FilesInVersion)
 	if nil != err {
 		return err
+	}
+
+	err = versionContentsFile.Sync()
+	if nil != err {
+		return errors.Wrap(err, "couldn't sync the version contents file")
 	}
 
 	return nil

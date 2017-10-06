@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -106,22 +107,43 @@ func (s *BucketService) handleGetAllBuckets(w http.ResponseWriter, r *http.Reque
 	}
 }
 
+type handleGetBucketResponse struct {
+	Revisions []*intelligentstore.Revision `json:"revisions"`
+}
+
 func (s *BucketService) handleGetBucket(w http.ResponseWriter, r *http.Request) {
 	bucketName := mux.Vars(r)["bucketName"]
 
 	bucket, err := s.store.GetBucket(bucketName)
 	if nil != err {
-		http.Error(w, err.Error(), 500) //TODO error code 404
+		if intelligentstore.ErrBucketDoesNotExist == err {
+			http.Error(w, err.Error(), 404)
+			return
+		}
+		http.Error(w, err.Error(), 500)
 		return
 	}
 
-	revisionsTimestamps, err := bucket.GetRevisionsTimestamps()
+	revisions, err := bucket.GetRevisions()
 	if nil != err {
 		http.Error(w, err.Error(), 500)
 		return
 	}
 
-	err = json.NewEncoder(w).Encode(revisionsTimestamps)
+	w.Header().Set("content-type", "application/json")
+
+	if 0 == len(revisions) {
+		revisions = make([]*intelligentstore.Revision, 0)
+	}
+
+	sort.Slice(revisions, func(i int, j int) bool {
+		if revisions[i].VersionTimestamp < revisions[j].VersionTimestamp {
+			return true
+		}
+		return false
+	})
+
+	err = json.NewEncoder(w).Encode(handleGetBucketResponse{revisions})
 	if nil != err {
 		http.Error(w, err.Error(), 500)
 		return
@@ -179,18 +201,21 @@ func (s *BucketService) handleGetRevision(w http.ResponseWriter, r *http.Request
 	type subDirInfoMap map[string]int64 // map[name]nestedFileCount
 	dirnames := subDirInfoMap{}         // dirname[nested file count]
 	for _, file := range allFiles {
-		log.Printf("filepath: '%s'\n", file.FilePath)
-		if !strings.HasPrefix(file.FilePath, rootDir) {
+		log.Printf("filepath: '%s'\n", file.RelativePath)
+		if !strings.HasPrefix(string(file.RelativePath), rootDir) {
 			// not in this root dir
 			continue
 		}
 
-		relativeFilePath := strings.TrimPrefix(strings.TrimPrefix(file.FilePath, rootDir), "/")
+		relativeFilePath := intelligentstore.NewRelativePath(
+			strings.TrimPrefix(
+				string(file.RelativePath),
+				rootDir))
 
-		indexOfSlash := strings.Index(relativeFilePath, "/")
+		indexOfSlash := strings.Index(string(relativeFilePath), "/")
 		if indexOfSlash != -1 {
 			// file is inside a dir (not in the root folder)
-			dirnames[relativeFilePath[0:indexOfSlash]]++
+			dirnames[string(relativeFilePath)[0:indexOfSlash]]++
 		} else {
 			// file is in the dir we're searching inside
 			files = append(files, file)
@@ -252,7 +277,7 @@ func (s *BucketService) handleCreateRevision(w http.ResponseWriter, r *http.Requ
 
 		hashAlreadyExists, err = transaction.AddAlreadyExistingHash(fileDescriptor)
 		if nil != err {
-			http.Error(w, fmt.Sprintf("error detecting if a hash for %s (%s) already exists", fileDescriptor.Hash, fileDescriptor.FilePath), 500)
+			http.Error(w, fmt.Sprintf("error detecting if a hash for %s (%s) already exists", fileDescriptor.Hash, fileDescriptor.RelativePath), 500)
 			return
 		}
 
@@ -277,7 +302,11 @@ func (s *BucketService) handleCreateRevision(w http.ResponseWriter, r *http.Requ
 
 	_, err = w.Write([]byte(responseBytes))
 	if nil != err {
-		log.Printf("failed to send a response back to the client for files required to open transaction. Bucket: '%s', Revision: '%s'. Error: %s\n", bucketName, transaction.VersionTimestamp, err)
+		log.Printf(
+			"failed to send a response back to the client for files required to open transaction. Bucket: '%s', Revision: '%d'. Error: %s\n",
+			bucketName,
+			transaction.VersionTimestamp,
+			err)
 	}
 }
 

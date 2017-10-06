@@ -22,8 +22,8 @@ type IntelligentStore struct {
 	fs afero.Fs
 }
 
-func NewIntelligentStoreConnToExisting(pathToBase string) (*IntelligentStore, error) {
-	return newIntelligentStoreConnToExisting(pathToBase, prodNowProvider, afero.NewOsFs())
+func NewIntelligentStoreConnToExisting(pathToBase string, fs afero.Fs) (*IntelligentStore, error) {
+	return newIntelligentStoreConnToExisting(pathToBase, prodNowProvider, fs)
 }
 
 func newIntelligentStoreConnToExisting(pathToBase string, nowFunc nowProvider, fs afero.Fs) (*IntelligentStore, error) {
@@ -76,6 +76,9 @@ func createIntelligentStoreAndNewConn(pathToBase string, nowFunc nowProvider, fs
 	return &IntelligentStore{pathToBase, nowFunc, fs}, nil
 }
 
+// GetBucket gets a bucket
+// If the bucket is not found, the error returned will be ErrBucketDoesNotExist
+// Otherwise, it will be an os/fs related error
 func (s *IntelligentStore) GetBucket(bucketName string) (*Bucket, error) {
 	bucketPath := filepath.Join(s.StoreBasePath, ".backup_data", "buckets", bucketName)
 	_, err := s.fs.Stat(bucketPath)

@@ -5,7 +5,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -13,7 +12,9 @@ import (
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
 	"github.com/jamesrr39/intelligent-backup-store-app/localupload"
 	"github.com/jamesrr39/intelligent-backup-store-app/storewebserver"
+	"github.com/jamesrr39/intelligent-backup-store-app/uploader"
 	"github.com/jamesrr39/intelligent-backup-store-app/webuploadclient"
+	"github.com/spf13/afero"
 	kingpin "gopkg.in/alecthomas/kingpin.v2"
 )
 
@@ -35,7 +36,10 @@ func main() {
 	initBucketStoreLocation := initBucketCommand.Arg("store location", "location of the store").Required().String()
 	initBucketBucketName := initBucketCommand.Arg("bucket name", "name of the bucket").Required().String()
 	initBucketCommand.Action(func(ctx *kingpin.ParseContext) error {
-		store, err := intelligentstore.NewIntelligentStoreConnToExisting(*initBucketStoreLocation)
+		store, err := intelligentstore.NewIntelligentStoreConnToExisting(
+			*initBucketStoreLocation,
+			afero.NewOsFs())
+
 		if nil != err {
 			return err
 		}
@@ -53,7 +57,6 @@ func main() {
 	backupStoreLocation := backupIntoCommand.Arg("store location", "location of the store").Required().String()
 	backupBucketName := backupIntoCommand.Arg("bucket name", "name of the bucket to back up into").Required().String()
 	backupFromLocation := backupIntoCommand.Arg("backup from location", "location to backup from").Default(".").String()
-	backupDryRun := backupIntoCommand.Flag("dry-run", "dry run?").Default("false").Bool()
 	backupExcludesMatcherLocation := backupIntoCommand.Flag("exclude", "path to a file with glob-style patterns to exclude files").Default("").String()
 	backupIntoCommand.Action(func(ctx *kingpin.ParseContext) error {
 		excludeMatcher := &excludesmatcher.ExcludesMatcher{}
@@ -70,18 +73,20 @@ func main() {
 			}
 		}
 
+		var uploaderClient uploader.Uploader
 		if strings.HasPrefix(*backupStoreLocation, "http://") || strings.HasPrefix(*backupStoreLocation, "https://") {
-			client := webuploadclient.NewWebUploadClient(*backupStoreLocation, *backupBucketName)
-			return client.BackupFolder(*backupFromLocation, excludeMatcher, *backupDryRun)
+			uploaderClient = webuploadclient.NewWebUploadClient(*backupStoreLocation, *backupBucketName, *backupFromLocation, excludeMatcher)
+		} else {
+			uploaderClient = localupload.NewLocalUploader(*backupStoreLocation, *backupBucketName, *backupFromLocation, excludeMatcher)
 		}
 
-		return localupload.UploadToStore(*backupStoreLocation, *backupBucketName, *backupFromLocation, excludeMatcher)
+		return uploaderClient.UploadToStore()
 	})
 
 	listBucketsCommand := kingpin.Command("list-buckets", "produce a listing of all the buckets and the last backup time")
 	listBucketsStoreLocation := listBucketsCommand.Arg("store location", "location of the store").Default(".").String()
 	listBucketsCommand.Action(func(ctx *kingpin.ParseContext) error {
-		store, err := intelligentstore.NewIntelligentStoreConnToExisting(*listBucketsStoreLocation)
+		store, err := intelligentstore.NewIntelligentStoreConnToExisting(*listBucketsStoreLocation, afero.NewOsFs())
 		if nil != err {
 			return err
 		}
@@ -103,12 +108,8 @@ func main() {
 					return err
 				}
 			} else {
-				latestRevTs, err := strconv.ParseInt(latestRevision.VersionTimestamp, 10, 64)
-				if nil != err {
-					return err
-				}
 
-				latestRevDisplay = time.Unix(latestRevTs, 0).Format(time.ANSIC)
+				latestRevDisplay = time.Unix(latestRevision.VersionTimestamp, 0).Format(time.ANSIC)
 			}
 
 			fmt.Printf("%s | %s\n", bucket.BucketName, latestRevDisplay)
@@ -121,7 +122,10 @@ func main() {
 	listBucketRevisionsBucketName := listBucketRevisionsCommand.Arg("bucket name", "name of the bucket to back up into").Required().String()
 	listBucketRevisionsStoreLocation := listBucketRevisionsCommand.Arg("store location", "location of the store").Default(".").String()
 	listBucketRevisionsCommand.Action(func(ctx *kingpin.ParseContext) error {
-		store, err := intelligentstore.NewIntelligentStoreConnToExisting(*listBucketRevisionsStoreLocation)
+		store, err := intelligentstore.NewIntelligentStoreConnToExisting(
+			*listBucketRevisionsStoreLocation,
+			afero.NewOsFs())
+
 		if nil != err {
 			return err
 		}
@@ -131,13 +135,13 @@ func main() {
 			return err
 		}
 
-		revisions, err := bucket.GetRevisionsTimestamps()
+		revisions, err := bucket.GetRevisions()
 		if nil != err {
 			return err
 		}
 
 		for _, revision := range revisions {
-			fmt.Println(revision.Format(time.ANSIC))
+			fmt.Println(time.Unix(revision.VersionTimestamp, 0).Format(time.ANSIC))
 		}
 
 		return nil
@@ -148,7 +152,10 @@ func main() {
 	startWebappAddr := startWebappCommand.Flag("address", "custom address to expose the webapp to. Example: ':8081': expose to everyone on port 8081").Default("localhost:8080").String()
 	startWebappStoreLocation := startWebappCommand.Arg("store location", "location of the store").Default(".").String()
 	startWebappCommand.Action(func(ctx *kingpin.ParseContext) error {
-		store, err := intelligentstore.NewIntelligentStoreConnToExisting(*startWebappStoreLocation)
+		store, err := intelligentstore.NewIntelligentStoreConnToExisting(
+			*startWebappStoreLocation,
+			afero.NewOsFs())
+
 		if nil != err {
 			return err
 		}

@@ -7,7 +7,15 @@ define([
   var template = Handlebars.compile([
     "<div>",
       "<h3>{{bucketName}}</h3>",
-      "<p>Showing the latest revision</p>",
+      "<p>",
+        "<select class='form-control' name='change-revision-select'>",
+          "{{#revisionTimestamps}}",
+            "<option value={{versionTimestamp}}>",
+              "{{timestampDisplayString}}",
+            "</option>",
+          "{{/revisionTimestamps}}",
+        "</select>",
+      "</p>",
       "<p>",
         "{{#dirLevels}}",
           "/<a href='{{url}}'>{{name}}</a>",
@@ -42,8 +50,8 @@ define([
     "</div>"
   ].join(""));
 
-  function renderBucketRevisions(bucket, $container) {
-    $.ajax("/api/buckets/" + bucket.name).then(function(revisions) {
+  function renderBucketRevisions(bucketName, $container) {
+    $.when(["/api/buckets/" + encodeURIComponent(bucketName)]).then(function(revisions) {
       $container.html(JSON.stringify(revisions));
     }).fail(function(xhr) {
       $container.html(new ErrorView("Error fetching revisions data: " + xhr.responseText).render());
@@ -51,7 +59,6 @@ define([
   };
 
   return function(bucketName, revisionStr, rootDir) {
-
     return {
       render($container) {
         var url = "/api/buckets/" + encodeURIComponent(bucketName) + "/" + revisionStr;
@@ -59,18 +66,33 @@ define([
           url += "?rootDir=" + encodeURIComponent("/" + rootDir);
         }
 
-        $.ajax(url).then(function(data) {
+        $.when(
+          $.ajax("/api/buckets/" + encodeURIComponent(bucketName)),
+          $.ajax(url)
+        ).done(function(
+          bucketsRequestObject,
+          dataRequestObject) {
+
+          var bucket = bucketsRequestObject[0];
+          var data = dataRequestObject[0];
+
           var dirLevels = rootDir.split("/");
 
           $container.html(template({
             bucketName: data.bucketName,
+            revisionTimestamps: bucket.revisions.map(function(revision) {
+              return {
+                versionTimestamp: revision.versionTimestamp,
+                timestampDisplayString: new Date(revision.versionTimestamp * 1000).toString()
+              };
+            }),
             files: data.files.sort(function(a, b){
               return a.path.toUpperCase() > b.path.toUpperCase();
             }).map(function(file) {
               var lastSlashIndex = file.path.lastIndexOf("/");
 
               return {
-                name: (lastSlashIndex === -1) ? file.path : file.path.substring(lastSlashIndex+1) 
+                name: (lastSlashIndex === -1) ? file.path : file.path.substring(lastSlashIndex+1)
               }
             }),
             dirs: data.dirs.sort(function(a, b){
@@ -94,6 +116,13 @@ define([
               };
             })
           }));
+
+          $container.find("[name='change-revision-select']").on("change", function(event){
+            var newTimestamp = $(event.currentTarget).val();
+            window.location = "#/buckets/docs/" + newTimestamp + "/" + rootDir;
+          });
+
+
         }).fail(function(xhr) {
           $container.html(new ErrorView("Error fetching revisions data: " + xhr.responseText).render());
         });

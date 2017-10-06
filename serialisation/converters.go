@@ -9,6 +9,6 @@ import (
 func FileDescriptorProtoToFileDescriptor(fileDescriptorProto *protogenerated.FileDescriptorProto) *intelligentstore.FileDescriptor {
 	return intelligentstore.NewFileInVersion(
 		intelligentstore.Hash(fileDescriptorProto.Hash),
-		fileDescriptorProto.Filename,
+		intelligentstore.NewRelativePath(fileDescriptorProto.Filename),
 	)
 }

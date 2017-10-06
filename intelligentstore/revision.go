@@ -3,7 +3,6 @@ package intelligentstore
 import (
 	"encoding/gob"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strconv"
 )
@@ -17,7 +16,7 @@ type Revision struct {
 // GetFilesInRevision gets a list of files in this revision
 func (r *Revision) GetFilesInRevision() ([]*FileDescriptor, error) {
 	filePath := filepath.Join(r.bucketPath(), "versions", strconv.FormatInt(r.VersionTimestamp, 10))
-	revisionDataFile, err := os.Open(filePath)
+	revisionDataFile, err := r.fs.Open(filePath)
 	if nil != err {
 		return nil, fmt.Errorf("couldn't open revision data file at '%s'. Error: '%s'", filePath, err)
 	}

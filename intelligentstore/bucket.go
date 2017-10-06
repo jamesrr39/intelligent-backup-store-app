@@ -2,12 +2,8 @@ package intelligentstore
 
 import (
 	"fmt"
-	"io/ioutil"
-	"os"
 	"path/filepath"
-	"sort"
 	"strconv"
-	"time"
 
 	"github.com/pkg/errors"
 
@@ -88,39 +84,11 @@ func (bucket *Bucket) GetLatestRevision() (*Revision, error) {
 
 }
 
-func (bucket *Bucket) GetRevisionsTimestamps() ([]time.Time, error) {
-	versionsFileInfos, err := ioutil.ReadDir(filepath.Join(bucket.bucketPath(), "versions"))
-	if nil != err {
-		return nil, err
-	}
-
-	if 0 == len(versionsFileInfos) {
-		return nil, ErrNoRevisionsForBucket
-	}
-
-	var timestamps []time.Time
-
-	for _, fileInfo := range versionsFileInfos {
-		ts, err := strconv.ParseInt(fileInfo.Name(), 10, 64)
-		if nil != err {
-			return nil, fmt.Errorf("couldn't understand revision '%s' of bucket '%s'. Error: '%s'", fileInfo.Name(), bucket.BucketName, err)
-		}
-
-		tsAsTime := time.Unix(ts, 0)
-		timestamps = append(timestamps, tsAsTime)
-	}
-
-	sort.Slice(timestamps, func(i, j int) bool {
-		return timestamps[i].Sub(timestamps[j]) > 0
-	})
-
-	return timestamps, nil
-}
-
+// GetRevisions gets all revisions of this bucket
 func (bucket *Bucket) GetRevisions() ([]*Revision, error) {
 	versionsFolderPath := filepath.Join(bucket.bucketPath(), "versions")
 
-	versionsFileInfos, err := ioutil.ReadDir(versionsFolderPath)
+	versionsFileInfos, err := afero.ReadDir(bucket.fs, versionsFolderPath)
 	if nil != err {
 		return nil, err
 	}
@@ -137,13 +105,14 @@ func (bucket *Bucket) GetRevisions() ([]*Revision, error) {
 	return versions, nil
 }
 
+// GetRevision gets a specific version of this bucket
 func (bucket *Bucket) GetRevision(revisionTimeStamp int64) (*Revision, error) {
 	versionsFolderPath := filepath.Join(bucket.bucketPath(), "versions")
 	timestampAsString := strconv.FormatInt(revisionTimeStamp, 10)
 
-	_, err := os.Stat(filepath.Join(versionsFolderPath, timestampAsString))
+	_, err := bucket.fs.Stat(filepath.Join(versionsFolderPath, timestampAsString))
 	if nil != err {
-		return nil, err
+		return nil, errors.Wrapf(err, "couldn't get revision '%d'", revisionTimeStamp)
 	}
 
 	return &Revision{bucket, revisionTimeStamp}, nil

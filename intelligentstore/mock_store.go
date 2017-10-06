@@ -9,15 +9,21 @@ import (
 
 // TODO: test build only
 
-func NewMockStore(t *testing.T, nowFunc nowProvider) *IntelligentStore {
-	fs := afero.NewMemMapFs()
-	err := fs.Mkdir("/ab", 0700)
+type MockStore struct {
+	*IntelligentStore
+	Path string
+}
+
+func NewMockStore(t *testing.T, nowFunc nowProvider, fs afero.Fs) *MockStore {
+	path := "/test-store"
+
+	err := fs.Mkdir(path, 0700)
 	require.Nil(t, err)
 
 	//nowFunc = func() { return time.Date(2000, 01, 02, 03, 04, 05, 06, time.UTC) }
 
-	store, err := createIntelligentStoreAndNewConn("/ab", nowFunc, fs)
+	store, err := createIntelligentStoreAndNewConn(path, nowFunc, fs)
 	require.Nil(t, err)
 
-	return store
+	return &MockStore{store, path}
 }

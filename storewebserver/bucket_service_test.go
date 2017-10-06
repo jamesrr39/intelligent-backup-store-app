@@ -4,25 +4,27 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore"
+	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func nowProvider() time.Time {
+func testNowProvider() time.Time {
 	return time.Date(2000, 1, 2, 3, 4, 5, 6, time.UTC)
 }
 
-func newBucketService(t *testing.T) *BucketService {
-	store := intelligentstore.NewMockStore(t, nowProvider)
-	return NewBucketService(store)
+func newTestBucketService(t *testing.T) *BucketService {
+	mockStore := intelligentstore.NewMockStore(t, testNowProvider, afero.NewMemMapFs())
+	return NewBucketService(mockStore.IntelligentStore)
 }
 
 func Test_handleGetAllBuckets(t *testing.T) {
-	bucketService := newBucketService(t)
+	bucketService := newTestBucketService(t)
 
 	requestURL := &url.URL{Path: "/"}
 	r1 := &http.Request{Method: "GET", URL: requestURL}
@@ -42,6 +44,16 @@ func Test_handleGetAllBuckets(t *testing.T) {
 	bucketService.ServeHTTP(w2, r2)
 
 	assert.Equal(t, 200, w2.Code)
-	assert.Equal(t, []byte("[{\"name\":\"docs\",\"lastRevisionTs\":null}]\n"), w2.Body.Bytes())
+	assert.Equal(t,
+		`[{"name":"docs","lastRevisionTs":null}]`,
+		strings.TrimSuffix(w2.Body.String(), "\n"))
+
+	r3 := &http.Request{Method: "GET", URL: &url.URL{Path: "/docs"}}
+	w3 := httptest.NewRecorder()
+
+	bucketService.ServeHTTP(w3, r3)
+
+	assert.Equal(t, 200, w3.Code)
+	assert.Equal(t, `{"revisions":[]}`, strings.TrimSuffix(w3.Body.String(), "\n"))
 
 }
