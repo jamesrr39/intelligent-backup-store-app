@@ -1,6 +1,5 @@
 syntax = "proto3";
-package protogenerated;
-
+package protobufgenerated;
 
 message FileDescriptorProto {
   string filename = 1;
@@ -21,6 +20,6 @@ message OpenTxRequest {
 }
 
 message OpenTxResponse {
-  uint64 revisionStr = 1;
+  int64 revisionStr = 1;
   FileDescriptorProtoList FileDescriptorList = 2;
 }

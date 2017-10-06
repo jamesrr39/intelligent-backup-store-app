@@ -10,10 +10,10 @@ import (
 
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
-	"github.com/jamesrr39/intelligent-backup-store-app/localupload"
 	"github.com/jamesrr39/intelligent-backup-store-app/storewebserver"
-	"github.com/jamesrr39/intelligent-backup-store-app/uploader"
-	"github.com/jamesrr39/intelligent-backup-store-app/webuploadclient"
+	"github.com/jamesrr39/intelligent-backup-store-app/uploaders"
+	"github.com/jamesrr39/intelligent-backup-store-app/uploaders/localupload"
+	"github.com/jamesrr39/intelligent-backup-store-app/uploaders/webuploadclient"
 	"github.com/spf13/afero"
 	kingpin "gopkg.in/alecthomas/kingpin.v2"
 )
@@ -73,7 +73,7 @@ func main() {
 			}
 		}
 
-		var uploaderClient uploader.Uploader
+		var uploaderClient uploaders.Uploader
 		if strings.HasPrefix(*backupStoreLocation, "http://") || strings.HasPrefix(*backupStoreLocation, "https://") {
 			uploaderClient = webuploadclient.NewWebUploadClient(*backupStoreLocation, *backupBucketName, *backupFromLocation, excludeMatcher)
 		} else {
@@ -109,7 +109,7 @@ func main() {
 				}
 			} else {
 
-				latestRevDisplay = time.Unix(latestRevision.VersionTimestamp, 0).Format(time.ANSIC)
+				latestRevDisplay = time.Unix(int64(latestRevision.VersionTimestamp), 0).Format(time.ANSIC)
 			}
 
 			fmt.Printf("%s | %s\n", bucket.BucketName, latestRevDisplay)
@@ -141,7 +141,7 @@ func main() {
 		}
 
 		for _, revision := range revisions {
-			fmt.Println(time.Unix(revision.VersionTimestamp, 0).Format(time.ANSIC))
+			fmt.Println(time.Unix(int64(revision.VersionTimestamp), 0).Format(time.ANSIC))
 		}
 
 		return nil

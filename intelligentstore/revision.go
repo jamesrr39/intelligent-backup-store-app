@@ -7,15 +7,21 @@ import (
 	"strconv"
 )
 
+type RevisionVersion int64
+
+func (r RevisionVersion) String() string {
+	return strconv.FormatInt(int64(r), 10)
+}
+
 // Revision represents a revision of a set of files
 type Revision struct {
 	*Bucket          `json:"-"`
-	VersionTimestamp int64 `json:"versionTimestamp"`
+	VersionTimestamp RevisionVersion `json:"versionTimestamp"`
 }
 
 // GetFilesInRevision gets a list of files in this revision
 func (r *Revision) GetFilesInRevision() ([]*FileDescriptor, error) {
-	filePath := filepath.Join(r.bucketPath(), "versions", strconv.FormatInt(r.VersionTimestamp, 10))
+	filePath := filepath.Join(r.bucketPath(), "versions", strconv.FormatInt(int64(r.VersionTimestamp), 10))
 	revisionDataFile, err := r.fs.Open(filePath)
 	if nil != err {
 		return nil, fmt.Errorf("couldn't open revision data file at '%s'. Error: '%s'", filePath, err)

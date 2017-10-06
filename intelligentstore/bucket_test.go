@@ -21,7 +21,7 @@ func Test_Begin(t *testing.T) {
 	bucket := &Bucket{store, "test bucket"}
 	transaction := bucket.Begin()
 
-	assert.Equal(t, int64(946782245), transaction.VersionTimestamp)
+	assert.Equal(t, int64(946782245), int64(transaction.VersionTimestamp))
 
 	year = 2001
 

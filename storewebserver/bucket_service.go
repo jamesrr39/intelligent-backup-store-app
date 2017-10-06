@@ -15,8 +15,8 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/gorilla/mux"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore"
-	"github.com/jamesrr39/intelligent-backup-store-app/serialisation"
-	"github.com/jamesrr39/intelligent-backup-store-app/serialisation/protogenerated"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/protobufs"
+	protofiles "github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/protobufs/proto_files"
 )
 
 // BucketService handles HTTP requests to get bucket information.
@@ -57,12 +57,12 @@ func NewBucketService(store *intelligentstore.IntelligentStore) *BucketService {
 }
 
 type bucketSummary struct {
-	Name           string `json:"name"`
-	LastRevisionTs *int64 `json:"lastRevisionTs"`
+	Name           string                            `json:"name"`
+	LastRevisionTs *intelligentstore.RevisionVersion `json:"lastRevisionTs"`
 }
 
 type revisionInfoWithFiles struct {
-	LastRevisionTs int64                              `json:"revisionTs"`
+	LastRevisionTs intelligentstore.RevisionVersion   `json:"revisionTs"`
 	Files          []*intelligentstore.FileDescriptor `json:"files"`
 	Dirs           []*subDirInfo                      `json:"dirs"`
 }
@@ -85,7 +85,7 @@ func (s *BucketService) handleGetAllBuckets(w http.ResponseWriter, r *http.Reque
 
 	var bucketsSummaries []*bucketSummary
 	var latestRevision *intelligentstore.Revision
-	var latestRevisionTs *int64
+	var latestRevisionTs *intelligentstore.RevisionVersion
 	for _, bucket := range buckets {
 		latestRevision, err = bucket.GetLatestRevision()
 		if nil != err {
@@ -254,7 +254,7 @@ func (s *BucketService) handleCreateRevision(w http.ResponseWriter, r *http.Requ
 	}
 
 	transaction := bucket.Begin()
-	s.openTransactionsMap[bucket.BucketName+"__"+strconv.FormatInt(transaction.VersionTimestamp, 10)] = transaction
+	s.openTransactionsMap[bucket.BucketName+"__"+strconv.FormatInt(int64(transaction.VersionTimestamp), 10)] = transaction
 
 	requestBytes, err := ioutil.ReadAll(r.Body)
 	if nil != err {
@@ -262,18 +262,18 @@ func (s *BucketService) handleCreateRevision(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	var openTxRequest protogenerated.OpenTxRequest
+	var openTxRequest protofiles.OpenTxRequest
 	err = proto.Unmarshal(requestBytes, &openTxRequest)
 	if nil != err {
 		http.Error(w, "couldn't unmarshal proto of request body. Error: "+err.Error(), 400)
 		return
 	}
 
-	fileDetectorsForRequiredFiles := &protogenerated.FileDescriptorProtoList{}
+	fileDetectorsForRequiredFiles := &protofiles.FileDescriptorProtoList{}
 	var hashAlreadyExists bool
 
-	for _, fileDescriptorProto := range openTxRequest.FileDescriptorList.FileDescriptorList {
-		fileDescriptor := serialisation.FileDescriptorProtoToFileDescriptor(fileDescriptorProto)
+	for _, fileDescriptorProto := range openTxRequest.FileDescriptorList.FileDescriptors {
+		fileDescriptor := protobufs.FileDescriptorProtoToFileDescriptor(fileDescriptorProto)
 
 		hashAlreadyExists, err = transaction.AddAlreadyExistingHash(fileDescriptor)
 		if nil != err {
@@ -283,14 +283,14 @@ func (s *BucketService) handleCreateRevision(w http.ResponseWriter, r *http.Requ
 
 		// if a file for the hash already exists, the transaction adds it to the files in version and we don't need it from the client
 		if !hashAlreadyExists {
-			fileDetectorsForRequiredFiles.FileDescriptorList = append(
-				fileDetectorsForRequiredFiles.FileDescriptorList,
+			fileDetectorsForRequiredFiles.FileDescriptors = append(
+				fileDetectorsForRequiredFiles.FileDescriptors,
 				fileDescriptorProto)
 		}
 	}
 
-	openTxReponse := &protogenerated.OpenTxResponse{
-		RevisionStr:        strconv.FormatInt(transaction.VersionTimestamp, 10),
+	openTxReponse := &protofiles.OpenTxResponse{
+		RevisionStr:        int64(transaction.VersionTimestamp),
 		FileDescriptorList: fileDetectorsForRequiredFiles,
 	}
 
@@ -339,7 +339,7 @@ func (s *BucketService) handleUploadFile(w http.ResponseWriter, r *http.Request)
 	}
 	defer r.Body.Close()
 
-	var uploadedFile protogenerated.FileProto
+	var uploadedFile protofiles.FileProto
 	err = proto.Unmarshal(bodyBytes, &uploadedFile)
 	if nil != err {
 		http.Error(w, fmt.Sprintf("couldn't unmarshal message. Error: '%s'", err), 400)

@@ -110,7 +110,7 @@ func (transaction *Transaction) Commit() error {
 		"buckets",
 		transaction.BucketName,
 		"versions",
-		strconv.FormatInt(transaction.VersionTimestamp, 10))
+		strconv.FormatInt(int64(transaction.VersionTimestamp), 10))
 
 	versionContentsFile, err := transaction.fs.Create(filePath)
 	if nil != err {

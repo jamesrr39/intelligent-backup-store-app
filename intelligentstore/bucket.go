@@ -28,7 +28,7 @@ type Bucket struct {
 func (bucket *Bucket) Begin() *Transaction {
 	versionTimestamp := bucket.nowProvider().Unix()
 
-	return &Transaction{&Revision{bucket, versionTimestamp}, nil}
+	return &Transaction{&Revision{bucket, RevisionVersion(versionTimestamp)}, nil}
 }
 
 func (bucket *Bucket) bucketPath() string {
@@ -80,7 +80,7 @@ func (bucket *Bucket) GetLatestRevision() (*Revision, error) {
 		}
 	}
 
-	return &Revision{bucket, highestTs}, nil
+	return &Revision{bucket, RevisionVersion(highestTs)}, nil
 
 }
 
@@ -99,7 +99,7 @@ func (bucket *Bucket) GetRevisions() ([]*Revision, error) {
 		if nil != err {
 			return nil, errors.Wrapf(err, "couldn't parse '%s' to a revision timestamp", versionFileInfo.Name())
 		}
-		versions = append(versions, &Revision{bucket, revisionTs})
+		versions = append(versions, &Revision{bucket, RevisionVersion(revisionTs)})
 	}
 
 	return versions, nil
@@ -115,5 +115,5 @@ func (bucket *Bucket) GetRevision(revisionTimeStamp int64) (*Revision, error) {
 		return nil, errors.Wrapf(err, "couldn't get revision '%d'", revisionTimeStamp)
 	}
 
-	return &Revision{bucket, revisionTimeStamp}, nil
+	return &Revision{bucket, RevisionVersion(revisionTimeStamp)}, nil
 }

@@ -14,8 +14,8 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
-	"github.com/jamesrr39/intelligent-backup-store-app/serialisation"
-	"github.com/jamesrr39/intelligent-backup-store-app/serialisation/protogenerated"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/protobufs"
+	protofiles "github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/protobufs/proto_files"
 	"github.com/pkg/errors"
 	"github.com/spf13/afero"
 )
@@ -103,7 +103,7 @@ func (c *WebUploadClient) UploadToStore() error {
 	if nil != err {
 		return err
 	}
-	log.Println("opened Tx. Rev: " + revisionStr)
+	log.Printf("opened Tx. Rev: %d\n", revisionStr)
 
 	var filesSuccessfullyBackedUpCount int64
 	var filesFailedToBackup []*intelligentstore.FileDescriptor
@@ -139,24 +139,24 @@ func (c *WebUploadClient) UploadToStore() error {
 }
 
 // openTx opens a transaction with the server and sends a list of files it wants to back up
-func (c *WebUploadClient) openTx(fileDescriptors []*intelligentstore.FileDescriptor) (string, []*intelligentstore.FileDescriptor, error) {
-	protoFileDescriptors := &protogenerated.FileDescriptorProtoList{}
+func (c *WebUploadClient) openTx(fileDescriptors []*intelligentstore.FileDescriptor) (intelligentstore.RevisionVersion, []*intelligentstore.FileDescriptor, error) {
+	protoFileDescriptors := &protofiles.FileDescriptorProtoList{}
 	for _, descriptor := range fileDescriptors {
-		descriptorProto := &protogenerated.FileDescriptorProto{
+		descriptorProto := &protofiles.FileDescriptorProto{
 			Filename: string(descriptor.RelativePath),
 			Hash:     string(descriptor.Hash),
 		}
 
-		protoFileDescriptors.FileDescriptorList = append(protoFileDescriptors.FileDescriptorList, descriptorProto)
+		protoFileDescriptors.FileDescriptors = append(protoFileDescriptors.FileDescriptors, descriptorProto)
 	}
 
-	openTxRequest := &protogenerated.OpenTxRequest{
+	openTxRequest := &protofiles.OpenTxRequest{
 		FileDescriptorList: protoFileDescriptors,
 	}
 
 	openTxRequestBodyBytes, err := proto.Marshal(openTxRequest)
 	if nil != err {
-		return "", nil, err
+		return 0, nil, errors.Wrap(err, "couldn't unmarshall the open transaction request response")
 	}
 
 	openTxClient := http.Client{Timeout: time.Second * 20}
@@ -167,7 +167,7 @@ func (c *WebUploadClient) openTx(fileDescriptors []*intelligentstore.FileDescrip
 		"application/octet-stream",
 		bytes.NewBuffer(openTxRequestBodyBytes))
 	if nil != err {
-		return "", nil, fmt.Errorf("couln't POST to %s. Error: %s", openTxURL, err)
+		return 0, nil, fmt.Errorf("couln't POST to %s. Error: %s", openTxURL, err)
 	}
 	defer resp.Body.Close()
 
@@ -182,32 +182,32 @@ func (c *WebUploadClient) openTx(fileDescriptors []*intelligentstore.FileDescrip
 			respErrMessage = fmt.Sprintf("couldn't read response error message. Error: %s", respReadErr)
 		}
 
-		return "", nil, fmt.Errorf(
+		return 0, nil, fmt.Errorf(
 			"expected 200 (OK) repsonse code for open transaction, but received '%s' on POSTing to %s. Message body: %s",
 			resp.Status, openTxURL, respErrMessage)
 	}
 
 	if nil != respReadErr {
-		return "", nil, fmt.Errorf("couldn't read OpenTx response. Error: %s", err)
+		return 0, nil, fmt.Errorf("couldn't read OpenTx response. Error: %s", err)
 	}
 
-	var openTxResponse protogenerated.OpenTxResponse
+	var openTxResponse protofiles.OpenTxResponse
 	err = proto.Unmarshal(respBytes, &openTxResponse)
 	if nil != err {
-		return "", nil, fmt.Errorf("couldn't unmarshal OpenTx response. Error: %s", err)
+		return 0, nil, fmt.Errorf("couldn't unmarshal OpenTx response. Error: %s", err)
 	}
 
 	var filesToSendDescriptors []*intelligentstore.FileDescriptor
-	for _, fileDescriptorProto := range openTxResponse.FileDescriptorList.FileDescriptorList {
+	for _, fileDescriptorProto := range openTxResponse.FileDescriptorList.FileDescriptors {
 		filesToSendDescriptors = append(
 			filesToSendDescriptors,
-			serialisation.FileDescriptorProtoToFileDescriptor(fileDescriptorProto))
+			protobufs.FileDescriptorProtoToFileDescriptor(fileDescriptorProto))
 	}
-	log.Printf("created a new version: %s\n", openTxResponse.RevisionStr)
-	return openTxResponse.RevisionStr, filesToSendDescriptors, nil
+	log.Printf("created a new version: %d\n", openTxResponse.RevisionStr)
+	return intelligentstore.RevisionVersion(openTxResponse.RevisionStr), filesToSendDescriptors, nil
 }
 
-func (c *WebUploadClient) backupFile(revisionStr string, fileDescriptor *intelligentstore.FileDescriptor) error {
+func (c *WebUploadClient) backupFile(revisionStr intelligentstore.RevisionVersion, fileDescriptor *intelligentstore.FileDescriptor) error {
 	log.Printf("BACKING UP %s\n", fileDescriptor.RelativePath)
 
 	client := http.Client{Timeout: time.Hour}
@@ -218,8 +218,8 @@ func (c *WebUploadClient) backupFile(revisionStr string, fileDescriptor *intelli
 		return errors.Wrapf(err, "couldn't read file at %s", fileDescriptor.RelativePath)
 	}
 
-	protoBufFile := &protogenerated.FileProto{
-		Descriptor_: descriptorToProto(fileDescriptor),
+	protoBufFile := &protofiles.FileProto{
+		Descriptor_: protobufs.FileDescriptorToProto(fileDescriptor),
 		Contents:    fileContents,
 	}
 
@@ -228,7 +228,7 @@ func (c *WebUploadClient) backupFile(revisionStr string, fileDescriptor *intelli
 		return errors.Wrapf(err, "couldn't marshall file at %s to protobuf", fileDescriptor.RelativePath)
 	}
 
-	uploadURL := fmt.Sprintf("%s/api/buckets/%s/upload/%s/file",
+	uploadURL := fmt.Sprintf("%s/api/buckets/%s/upload/%d/file",
 		c.storeURL, c.bucketName, revisionStr)
 	resp, err := client.Post(uploadURL, "application/octet-stream", bytes.NewBuffer(marshalledFile))
 	if nil != err {
@@ -250,9 +250,10 @@ func (c *WebUploadClient) backupFile(revisionStr string, fileDescriptor *intelli
 	return nil
 }
 
-func (c *WebUploadClient) commitTx(revisionStr string) error {
+func (c *WebUploadClient) commitTx(revisionStr intelligentstore.RevisionVersion) error {
 	commitTxClient := http.Client{Timeout: time.Second * 20}
-	resp, err := commitTxClient.Get(c.storeURL + "/api/buckets/" + c.bucketName + "/upload/" + revisionStr + "/commit")
+	url := fmt.Sprintf("%s/api/buckets/%s/upload/%d/commit", c.storeURL, c.bucketName, revisionStr)
+	resp, err := commitTxClient.Get(url)
 	if nil != err {
 		return errors.Wrap(err, "couldn't commit upload transaction")
 	}
@@ -275,11 +276,4 @@ func (c *WebUploadClient) commitTx(revisionStr string) error {
 	}
 
 	return nil
-}
-
-func descriptorToProto(descriptor *intelligentstore.FileDescriptor) *protogenerated.FileDescriptorProto {
-	return &protogenerated.FileDescriptorProto{
-		Filename: string(descriptor.RelativePath),
-		Hash:     string(descriptor.Hash),
-	}
 }
