@@ -66,8 +66,8 @@ func Test_handleGetRevision(t *testing.T) {
 	testFiles := []*testfile{
 		&testfile{"a.txt", "file a"},
 		&testfile{"b.txt", "file b"},
-		&testfile{"folder1/a.txt", "file 1/a"},
-		&testfile{"folder1/c.txt", "file 1/c"},
+		&testfile{"folder-1/a.txt", "file 1/a"},
+		&testfile{"folder-1/c.txt", "file 1/c"},
 	}
 
 	fs := generateTestFSWithData(t, testFiles)
@@ -101,7 +101,7 @@ func Test_handleGetRevision(t *testing.T) {
 	assert.Len(t, revInfoWithFiles.Files, 2)
 	assert.Len(t, revInfoWithFiles.Dirs, 1)
 
-	assert.Equal(t, "folder1", revInfoWithFiles.Dirs[0].Name)
+	assert.Equal(t, "folder-1", revInfoWithFiles.Dirs[0].Name)
 	assert.Equal(t, int64(2), revInfoWithFiles.Dirs[0].NestedFileCount)
 
 	index := 0
@@ -111,7 +111,7 @@ func Test_handleGetRevision(t *testing.T) {
 	}
 
 	// request 2; testing with a rootDir
-	r2 := &http.Request{Method: "GET", URL: &url.URL{Path: "/docs/latest", RawQuery: "rootDir=folder1"}}
+	r2 := &http.Request{Method: "GET", URL: &url.URL{Path: "/docs/latest", RawQuery: "rootDir=folder-1"}}
 	w2 := httptest.NewRecorder()
 
 	bucketService.ServeHTTP(w2, r2)

@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -189,11 +188,8 @@ func (s *BucketService) handleGetRevision(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	rootDir, err := url.QueryUnescape(r.URL.Query().Get("rootDir"))
-	if nil != err {
-		http.Error(w, "couldn't unescape rootDir. Error: "+err.Error(), 400)
-		return
-	}
+	rootDir := r.URL.Query().Get("rootDir")
+
 	files := []*intelligentstore.FileDescriptor{}
 
 	log.Printf("rootDir: '%s'\n", rootDir)
@@ -201,7 +197,6 @@ func (s *BucketService) handleGetRevision(w http.ResponseWriter, r *http.Request
 	type subDirInfoMap map[string]int64 // map[name]nestedFileCount
 	dirnames := subDirInfoMap{}         // dirname[nested file count]
 	for _, file := range allFiles {
-		log.Printf("filepath: '%s'\n", file.RelativePath)
 		if !strings.HasPrefix(string(file.RelativePath), rootDir) {
 			// not in this root dir
 			continue

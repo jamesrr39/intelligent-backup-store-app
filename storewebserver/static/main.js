@@ -16,7 +16,9 @@ define([
   var $contentEl = $("#content");
 
 	window.onhashchange = function(){
-		var hashFragments = window.location.hash.substring(2).split("/"); // remove the '#/' at the start of the hash
+		var hashFragments = window.location.hash.substring(2).split("/").map(function(fragment){
+      return decodeURIComponent(fragment);
+    }); // remove the '#/' at the start of the hash
     var bucketName;
     var revisionStr;
     var rootDir;
