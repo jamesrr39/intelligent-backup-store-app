@@ -52,7 +52,7 @@ func NewBucketService(store *intelligentstore.IntelligentStore) *BucketService {
 	router.HandleFunc("/{bucketName}/upload/{revisionTs}/file", bucketService.handleUploadFile).Methods("POST")
 	router.HandleFunc("/{bucketName}/upload/{revisionTs}/commit", bucketService.handleCommitTransaction).Methods("GET")
 
-	router.PathPrefix("/{bucketName}/{revisionTs}").HandlerFunc(bucketService.handleGetRevision).Methods("GET")
+	router.HandleFunc("/{bucketName}/{revisionTs}", bucketService.handleGetRevision).Methods("GET")
 	return bucketService
 }
 

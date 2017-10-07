@@ -27,14 +27,15 @@ func NewLocalUploader(
 	backupStoreLocation,
 	backupBucketName,
 	backupFromLocation string,
-	excludeMatcher *excludesmatcher.ExcludesMatcher) *LocalUploader {
+	excludeMatcher *excludesmatcher.ExcludesMatcher,
+	fs afero.Fs) *LocalUploader {
 
 	return &LocalUploader{
 		backupStoreLocation,
 		backupBucketName,
-		backupStoreLocation,
+		backupFromLocation,
 		excludeMatcher,
-		afero.NewOsFs(),
+		fs,
 	}
 }
 

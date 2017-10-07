@@ -10,15 +10,16 @@ define([
       "<p>",
         "<select class='form-control' name='change-revision-select'>",
           "{{#revisionTimestamps}}",
-            "<option value={{versionTimestamp}}>",
+            "<option value={{versionTimestamp}} {{selected}}>",
               "{{timestampDisplayString}}",
             "</option>",
           "{{/revisionTimestamps}}",
         "</select>",
       "</p>",
       "<p>",
+        "<a href='{{homeURL}}'>Home</a>",
         "{{#dirLevels}}",
-          "/<a href='{{url}}'>{{name}}</a>",
+          " / <a href='{{url}}'>{{name}}</a>",
         "{{/dirLevels}}",
       "</p>",
       "<div class='listing-container'>",
@@ -63,7 +64,7 @@ define([
       render($container) {
         var url = "/api/buckets/" + encodeURIComponent(bucketName) + "/" + revisionStr;
         if (rootDir) {
-          url += "?rootDir=" + encodeURIComponent("/" + rootDir);
+          url += "?rootDir=" + encodeURIComponent(rootDir);
         }
 
         $.when(
@@ -83,8 +84,11 @@ define([
             revisionTimestamps: bucket.revisions.map(function(revision) {
               return {
                 versionTimestamp: revision.versionTimestamp,
-                timestampDisplayString: new Date(revision.versionTimestamp * 1000).toString()
+                timestampDisplayString: new Date(revision.versionTimestamp * 1000).toString(),
+                selected: (revisionStr === (revision.versionTimestamp + "")) ? "selected" : ""
               };
+            }).sort(function(a, b) {
+              return (a.versionTimestamp < b.versionTimestamp) ? 1 : -1;
             }),
             files: data.files.sort(function(a, b){
               return a.path.toUpperCase() > b.path.toUpperCase();
@@ -111,10 +115,11 @@ define([
               var relativePath = dirLevels.slice(0, index +1).join("/");
 
               return {
-                url: "#/buckets/" + bucketName + "/" + revisionStr + "/" + relativePath,
+                url: "#/buckets/" + encodeURIComponent(bucketName) + "/" + revisionStr + "/" + relativePath,
                 name: dirLevelName
               };
-            })
+            }),
+            homeURL: "#/buckets/" + encodeURIComponent(bucketName) + "/" + revisionStr
           }));
 
           $container.find("[name='change-revision-select']").on("change", function(event){

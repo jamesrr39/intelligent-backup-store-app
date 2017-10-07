@@ -77,7 +77,7 @@ func main() {
 		if strings.HasPrefix(*backupStoreLocation, "http://") || strings.HasPrefix(*backupStoreLocation, "https://") {
 			uploaderClient = webuploadclient.NewWebUploadClient(*backupStoreLocation, *backupBucketName, *backupFromLocation, excludeMatcher)
 		} else {
-			uploaderClient = localupload.NewLocalUploader(*backupStoreLocation, *backupBucketName, *backupFromLocation, excludeMatcher)
+			uploaderClient = localupload.NewLocalUploader(*backupStoreLocation, *backupBucketName, *backupFromLocation, excludeMatcher, afero.NewOsFs())
 		}
 
 		return uploaderClient.UploadToStore()
