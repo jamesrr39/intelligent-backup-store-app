@@ -3,9 +3,14 @@ package intelligentstore
 import (
 	"encoding/gob"
 	"fmt"
+	"io"
 	"path/filepath"
 	"strconv"
+
+	"github.com/pkg/errors"
 )
+
+var ErrNoFileWithThisRelativePathInRevision = errors.New("No File With This Relative Path In Revision")
 
 type RevisionVersion int64
 
@@ -37,6 +42,17 @@ func (r *Revision) GetFilesInRevision() ([]*FileDescriptor, error) {
 	return filesInVersion, nil
 }
 
-func (r *Revision) getPathToRevisionFile() string {
-	return filepath.Join(r.bucketPath())
+func (r *Revision) GetFileContentsInRevision(relativePath RelativePath) (io.ReadCloser, error) {
+	fileDescriptors, err := r.GetFilesInRevision()
+	if nil != err {
+		return nil, errors.Wrap(err, "couldn't get all files in revision to filter")
+	}
+
+	for _, fileDescriptor := range fileDescriptors {
+		if fileDescriptor.RelativePath == relativePath {
+			return r.GetObjectByHash(fileDescriptor.Hash)
+		}
+	}
+
+	return nil, ErrNoFileWithThisRelativePathInRevision
 }

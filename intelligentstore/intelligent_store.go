@@ -3,6 +3,7 @@ package intelligentstore
 import (
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -137,4 +138,10 @@ func (s *IntelligentStore) GetAllBuckets() ([]*Bucket, error) {
 
 	return buckets, nil
 
+}
+
+func (s *IntelligentStore) GetObjectByHash(hash Hash) (io.ReadCloser, error) {
+	objectPath := filepath.Join(s.StoreBasePath, ".backup_data", "objects", hash.FirstChunk(), hash.Remainder())
+
+	return s.fs.Open(objectPath)
 }

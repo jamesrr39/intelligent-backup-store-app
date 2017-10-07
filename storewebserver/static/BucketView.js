@@ -45,7 +45,9 @@ define([
                 "pic",
               "</div>",
               "<div class='name'>",
+                "<a href='{{fileURL}}' target='_blank'>",
                 "{{name}}",
+                "</a>",
               "</div>",
             "</div>",
           "{{/files}}",
@@ -99,6 +101,7 @@ define([
               var lastSlashIndex = file.path.lastIndexOf("/");
 
               return {
+                fileURL: "/api/buckets/"+encodeURIComponent(bucketName) +"/"+encodeURIComponent(revisionStr)+"/file?relativePath=" + encodeURIComponent(file.path),
                 name: (lastSlashIndex === -1) ? file.path : file.path.substring(lastSlashIndex+1)
               }
             }),

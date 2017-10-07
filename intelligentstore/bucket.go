@@ -106,11 +106,10 @@ func (bucket *Bucket) GetRevisions() ([]*Revision, error) {
 }
 
 // GetRevision gets a specific version of this bucket
-func (bucket *Bucket) GetRevision(revisionTimeStamp int64) (*Revision, error) {
+func (bucket *Bucket) GetRevision(revisionTimeStamp RevisionVersion) (*Revision, error) {
 	versionsFolderPath := filepath.Join(bucket.bucketPath(), "versions")
-	timestampAsString := strconv.FormatInt(revisionTimeStamp, 10)
 
-	_, err := bucket.fs.Stat(filepath.Join(versionsFolderPath, timestampAsString))
+	_, err := bucket.fs.Stat(filepath.Join(versionsFolderPath, revisionTimeStamp.String()))
 	if nil != err {
 		return nil, errors.Wrapf(err, "couldn't get revision '%d'", revisionTimeStamp)
 	}

@@ -20,8 +20,6 @@ func NewMockStore(t *testing.T, nowFunc nowProvider, fs afero.Fs) *MockStore {
 	err := fs.Mkdir(path, 0700)
 	require.Nil(t, err)
 
-	//nowFunc = func() { return time.Date(2000, 01, 02, 03, 04, 05, 06, time.UTC) }
-
 	store, err := createIntelligentStoreAndNewConn(path, nowFunc, fs)
 	require.Nil(t, err)
 

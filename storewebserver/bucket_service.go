@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -52,6 +53,7 @@ func NewBucketService(store *intelligentstore.IntelligentStore) *BucketService {
 	router.HandleFunc("/{bucketName}/upload/{revisionTs}/commit", bucketService.handleCommitTransaction).Methods("GET")
 
 	router.HandleFunc("/{bucketName}/{revisionTs}", bucketService.handleGetRevision).Methods("GET")
+	router.HandleFunc("/{bucketName}/{revisionTs}/file", bucketService.handleGetFileContents).Methods("GET")
 	return bucketService
 }
 
@@ -149,20 +151,13 @@ func (s *BucketService) handleGetBucket(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
-func (s *BucketService) handleGetRevision(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-
-	bucketName := vars["bucketName"]
-	revisionTsString := vars["revisionTs"]
-
+func (s *BucketService) getRevision(bucketName, revisionTsString string) (*intelligentstore.Revision, *HTTPError) {
 	bucket, err := s.store.GetBucket(bucketName)
 	if nil != err {
 		if intelligentstore.ErrBucketDoesNotExist == err {
-			http.Error(w, fmt.Sprintf("couldn't find bucket '%s'. Error: %s", bucketName, err), 404)
-			return
+			return nil, NewHTTPError(fmt.Errorf("couldn't find bucket '%s'. Error: %s", bucketName, err), 404)
 		}
-		http.Error(w, err.Error(), 500)
-		return
+		return nil, NewHTTPError(err, 404)
 	}
 
 	var revision *intelligentstore.Revision
@@ -172,13 +167,25 @@ func (s *BucketService) handleGetRevision(w http.ResponseWriter, r *http.Request
 		var revisionTimestamp int64
 		revisionTimestamp, err = strconv.ParseInt(revisionTsString, 10, 64)
 		if nil != err {
-			http.Error(w, fmt.Sprintf("couldn't convert '%s' to a timestamp. Error: '%s'", revisionTsString, err), 400)
-			return
+			return nil, NewHTTPError(fmt.Errorf("couldn't convert '%s' to a timestamp. Error: '%s'", revisionTsString, err), 400)
 		}
-		revision, err = bucket.GetRevision(revisionTimestamp)
+		revision, err = bucket.GetRevision(intelligentstore.RevisionVersion(revisionTimestamp))
 	}
 	if nil != err {
-		http.Error(w, err.Error(), 500)
+		return nil, NewHTTPError(err, 500)
+	}
+	return revision, nil
+}
+
+func (s *BucketService) handleGetRevision(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+
+	bucketName := vars["bucketName"]
+	revisionTsString := vars["revisionTs"]
+
+	revision, revErr := s.getRevision(bucketName, revisionTsString)
+	if nil != revErr {
+		http.Error(w, revErr.Error(), revErr.StatusCode)
 		return
 	}
 
@@ -377,4 +384,37 @@ func (s *BucketService) handleCommitTransaction(w http.ResponseWriter, r *http.R
 		return
 	}
 	s.openTransactionsMap[bucketName+"__"+revisionTsString] = nil
+}
+
+func (s *BucketService) handleGetFileContents(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+
+	bucketName := vars["bucketName"]
+	revisionTsString := vars["revisionTs"]
+
+	relativePath := intelligentstore.NewRelativePath(r.URL.Query().Get("relativePath"))
+
+	revision, revErr := s.getRevision(bucketName, revisionTsString)
+	if nil != revErr {
+		http.Error(w, revErr.Error(), revErr.StatusCode)
+		return
+	}
+
+	file, err := revision.GetFileContentsInRevision(relativePath)
+	if nil != err {
+		if err == intelligentstore.ErrNoFileWithThisRelativePathInRevision {
+			http.Error(w, fmt.Sprintf("couldn't get '%s'", relativePath), 404)
+			return
+		}
+		http.Error(w, fmt.Sprintf("error getting file: '%s'. Error: %s", relativePath, err), 500)
+		return
+	}
+	defer file.Close()
+
+	_, err = io.Copy(w, file)
+	if nil != err {
+		http.Error(w, fmt.Sprintf("couldn't copy file. Error: %s", err), 500)
+		return
+	}
+
 }
