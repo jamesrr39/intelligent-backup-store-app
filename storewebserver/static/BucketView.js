@@ -1,8 +1,9 @@
 define([
   "jquery",
   "handlebars",
-  "./ErrorView"
-], function($, Handlebars, ErrorView){
+  "./ErrorView",
+  "./FileIcons"
+], function($, Handlebars, ErrorView, FileIcons){
 
   var template = Handlebars.compile([
     "<div>",
@@ -42,7 +43,7 @@ define([
           "{{#files}}",
             "<div class='file'>",
               "<div class='thumbnail'>",
-                "pic",
+                "<i class='fa fa-{{iconClass}} file-type-icon'></i>",
               "</div>",
               "<div class='name'>",
                 "<a href='{{fileURL}}' target='_blank'>",
@@ -100,9 +101,12 @@ define([
             }).map(function(file) {
               var lastSlashIndex = file.path.lastIndexOf("/");
 
+              var fileName = (lastSlashIndex === -1) ? file.path : file.path.substring(lastSlashIndex+1);
+
               return {
                 fileURL: "/api/buckets/"+encodeURIComponent(bucketName) +"/"+encodeURIComponent(revisionStr)+"/file?relativePath=" + encodeURIComponent(file.path),
-                name: (lastSlashIndex === -1) ? file.path : file.path.substring(lastSlashIndex+1)
+                name: fileName,
+                iconClass: FileIcons.classNameFromFileName(fileName)
               }
             }),
             dirs: data.dirs.sort(function(a, b){
