@@ -17,7 +17,7 @@ func Test_Begin(t *testing.T) {
 		return time.Date(year, 1, 2, 3, 4, 5, 6, time.UTC)
 	}
 
-	store := &IntelligentStore{"", testNowProvider, afero.NewMemMapFs()}
+	store := createIntelligentStoreAndNewConn("", testNowProvider, afero.NewMemMapFs())
 	bucket := &Bucket{store, "test bucket"}
 	transaction := bucket.Begin()
 

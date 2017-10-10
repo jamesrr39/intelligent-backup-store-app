@@ -8,6 +8,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/jamesrr39/goutil/dirtraversal"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
 	"github.com/spf13/afero"
 )
 
@@ -19,20 +20,23 @@ var (
 )
 
 // Bucket represents an organisational area of the Store.
-type Bucket struct {
-	*IntelligentStore `json:"-"`
-	BucketName        string `json:"name"`
+type BucketDAL struct {
+	*IntelligentStoreDAL
 }
 
-// Begin creates a new Transaction to create a new revision of files in the Bucket.
-func (bucket *Bucket) Begin() *Transaction {
-	versionTimestamp := bucket.nowProvider().Unix()
+func (dal *BucketDAL) Begin(bucket *domain.Bucket) *domain.Transaction {
+	versionTimestamp := dal.nowProvider().Unix()
 
-	return &Transaction{&Revision{bucket, RevisionVersion(versionTimestamp)}, nil}
+	return &domain.Transaction{
+		domain.NewRevision(bucket, domain.RevisionVersion(versionTimestamp)), nil}
 }
 
-func (bucket *Bucket) bucketPath() string {
-	return filepath.Join(bucket.StoreBasePath, ".backup_data", "buckets", bucket.BucketName)
+func (dal *BucketDAL) bucketPath(bucket *domain.Bucket) string {
+	return filepath.Join(
+		dal.IntelligentStoreDAL.StoreBasePath,
+		".backup_data",
+		"buckets",
+		bucket.BucketName)
 }
 
 func isValidBucketName(name string) error {
@@ -55,10 +59,10 @@ var ErrNoRevisionsForBucket = errors.New("no revisions for this bucket yet")
 
 // GetLatestRevision returns the latest Revision of this bucket.
 // error could be either ErrNoRevisionsForBucket or an FS-related error.
-func (bucket *Bucket) GetLatestRevision() (*Revision, error) {
-	versionsDirPath := filepath.Join(bucket.bucketPath(), "versions")
+func (dal *BucketDAL) GetLatestRevision(bucket *domain.Bucket) (*domain.Revision, error) {
+	versionsDirPath := filepath.Join(dal.bucketPath(bucket), "versions")
 	versionsFileInfos, err := afero.ReadDir(
-		bucket.IntelligentStore.fs,
+		dal.IntelligentStoreDAL.fs,
 		versionsDirPath)
 	if nil != err {
 		return nil, err
@@ -80,39 +84,43 @@ func (bucket *Bucket) GetLatestRevision() (*Revision, error) {
 		}
 	}
 
-	return &Revision{bucket, RevisionVersion(highestTs)}, nil
+	return domain.NewRevision(bucket, domain.RevisionVersion(highestTs)), nil
 
 }
 
 // GetRevisions gets all revisions of this bucket
-func (bucket *Bucket) GetRevisions() ([]*Revision, error) {
-	versionsFolderPath := filepath.Join(bucket.bucketPath(), "versions")
+func (dal *BucketDAL) GetRevisions(bucket *domain.Bucket) ([]*domain.Revision, error) {
+	versionsFolderPath := filepath.Join(dal.bucketPath(bucket), "versions")
 
-	versionsFileInfos, err := afero.ReadDir(bucket.fs, versionsFolderPath)
+	versionsFileInfos, err := afero.ReadDir(
+		dal.IntelligentStoreDAL.fs, versionsFolderPath)
 	if nil != err {
 		return nil, err
 	}
 
-	var versions []*Revision
+	var versions []*domain.Revision
 	for _, versionFileInfo := range versionsFileInfos {
 		revisionTs, err := strconv.ParseInt(versionFileInfo.Name(), 10, 64)
 		if nil != err {
 			return nil, errors.Wrapf(err, "couldn't parse '%s' to a revision timestamp", versionFileInfo.Name())
 		}
-		versions = append(versions, &Revision{bucket, RevisionVersion(revisionTs)})
+		versions = append(versions, domain.NewRevision(bucket, domain.RevisionVersion(revisionTs)))
 	}
 
 	return versions, nil
 }
 
 // GetRevision gets a specific version of this bucket
-func (bucket *Bucket) GetRevision(revisionTimeStamp RevisionVersion) (*Revision, error) {
-	versionsFolderPath := filepath.Join(bucket.bucketPath(), "versions")
+func (dal *BucketDAL) GetRevision(bucket *domain.Bucket, revisionTimeStamp domain.RevisionVersion) (*domain.Revision, error) {
+	versionsFolderPath := filepath.Join(dal.bucketPath(bucket), "versions")
 
-	_, err := bucket.fs.Stat(filepath.Join(versionsFolderPath, revisionTimeStamp.String()))
+	_, err := dal.IntelligentStoreDAL.fs.Stat(
+		filepath.Join(
+			versionsFolderPath,
+			revisionTimeStamp.String()))
 	if nil != err {
 		return nil, errors.Wrapf(err, "couldn't get revision '%d'", revisionTimeStamp)
 	}
 
-	return &Revision{bucket, RevisionVersion(revisionTimeStamp)}, nil
+	return domain.NewRevision(bucket, domain.RevisionVersion(revisionTimeStamp)), nil
 }

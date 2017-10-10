@@ -3,6 +3,7 @@ package intelligentstore
 import (
 	"testing"
 
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/db"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 )
@@ -10,17 +11,19 @@ import (
 // TODO: test build only
 
 type MockStore struct {
-	*IntelligentStore
+	*IntelligentStoreDAL
 	Path string
 }
 
 func NewMockStore(t *testing.T, nowFunc nowProvider, fs afero.Fs) *MockStore {
 	path := "/test-store"
-
-	err := fs.Mkdir(path, 0700)
+	dbConn, err := db.NewDBConn("memory")
 	require.Nil(t, err)
 
-	store, err := createIntelligentStoreAndNewConn(path, nowFunc, fs)
+	err = fs.Mkdir(path, 0700)
+	require.Nil(t, err)
+
+	store, err := createIntelligentStoreAndNewConn(path, nowFunc, fs, dbConn)
 	require.Nil(t, err)
 
 	return &MockStore{store, path}

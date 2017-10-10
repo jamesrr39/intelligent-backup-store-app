@@ -7,33 +7,28 @@ import (
 	"path/filepath"
 	"strconv"
 
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
 	"github.com/pkg/errors"
 )
 
-var ErrNoFileWithThisRelativePathInRevision = errors.New("No File With This Relative Path In Revision")
-
-type RevisionVersion int64
-
-func (r RevisionVersion) String() string {
-	return strconv.FormatInt(int64(r), 10)
-}
-
-// Revision represents a revision of a set of files
-type Revision struct {
-	*Bucket          `json:"-"`
-	VersionTimestamp RevisionVersion `json:"versionTimestamp"`
+type RevisionDAL struct {
+	*IntelligentStoreDAL
+	*BucketDAL
 }
 
 // GetFilesInRevision gets a list of files in this revision
-func (r *Revision) GetFilesInRevision() ([]*FileDescriptor, error) {
-	filePath := filepath.Join(r.bucketPath(), "versions", strconv.FormatInt(int64(r.VersionTimestamp), 10))
+func (r *RevisionDAL) GetFilesInRevision(bucket *domain.Bucket, revision *domain.Revision) ([]*domain.FileDescriptor, error) {
+	filePath := filepath.Join(
+		r.bucketPath(bucket),
+		"versions",
+		strconv.FormatInt(int64(revision.VersionTimestamp), 10))
 	revisionDataFile, err := r.fs.Open(filePath)
 	if nil != err {
 		return nil, fmt.Errorf("couldn't open revision data file at '%s'. Error: '%s'", filePath, err)
 	}
 	defer revisionDataFile.Close()
 
-	var filesInVersion []*FileDescriptor
+	var filesInVersion []*domain.FileDescriptor
 	err = gob.NewDecoder(revisionDataFile).Decode(&filesInVersion)
 	if nil != err {
 		return nil, err
@@ -42,8 +37,12 @@ func (r *Revision) GetFilesInRevision() ([]*FileDescriptor, error) {
 	return filesInVersion, nil
 }
 
-func (r *Revision) GetFileContentsInRevision(relativePath RelativePath) (io.ReadCloser, error) {
-	fileDescriptors, err := r.GetFilesInRevision()
+func (r *RevisionDAL) GetFileContentsInRevision(
+	bucket *domain.Bucket,
+	revision *domain.Revision,
+	relativePath domain.RelativePath) (io.ReadCloser, error) {
+
+	fileDescriptors, err := r.GetFilesInRevision(bucket, revision)
 	if nil != err {
 		return nil, errors.Wrap(err, "couldn't get all files in revision to filter")
 	}

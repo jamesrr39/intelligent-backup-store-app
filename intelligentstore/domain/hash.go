@@ -1,4 +1,4 @@
-package intelligentstore
+package domain
 
 import (
 	"crypto/sha512"

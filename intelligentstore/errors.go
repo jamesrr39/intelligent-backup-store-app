@@ -9,3 +9,6 @@ var ErrIllegalDirectoryTraversal = errors.New("filepath contains .. and is tryin
 
 // ErrBucketDoesNotExist is an error signifying that a bucket doesn't exist
 var ErrBucketDoesNotExist = errors.New("bucket does not exist")
+
+// ErrNoFileWithThisRelativePathInRevision is an error signifying that a file with a given relative path couldn't be found in a given revision
+var ErrNoFileWithThisRelativePathInRevision = errors.New("No File With This Relative Path In Revision")

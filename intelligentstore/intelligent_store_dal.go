@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/db"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
 	"github.com/spf13/afero"
 )
 
@@ -16,18 +18,24 @@ var (
 	ErrStoreNotInitedYet          = errors.New("IntelligentStore not initialised yet. Use init to create a new store")
 )
 
-// IntelligentStore represents the object to interact with the underlying storage
-type IntelligentStore struct {
+// IntelligentStoreDAL represents the object to interact with the underlying storage
+type IntelligentStoreDAL struct {
 	StoreBasePath string
 	nowProvider
 	fs afero.Fs
+	db *db.DBConn
 }
 
-func NewIntelligentStoreConnToExisting(pathToBase string, fs afero.Fs) (*IntelligentStore, error) {
-	return newIntelligentStoreConnToExisting(pathToBase, prodNowProvider, fs)
+func NewIntelligentStoreConnToExisting(pathToBase string, fs afero.Fs) (*IntelligentStoreDAL, error) {
+	dbConn, err := db.NewDBConn(pathToBase)
+	if nil != err {
+		return nil, err
+	}
+
+	return newIntelligentStoreConnToExisting(pathToBase, prodNowProvider, fs, dbConn)
 }
 
-func newIntelligentStoreConnToExisting(pathToBase string, nowFunc nowProvider, fs afero.Fs) (*IntelligentStore, error) {
+func newIntelligentStoreConnToExisting(pathToBase string, nowFunc nowProvider, fs afero.Fs, dbConn *db.DBConn) (*IntelligentStoreDAL, error) {
 	fileInfo, err := fs.Stat(filepath.Join(pathToBase, ".backup_data"))
 	if nil != err {
 		if os.IsNotExist(err) {
@@ -40,14 +48,14 @@ func newIntelligentStoreConnToExisting(pathToBase string, nowFunc nowProvider, f
 		return nil, ErrStoreDirectoryNotDirectory
 	}
 
-	return &IntelligentStore{pathToBase, nowFunc, fs}, nil
+	return &IntelligentStoreDAL{pathToBase, nowFunc, fs, dbConn}, nil
 }
 
-func CreateIntelligentStoreAndNewConn(pathToBase string) (*IntelligentStore, error) {
-	return createIntelligentStoreAndNewConn(pathToBase, prodNowProvider, afero.NewOsFs())
+func CreateIntelligentStoreAndNewConn(pathToBase string, dbConn *db.DBConn) (*IntelligentStoreDAL, error) {
+	return createIntelligentStoreAndNewConn(pathToBase, prodNowProvider, afero.NewOsFs(), dbConn)
 }
 
-func createIntelligentStoreAndNewConn(pathToBase string, nowFunc nowProvider, fs afero.Fs) (*IntelligentStore, error) {
+func createIntelligentStoreAndNewConn(pathToBase string, nowFunc nowProvider, fs afero.Fs, dbConn *db.DBConn) (*IntelligentStoreDAL, error) {
 	fileInfos, err := afero.ReadDir(fs, pathToBase)
 	if nil != err {
 		return nil, fmt.Errorf("couldn't get a file listing for '%s'. Error: '%s'", pathToBase, err)
@@ -74,13 +82,13 @@ func createIntelligentStoreAndNewConn(pathToBase string, nowFunc nowProvider, fs
 		return nil, fmt.Errorf("couldn't create data folder for backup objects at '%s'. Error: '%s'", objectsFolderPath, err)
 	}
 
-	return &IntelligentStore{pathToBase, nowFunc, fs}, nil
+	return newIntelligentStoreConnToExisting(pathToBase, nowFunc, fs, dbConn)
 }
 
 // GetBucket gets a bucket
 // If the bucket is not found, the error returned will be ErrBucketDoesNotExist
 // Otherwise, it will be an os/fs related error
-func (s *IntelligentStore) GetBucket(bucketName string) (*Bucket, error) {
+func (s *IntelligentStoreDAL) GetBucket(bucketName string) (*domain.Bucket, error) {
 	bucketPath := filepath.Join(s.StoreBasePath, ".backup_data", "buckets", bucketName)
 	_, err := s.fs.Stat(bucketPath)
 	if nil != err {
@@ -90,11 +98,11 @@ func (s *IntelligentStore) GetBucket(bucketName string) (*Bucket, error) {
 		return nil, err
 	}
 
-	return &Bucket{s, bucketName}, nil
+	return domain.NewBucket(bucketName), nil
 }
 
 // TODO: filesystem-safe names
-func (s *IntelligentStore) CreateBucket(bucketName string) (*Bucket, error) {
+func (s *IntelligentStoreDAL) CreateBucket(bucketName string) (*domain.Bucket, error) {
 	err := isValidBucketName(bucketName)
 	if nil != err {
 		return nil, err
@@ -113,10 +121,10 @@ func (s *IntelligentStore) CreateBucket(bucketName string) (*Bucket, error) {
 		return nil, err
 	}
 
-	return &Bucket{s, bucketName}, nil
+	return domain.NewBucket(bucketName), nil
 }
 
-func (s *IntelligentStore) GetAllBuckets() ([]*Bucket, error) {
+func (s *IntelligentStoreDAL) GetAllBuckets() ([]*domain.Bucket, error) {
 	bucketsDirPath := filepath.Join(s.StoreBasePath, ".backup_data", "buckets")
 
 	bucketsFileInfo, err := afero.ReadDir(s.fs, bucketsDirPath)
@@ -124,7 +132,7 @@ func (s *IntelligentStore) GetAllBuckets() ([]*Bucket, error) {
 		return nil, err
 	}
 
-	var buckets []*Bucket
+	var buckets []*domain.Bucket
 
 	for _, bucketFileInfo := range bucketsFileInfo {
 		if !bucketFileInfo.IsDir() {
@@ -133,14 +141,14 @@ func (s *IntelligentStore) GetAllBuckets() ([]*Bucket, error) {
 				filepath.Join(bucketsDirPath, bucketFileInfo.Name()))
 		}
 
-		buckets = append(buckets, &Bucket{s, bucketFileInfo.Name()})
+		buckets = append(buckets, domain.NewBucket(bucketFileInfo.Name()))
 	}
 
 	return buckets, nil
 
 }
 
-func (s *IntelligentStore) GetObjectByHash(hash Hash) (io.ReadCloser, error) {
+func (s *IntelligentStoreDAL) GetObjectByHash(hash domain.Hash) (io.ReadCloser, error) {
 	objectPath := filepath.Join(s.StoreBasePath, ".backup_data", "objects", hash.FirstChunk(), hash.Remainder())
 
 	return s.fs.Open(objectPath)

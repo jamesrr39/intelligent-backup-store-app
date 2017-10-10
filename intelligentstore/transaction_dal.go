@@ -13,17 +13,17 @@ import (
 	"strings"
 
 	"github.com/jamesrr39/goutil/dirtraversal"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
 	"github.com/pkg/errors"
 	"github.com/spf13/afero"
 )
 
-type Transaction struct {
-	*Revision
-	FilesInVersion []*FileDescriptor
+type TransactionDAL struct {
+	*IntelligentStoreDAL
 }
 
 // TODO: test for >4GB file
-func (transaction *Transaction) BackupFile(fileName string, sourceFile io.Reader) error {
+func (dal *TransactionDAL) BackupFile(transaction *domain.Transaction, fileName string, sourceFile io.Reader) error {
 	fileName = strings.TrimPrefix(fileName, string(filepath.Separator))
 
 	if dirtraversal.IsTryingToTraverseUp(fileName) {
@@ -35,13 +35,13 @@ func (transaction *Transaction) BackupFile(fileName string, sourceFile io.Reader
 		return err
 	}
 
-	hash, err := NewHash(bytes.NewBuffer(sourceAsBytes))
+	hash, err := domain.NewHash(bytes.NewBuffer(sourceAsBytes))
 	if nil != err {
 		return err
 	}
 
 	filePath := filepath.Join(
-		transaction.StoreBasePath,
+		dal.StoreBasePath,
 		".backup_data",
 		"objects",
 		hash.FirstChunk(),
@@ -49,7 +49,7 @@ func (transaction *Transaction) BackupFile(fileName string, sourceFile io.Reader
 
 	log.Printf("backing up %s into %s\n", fileName, filePath)
 
-	_, err = transaction.fs.Stat(filePath)
+	_, err = dal.fs.Stat(filePath)
 	if nil != err {
 		if !os.IsNotExist(err) {
 			// permissions issue or something.
@@ -57,37 +57,38 @@ func (transaction *Transaction) BackupFile(fileName string, sourceFile io.Reader
 		}
 		// file doesn't exist in store already. Write it to store.
 
-		err := transaction.fs.MkdirAll(filepath.Dir(filePath), 0700)
+		err := dal.fs.MkdirAll(filepath.Dir(filePath), 0700)
 		if nil != err {
 			return err
 		}
 
 		log.Printf("writing %s to %s\n", fileName, filePath)
-		err = afero.WriteFile(transaction.fs, filePath, sourceAsBytes, 0700)
+		err = afero.WriteFile(dal.fs, filePath, sourceAsBytes, 0700)
 		if nil != err {
 			return err
 		}
 	} else {
-		// file already exists. Do a byte by byte comparision to make sure there isn't a collision
-		existingFile, err := transaction.fs.Open(filePath)
+		existingFile, err := dal.fs.Open(filePath)
 		if nil != err {
 			return fmt.Errorf("couldn't open existing file in store at '%s'. Error: %s", filePath, err)
 		}
 		defer existingFile.Close()
 	}
 
-	transaction.FilesInVersion = append(transaction.FilesInVersion, NewFileInVersion(hash, NewRelativePath(fileName)))
+	transaction.FilesInVersion = append(
+		transaction.FilesInVersion,
+		domain.NewFileInVersion(hash, domain.NewRelativePath(fileName)))
 
 	return nil
 }
 
-func (transaction *Transaction) AddAlreadyExistingHash(fileDescriptor *FileDescriptor) (bool, error) {
+func (dal *TransactionDAL) AddAlreadyExistingHash(transaction *domain.Transaction, fileDescriptor *domain.FileDescriptor) (bool, error) {
 	isTryingToTraverse := dirtraversal.IsTryingToTraverseUp(string(fileDescriptor.Hash))
 	if isTryingToTraverse {
 		return false, fmt.Errorf("%s is attempting to traverse up the filesystem tree, which is not allowed (and this is not a hash)", fileDescriptor.Hash)
 	}
 
-	bucketsDirPath := filepath.Join(transaction.StoreBasePath, ".backup_data", "objects")
+	bucketsDirPath := filepath.Join(dal.StoreBasePath, ".backup_data", "objects")
 
 	filePath := filepath.Join(bucketsDirPath, fileDescriptor.Hash.FirstChunk(), fileDescriptor.Hash.Remainder())
 	_, err := os.Stat(filePath)
@@ -103,16 +104,16 @@ func (transaction *Transaction) AddAlreadyExistingHash(fileDescriptor *FileDescr
 	return true, nil
 }
 
-func (transaction *Transaction) Commit() error {
+func (dal *TransactionDAL) Commit(transaction *domain.Transaction) error {
 	filePath := filepath.Join(
-		transaction.StoreBasePath,
+		dal.StoreBasePath,
 		".backup_data",
 		"buckets",
 		transaction.BucketName,
 		"versions",
 		strconv.FormatInt(int64(transaction.VersionTimestamp), 10))
 
-	versionContentsFile, err := transaction.fs.Create(filePath)
+	versionContentsFile, err := dal.fs.Create(filePath)
 	if nil != err {
 		return fmt.Errorf("couldn't write version summary file at '%s'. Error: '%s'", filePath, err)
 	}
