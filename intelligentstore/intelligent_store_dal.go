@@ -23,7 +23,7 @@ type IntelligentStoreDAL struct {
 	StoreBasePath string
 	nowProvider
 	fs afero.Fs
-	db *db.DBConn
+	db *db.Conn
 }
 
 func NewIntelligentStoreConnToExisting(pathToBase string, fs afero.Fs) (*IntelligentStoreDAL, error) {
@@ -35,7 +35,7 @@ func NewIntelligentStoreConnToExisting(pathToBase string, fs afero.Fs) (*Intelli
 	return newIntelligentStoreConnToExisting(pathToBase, prodNowProvider, fs, dbConn)
 }
 
-func newIntelligentStoreConnToExisting(pathToBase string, nowFunc nowProvider, fs afero.Fs, dbConn *db.DBConn) (*IntelligentStoreDAL, error) {
+func newIntelligentStoreConnToExisting(pathToBase string, nowFunc nowProvider, fs afero.Fs, dbConn *db.Conn) (*IntelligentStoreDAL, error) {
 	fileInfo, err := fs.Stat(filepath.Join(pathToBase, ".backup_data"))
 	if nil != err {
 		if os.IsNotExist(err) {
@@ -51,11 +51,11 @@ func newIntelligentStoreConnToExisting(pathToBase string, nowFunc nowProvider, f
 	return &IntelligentStoreDAL{pathToBase, nowFunc, fs, dbConn}, nil
 }
 
-func CreateIntelligentStoreAndNewConn(pathToBase string, dbConn *db.DBConn) (*IntelligentStoreDAL, error) {
+func CreateIntelligentStoreAndNewConn(pathToBase string, dbConn *db.Conn) (*IntelligentStoreDAL, error) {
 	return createIntelligentStoreAndNewConn(pathToBase, prodNowProvider, afero.NewOsFs(), dbConn)
 }
 
-func createIntelligentStoreAndNewConn(pathToBase string, nowFunc nowProvider, fs afero.Fs, dbConn *db.DBConn) (*IntelligentStoreDAL, error) {
+func createIntelligentStoreAndNewConn(pathToBase string, nowFunc nowProvider, fs afero.Fs, dbConn *db.Conn) (*IntelligentStoreDAL, error) {
 	fileInfos, err := afero.ReadDir(fs, pathToBase)
 	if nil != err {
 		return nil, fmt.Errorf("couldn't get a file listing for '%s'. Error: '%s'", pathToBase, err)

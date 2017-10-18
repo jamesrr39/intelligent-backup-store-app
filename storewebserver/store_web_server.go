@@ -9,12 +9,12 @@ import (
 
 // StoreWebServer represents a handler handling requests for a store.
 type StoreWebServer struct {
-	store *intelligentstore.IntelligentStore
+	store *intelligentstore.IntelligentStoreDAL
 	http.Handler
 }
 
 // NewStoreWebServer creates a StoreWebServer and sets up the routing for the services it provides.
-func NewStoreWebServer(store *intelligentstore.IntelligentStore) *StoreWebServer {
+func NewStoreWebServer(store *intelligentstore.IntelligentStoreDAL) *StoreWebServer {
 	router := mux.NewRouter()
 
 	bucketsHandler := NewBucketService(store)

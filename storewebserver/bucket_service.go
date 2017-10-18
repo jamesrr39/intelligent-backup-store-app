@@ -15,18 +15,19 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/gorilla/mux"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/protobufs"
 	protofiles "github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/protobufs/proto_files"
 )
 
 // BucketService handles HTTP requests to get bucket information.
 type BucketService struct {
-	store *intelligentstore.IntelligentStore
+	store *intelligentstore.IntelligentStoreDAL
 	http.Handler
 	openTransactionsMap
 }
 
-type openTransactionsMap map[string]*intelligentstore.Transaction
+type openTransactionsMap map[string]*domain.Transaction
 
 type subDirInfo struct {
 	Name            string `json:"name"`
@@ -34,7 +35,7 @@ type subDirInfo struct {
 }
 
 // NewBucketService creates a new BucketService and a router for handling requests.
-func NewBucketService(store *intelligentstore.IntelligentStore) *BucketService {
+func NewBucketService(store *intelligentstore.IntelligentStoreDAL) *BucketService {
 	router := mux.NewRouter()
 	bucketService := &BucketService{store, router, make(openTransactionsMap)}
 
@@ -58,14 +59,14 @@ func NewBucketService(store *intelligentstore.IntelligentStore) *BucketService {
 }
 
 type bucketSummary struct {
-	Name           string                            `json:"name"`
-	LastRevisionTs *intelligentstore.RevisionVersion `json:"lastRevisionTs"`
+	Name           string                  `json:"name"`
+	LastRevisionTs *domain.RevisionVersion `json:"lastRevisionTs"`
 }
 
 type revisionInfoWithFiles struct {
-	LastRevisionTs intelligentstore.RevisionVersion   `json:"revisionTs"`
-	Files          []*intelligentstore.FileDescriptor `json:"files"`
-	Dirs           []*subDirInfo                      `json:"dirs"`
+	LastRevisionTs domain.RevisionVersion   `json:"revisionTs"`
+	Files          []*domain.FileDescriptor `json:"files"`
+	Dirs           []*subDirInfo            `json:"dirs"`
 }
 
 // @Title Get Latest Buckets Information
@@ -109,7 +110,7 @@ func (s *BucketService) handleGetAllBuckets(w http.ResponseWriter, r *http.Reque
 }
 
 type handleGetBucketResponse struct {
-	Revisions []*intelligentstore.Revision `json:"revisions"`
+	Revisions []*domain.Revision `json:"revisions"`
 }
 
 func (s *BucketService) handleGetBucket(w http.ResponseWriter, r *http.Request) {
@@ -151,7 +152,7 @@ func (s *BucketService) handleGetBucket(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
-func (s *BucketService) getRevision(bucketName, revisionTsString string) (*intelligentstore.Revision, *HTTPError) {
+func (s *BucketService) getRevision(bucketName, revisionTsString string) (*domain.Revision, *HTTPError) {
 	bucket, err := s.store.GetBucket(bucketName)
 	if nil != err {
 		if intelligentstore.ErrBucketDoesNotExist == err {

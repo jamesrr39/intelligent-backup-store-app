@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
@@ -19,11 +20,12 @@ func Test_fullPathToRelative(t *testing.T) {
 }
 
 type testfile struct {
-	path     intelligentstore.RelativePath
+	path     domain.RelativePath
 	contents string
 }
 
 func Test_UploadToStore(t *testing.T) {
+	// define and write test files to upload, living under /docs
 	testFiles := []*testfile{
 		&testfile{"a.txt", "file a"},
 		&testfile{"b.txt", "file b"},
@@ -61,32 +63,39 @@ func Test_UploadToStore(t *testing.T) {
 		fs,
 	}
 
+	d, err := afero.ReadDir(fs, "/test-store")
+	require.Nil(t, err)
+	t.Log(d[0].Name())
+
 	err = uploader.UploadToStore()
-	assert.Nil(t, err)
+	require.Nil(t, err)
 
 	_, err = store.GetBucket("not existing bucket")
-	assert.NotNil(t, err)
+	require.NotNil(t, err)
 
 	bucket, err := store.GetBucket("docs")
 	require.Nil(t, err)
 
-	revisions, err := bucket.GetRevisions()
+	bucketDAL := intelligentstore.NewBucketDAL(store.IntelligentStoreDAL)
+
+	revisions, err := bucketDAL.GetRevisions(bucket)
 	require.Nil(t, err)
 	assert.Len(t, revisions, 1)
 
 	revision := revisions[0]
+	revisionDAL := intelligentstore.NewRevisionDAL(store.IntelligentStoreDAL, bucketDAL)
 
-	fileDescriptors, err := revision.GetFilesInRevision()
+	fileDescriptors, err := revisionDAL.GetFilesInRevision(bucket, revision)
 	require.Nil(t, err)
 	assert.Len(t, fileDescriptors, 4)
 
-	fileDescriptorNameMap := make(map[intelligentstore.RelativePath]*intelligentstore.FileDescriptor)
+	fileDescriptorNameMap := make(map[domain.RelativePath]*domain.FileDescriptor)
 	for _, fileDescriptor := range fileDescriptors {
 		fileDescriptorNameMap[fileDescriptor.RelativePath] = fileDescriptor
 	}
 
 	for _, testFile := range testFiles {
-		hash, err := intelligentstore.NewHash(
+		hash, err := domain.NewHash(
 			bytes.NewBuffer([]byte(testFile.contents)))
 		require.Nil(t, err)
 

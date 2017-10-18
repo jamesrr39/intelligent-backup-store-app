@@ -11,27 +11,28 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
 	"github.com/spf13/afero"
 )
 
 type LocalUploader struct {
-	backupStoreLocation string
-	backupBucketName    string
-	backupFromLocation  string
-	excludeMatcher      *excludesmatcher.ExcludesMatcher
-	fs                  afero.Fs
+	backupStoreDAL     *intelligentstore.IntelligentStoreDAL
+	backupBucketName   string
+	backupFromLocation string
+	excludeMatcher     *excludesmatcher.ExcludesMatcher
+	fs                 afero.Fs
 }
 
 func NewLocalUploader(
-	backupStoreLocation,
+	backupStoreDAL *intelligentstore.IntelligentStoreDAL,
 	backupBucketName,
 	backupFromLocation string,
 	excludeMatcher *excludesmatcher.ExcludesMatcher,
 	fs afero.Fs) *LocalUploader {
 
 	return &LocalUploader{
-		backupStoreLocation,
+		backupStoreDAL,
 		backupBucketName,
 		backupFromLocation,
 		excludeMatcher,
@@ -43,23 +44,15 @@ func (uploader *LocalUploader) UploadToStore() error {
 
 	startTime := time.Now()
 
-	backupStore, err := intelligentstore.NewIntelligentStoreConnToExisting(
-		uploader.backupStoreLocation,
-		uploader.fs)
-	if nil != err {
-		return errors.Wrapf(
-			err,
-			"couldn't connect to existing store at '%s'",
-			uploader.backupStoreLocation)
-	}
-
-	bucket, err := backupStore.GetBucket(
+	bucket, err := uploader.GetBucket(
 		uploader.backupBucketName)
 	if nil != err {
 		return err
 	}
 
-	backupTx := bucket.Begin()
+	bucketDAL := intelligentstore.NewBucketDAL(backupStore)
+
+	backupTx := bucketDAL.Begin(bucket)
 
 	absBackupFromLocation, err := filepath.Abs(
 		uploader.backupFromLocation)
@@ -96,6 +89,8 @@ func (uploader *LocalUploader) UploadToStore() error {
 	var errs []error
 	fileCount := 0
 
+	transactionDAL := intelligentstore.NewTransactionDAL(backupStore)
+
 	for _, filePath := range filePathsToUpload {
 
 		file, err := uploader.fs.Open(filePath)
@@ -108,7 +103,7 @@ func (uploader *LocalUploader) UploadToStore() error {
 		defer file.Close()
 
 		relativeFilePath := fullPathToRelative(absBackupFromLocation, filePath)
-		err = backupTx.BackupFile(string(relativeFilePath), file)
+		err = transactionDAL.BackupFile(backupTx, string(relativeFilePath), file)
 		if nil != err {
 			errMessage := fmt.Sprintf("couldn't backup '%s'. Error: %s", filePath, err)
 			log.Println(errMessage)
@@ -119,7 +114,7 @@ func (uploader *LocalUploader) UploadToStore() error {
 		fileCount++
 	}
 
-	err = backupTx.Commit()
+	err = transactionDAL.Commit(backupTx)
 	if nil != err {
 		return err
 	}
@@ -140,6 +135,6 @@ func (uploader *LocalUploader) UploadToStore() error {
 
 }
 
-func fullPathToRelative(rootPath, fullPath string) intelligentstore.RelativePath {
-	return intelligentstore.NewRelativePath(strings.TrimPrefix(fullPath, rootPath))
+func fullPathToRelative(rootPath, fullPath string) domain.RelativePath {
+	return domain.NewRelativePath(strings.TrimPrefix(fullPath, rootPath))
 }

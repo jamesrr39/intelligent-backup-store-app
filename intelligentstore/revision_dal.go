@@ -16,6 +16,13 @@ type RevisionDAL struct {
 	*BucketDAL
 }
 
+func NewRevisionDAL(
+	intelligentStoreDAL *IntelligentStoreDAL,
+	bucketDAL *BucketDAL) *RevisionDAL {
+
+	return &RevisionDAL{intelligentStoreDAL, bucketDAL}
+}
+
 // GetFilesInRevision gets a list of files in this revision
 func (r *RevisionDAL) GetFilesInRevision(bucket *domain.Bucket, revision *domain.Revision) ([]*domain.FileDescriptor, error) {
 	filePath := filepath.Join(

@@ -1,4 +1,4 @@
-package intelligentstore
+package storewebserver
 
 type UserStore struct {
 	authTokenMap

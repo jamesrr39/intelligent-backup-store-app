@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 )
@@ -13,28 +14,32 @@ import (
 func Test_Begin(t *testing.T) {
 	year := 2000
 
-	var testNowProvider = func() time.Time {
-		return time.Date(year, 1, 2, 3, 4, 5, 6, time.UTC)
+	mockNow := func() time.Time {
+		return time.Date(year, 01, 02, 03, 04, 05, 06, time.UTC)
 	}
 
-	store := createIntelligentStoreAndNewConn("", testNowProvider, afero.NewMemMapFs())
-	bucket := &Bucket{store, "test bucket"}
-	transaction := bucket.Begin()
+	mockStoreDAL := NewMockStore(t, mockNow, afero.NewMemMapFs())
+	bucketDAL := NewBucketDAL(mockStoreDAL.IntelligentStoreDAL)
+
+	bucket := domain.NewBucket("test bucket")
+	transaction := bucketDAL.Begin(bucket)
 
 	assert.Equal(t, int64(946782245), int64(transaction.VersionTimestamp))
 
 	year = 2001
 
-	transaction2 := bucket.Begin()
+	transaction2 := bucketDAL.Begin(bucket)
 
 	assert.NotEqual(t, transaction.VersionTimestamp, transaction2.VersionTimestamp)
 }
 
 func Test_bucketPath(t *testing.T) {
-	store := &IntelligentStore{StoreBasePath: "/a/b"}
-	bucket := &Bucket{store, "test bucket"}
+	mockStoreDAL := NewMockStore(t, MockNowProvider, afero.NewMemMapFs())
+	bucketDAL := NewBucketDAL(mockStoreDAL.IntelligentStoreDAL)
 
-	assert.Equal(t, "/a/b/.backup_data/buckets/test bucket", bucket.bucketPath())
+	bucket := domain.NewBucket("test bucket")
+
+	assert.Equal(t, "/test-store/.backup_data/buckets/test bucket", bucketDAL.bucketPath(bucket))
 }
 
 func Test_isValidBucketName(t *testing.T) {

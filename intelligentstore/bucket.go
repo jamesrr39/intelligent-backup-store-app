@@ -19,16 +19,23 @@ var (
 	ErrBucketNameOver100Chars = errors.New("bucket name must be a maximum of 100 characters")
 )
 
-// Bucket represents an organisational area of the Store.
+// BucketDAL is the Data Access Layer used to deal with Buckets.
 type BucketDAL struct {
 	*IntelligentStoreDAL
+}
+
+func NewBucketDAL(intelligentStoreDAL *IntelligentStoreDAL) *BucketDAL {
+	return &BucketDAL{intelligentStoreDAL}
 }
 
 func (dal *BucketDAL) Begin(bucket *domain.Bucket) *domain.Transaction {
 	versionTimestamp := dal.nowProvider().Unix()
 
-	return &domain.Transaction{
-		domain.NewRevision(bucket, domain.RevisionVersion(versionTimestamp)), nil}
+	return domain.NewTransaction(
+		domain.NewRevision(
+			bucket,
+			domain.RevisionVersion(versionTimestamp)),
+		nil)
 }
 
 func (dal *BucketDAL) bucketPath(bucket *domain.Bucket) string {

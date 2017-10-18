@@ -22,6 +22,10 @@ type TransactionDAL struct {
 	*IntelligentStoreDAL
 }
 
+func NewTransactionDAL(intelligentStoreDAL *IntelligentStoreDAL) *TransactionDAL {
+	return &TransactionDAL{intelligentStoreDAL}
+}
+
 // TODO: test for >4GB file
 func (dal *TransactionDAL) BackupFile(transaction *domain.Transaction, fileName string, sourceFile io.Reader) error {
 	fileName = strings.TrimPrefix(fileName, string(filepath.Separator))
