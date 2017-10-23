@@ -44,7 +44,7 @@ func NewWebUploadClient(
 	}
 }
 
-// BackupFolder backs up a directory on the local machine to the bucket in the store in the WebUploadClient
+// UploadToStore backs up a directory on the local machine to the bucket in the store in the WebUploadClient
 func (c *WebUploadClient) UploadToStore() error {
 	var fileList []*intelligentstore.FileDescriptor
 

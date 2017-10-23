@@ -71,6 +71,7 @@ type revisionInfoWithFiles struct {
 // @Title Get Latest Buckets Information
 // @Success 200 {object} string &quot;Success&quot;
 func (s *BucketService) handleGetAllBuckets(w http.ResponseWriter, r *http.Request) {
+
 	buckets, err := s.store.GetAllBuckets()
 	if nil != err {
 		http.Error(w, err.Error(), 500)
@@ -115,7 +116,7 @@ type handleGetBucketResponse struct {
 func (s *BucketService) handleGetBucket(w http.ResponseWriter, r *http.Request) {
 	bucketName := mux.Vars(r)["bucketName"]
 
-	bucket, err := s.store.GetBucket(bucketName)
+	bucket, err := s.store.GetBucketByName(bucketName)
 	if nil != err {
 		if intelligentstore.ErrBucketDoesNotExist == err {
 			http.Error(w, err.Error(), 404)
@@ -152,7 +153,8 @@ func (s *BucketService) handleGetBucket(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *BucketService) getRevision(bucketName, revisionTsString string) (*intelligentstore.Revision, *HTTPError) {
-	bucket, err := s.store.GetBucket(bucketName)
+
+	bucket, err := s.store.GetBucketByName(bucketName)
 	if nil != err {
 		if intelligentstore.ErrBucketDoesNotExist == err {
 			return nil, NewHTTPError(fmt.Errorf("couldn't find bucket '%s'. Error: %s", bucketName, err), 404)
@@ -245,7 +247,7 @@ func (s *BucketService) handleCreateRevision(w http.ResponseWriter, r *http.Requ
 
 	bucketName := vars["bucketName"]
 
-	bucket, err := s.store.GetBucket(bucketName)
+	bucket, err := s.store.GetBucketByName(bucketName)
 	if nil != err {
 		if intelligentstore.ErrBucketDoesNotExist == err {
 			http.Error(w, fmt.Sprintf("couldn't find bucket '%s'. Error: %s", bucketName, err), 404)
@@ -318,7 +320,7 @@ func (s *BucketService) handleUploadFile(w http.ResponseWriter, r *http.Request)
 	bucketName := vars["bucketName"]
 	revisionTsString := vars["revisionTs"]
 
-	bucket, err := s.store.GetBucket(bucketName)
+	bucket, err := s.store.GetBucketByName(bucketName)
 	if nil != err {
 		if intelligentstore.ErrBucketDoesNotExist == err {
 			http.Error(w, fmt.Sprintf("couldn't find bucket '%s'. Error: %s", bucketName, err), 404)
@@ -362,7 +364,7 @@ func (s *BucketService) handleCommitTransaction(w http.ResponseWriter, r *http.R
 	bucketName := vars["bucketName"]
 	revisionTsString := vars["revisionTs"]
 
-	bucket, err := s.store.GetBucket(bucketName)
+	bucket, err := s.store.GetBucketByName(bucketName)
 	if nil != err {
 		if intelligentstore.ErrBucketDoesNotExist == err {
 			http.Error(w, fmt.Sprintf("couldn't find bucket '%s'. Error: %s", bucketName, err), 404)
@@ -416,5 +418,4 @@ func (s *BucketService) handleGetFileContents(w http.ResponseWriter, r *http.Req
 		http.Error(w, fmt.Sprintf("couldn't copy file. Error: %s", err), 500)
 		return
 	}
-
 }

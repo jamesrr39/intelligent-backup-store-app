@@ -50,11 +50,12 @@ func Test_UploadToStore(t *testing.T) {
 	require.Nil(t, err)
 
 	store := intelligentstore.NewMockStore(t, mockTimeProvider, fs)
+
 	_, err = store.CreateBucket("docs")
 	require.Nil(t, err)
 
 	uploader := &LocalUploader{
-		store.Path,
+		store.IntelligentStore,
 		"docs",
 		"/docs",
 		excludeMatcher,
@@ -62,12 +63,12 @@ func Test_UploadToStore(t *testing.T) {
 	}
 
 	err = uploader.UploadToStore()
-	assert.Nil(t, err)
+	require.Nil(t, err)
 
-	_, err = store.GetBucket("not existing bucket")
+	_, err = store.GetBucketByName("not existing bucket")
 	assert.NotNil(t, err)
 
-	bucket, err := store.GetBucket("docs")
+	bucket, err := store.GetBucketByName("docs")
 	require.Nil(t, err)
 
 	revisions, err := bucket.GetRevisions()

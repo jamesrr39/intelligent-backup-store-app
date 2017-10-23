@@ -103,12 +103,10 @@ func (transaction *Transaction) AddAlreadyExistingHash(fileDescriptor *FileDescr
 	return true, nil
 }
 
+// Commit closes the transaction and writes the revision data to disk
 func (transaction *Transaction) Commit() error {
 	filePath := filepath.Join(
-		transaction.StoreBasePath,
-		".backup_data",
-		"buckets",
-		transaction.BucketName,
+		transaction.Revision.Bucket.bucketPath(),
 		"versions",
 		strconv.FormatInt(int64(transaction.VersionTimestamp), 10))
 
@@ -117,8 +115,6 @@ func (transaction *Transaction) Commit() error {
 		return fmt.Errorf("couldn't write version summary file at '%s'. Error: '%s'", filePath, err)
 	}
 	defer versionContentsFile.Close()
-
-	log.Printf("files written to version: %v\n", transaction.FilesInVersion)
 
 	err = gob.NewEncoder(versionContentsFile).Encode(transaction.FilesInVersion)
 	if nil != err {

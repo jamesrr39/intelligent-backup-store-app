@@ -1,13 +1,15 @@
 package intelligentstore
 
 import (
-	"errors"
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
+	"strconv"
 
+	"github.com/pkg/errors"
 	"github.com/spf13/afero"
 )
 
@@ -23,8 +25,8 @@ type IntelligentStore struct {
 	fs afero.Fs
 }
 
-func NewIntelligentStoreConnToExisting(pathToBase string, fs afero.Fs) (*IntelligentStore, error) {
-	return newIntelligentStoreConnToExisting(pathToBase, prodNowProvider, fs)
+func NewIntelligentStoreConnToExisting(pathToBase string) (*IntelligentStore, error) {
+	return newIntelligentStoreConnToExisting(pathToBase, prodNowProvider, afero.NewOsFs())
 }
 
 func newIntelligentStoreConnToExisting(pathToBase string, nowFunc nowProvider, fs afero.Fs) (*IntelligentStore, error) {
@@ -62,10 +64,26 @@ func createIntelligentStoreAndNewConn(pathToBase string, nowFunc nowProvider, fs
 	versionsFolderPath := filepath.Join(pathToBase, ".backup_data", "buckets")
 	err = fs.MkdirAll(versionsFolderPath, 0700)
 	if nil != err {
-		return nil, fmt.Errorf(
-			"couldn't create data folder for backup versions at '%s'. Error: '%s'",
-			versionsFolderPath,
-			err)
+		return nil, errors.Wrapf(err,
+			"couldn't create data folder for backup versions at '%s'",
+			versionsFolderPath)
+	}
+
+	err = fs.MkdirAll(filepath.Join(pathToBase, ".backup_data", "store_metadata"), 0700)
+	if nil != err {
+		return nil, err
+	}
+
+	err = afero.WriteFile(fs, filepath.Join(pathToBase, ".backup_data", "store_metadata", "users-data.json"), []byte("[]"), 0600)
+	if nil != err {
+		return nil, err
+	}
+
+	err = afero.WriteFile(fs, filepath.Join(pathToBase, ".backup_data", "store_metadata", "buckets-data.json"), []byte("[]"), 0600)
+	if nil != err {
+		return nil, errors.Wrapf(err,
+			"couldn't create data file for buckets at '%s'",
+			versionsFolderPath)
 	}
 
 	objectsFolderPath := filepath.Join(pathToBase, ".backup_data", "objects")
@@ -77,71 +95,166 @@ func createIntelligentStoreAndNewConn(pathToBase string, nowFunc nowProvider, fs
 	return &IntelligentStore{pathToBase, nowFunc, fs}, nil
 }
 
-// GetBucket gets a bucket
-// If the bucket is not found, the error returned will be ErrBucketDoesNotExist
-// Otherwise, it will be an os/fs related error
-func (s *IntelligentStore) GetBucket(bucketName string) (*Bucket, error) {
-	bucketPath := filepath.Join(s.StoreBasePath, ".backup_data", "buckets", bucketName)
-	_, err := s.fs.Stat(bucketPath)
-	if nil != err {
-		if os.IsNotExist(err) {
-			return nil, ErrBucketDoesNotExist
-		}
-		return nil, err
-	}
-
-	return &Bucket{s, bucketName}, nil
+func (s *IntelligentStore) getBucketsInformationPath() string {
+	return filepath.Join(s.StoreBasePath, ".backup_data", "store_metadata", "buckets-data.json")
 }
 
-// TODO: filesystem-safe names
-func (s *IntelligentStore) CreateBucket(bucketName string) (*Bucket, error) {
-	err := isValidBucketName(bucketName)
-	if nil != err {
-		return nil, err
-	}
-
-	bucketPath := filepath.Join(s.StoreBasePath, ".backup_data", "buckets", bucketName)
-	err = s.fs.Mkdir(bucketPath, 0700)
-	if nil != err {
-		return nil, err
-	}
-
-	versionsDirPath := filepath.Join(bucketPath, "versions")
-	log.Printf("creating %s\n", versionsDirPath)
-	err = s.fs.Mkdir(versionsDirPath, 0700)
-	if nil != err {
-		return nil, err
-	}
-
-	return &Bucket{s, bucketName}, nil
+func (s *IntelligentStore) getUsersInformationPath() string {
+	return filepath.Join(s.StoreBasePath, ".backup_data", "store_metadata", "users-data.json")
 }
 
 func (s *IntelligentStore) GetAllBuckets() ([]*Bucket, error) {
-	bucketsDirPath := filepath.Join(s.StoreBasePath, ".backup_data", "buckets")
+	file, err := s.fs.Open(s.getBucketsInformationPath())
+	if nil != err {
+		return nil, err
+	}
+	defer file.Close()
 
-	bucketsFileInfo, err := afero.ReadDir(s.fs, bucketsDirPath)
+	var buckets []*Bucket
+	err = json.NewDecoder(file).Decode(&buckets)
 	if nil != err {
 		return nil, err
 	}
 
-	var buckets []*Bucket
-
-	for _, bucketFileInfo := range bucketsFileInfo {
-		if !bucketFileInfo.IsDir() {
-			return nil, fmt.Errorf("corrupted buckets folder: expected only directories in  %s, but %s is not a directory",
-				bucketsDirPath,
-				filepath.Join(bucketsDirPath, bucketFileInfo.Name()))
-		}
-
-		buckets = append(buckets, &Bucket{s, bucketFileInfo.Name()})
+	for _, bucket := range buckets {
+		bucket.IntelligentStore = s
 	}
 
 	return buckets, nil
+}
 
+// GetBucketByName gets a bucket by its name
+// If the bucket is not found, the error returned will be ErrBucketDoesNotExist
+// Otherwise, it will be an os/fs related error
+func (s *IntelligentStore) GetBucketByName(bucketName string) (*Bucket, error) {
+	buckets, err := s.GetAllBuckets()
+	if nil != err {
+		return nil, err
+	}
+
+	for _, bucket := range buckets {
+		if bucketName == bucket.BucketName {
+			bucket.IntelligentStore = s
+			return bucket, nil
+		}
+	}
+
+	return nil, ErrBucketDoesNotExist
+}
+
+func (s *IntelligentStore) CreateBucket(bucketName string) (*Bucket, error) {
+	buckets, err := s.GetAllBuckets()
+	if nil != err {
+		return nil, err
+	}
+
+	highestID := int64(0)
+	for _, bucket := range buckets {
+		if bucket.ID > highestID {
+			highestID = bucket.ID
+		}
+	}
+
+	id := highestID + 1
+
+	buckets = append(buckets, &Bucket{s, id, bucketName})
+
+	byteBuffer := bytes.NewBuffer(nil)
+	err = json.NewEncoder(byteBuffer).Encode(buckets)
+	if nil != err {
+		return nil, err
+	}
+
+	err = afero.WriteFile(s.fs, s.getBucketsInformationPath(), byteBuffer.Bytes(), 0600)
+	if nil != err {
+		return nil, err
+	}
+
+	bucketVersionsPath := filepath.Join(s.StoreBasePath, ".backup_data", "buckets", strconv.FormatInt(id, 10), "versions")
+	err = s.fs.MkdirAll(bucketVersionsPath, 0700)
+	if nil != err {
+		return nil, err
+	}
+
+	return &Bucket{s, id, bucketName}, nil
+}
+
+var ErrUserNotFound = errors.New("couldn't find user")
+
+func (s *IntelligentStore) GetUserByUsername(username string) (*User, error) {
+	file, err := s.fs.Open(s.getUsersInformationPath())
+	if nil != err {
+		return nil, err
+	}
+	defer file.Close()
+
+	var users []*User
+	err = json.NewDecoder(file).Decode(&users)
+	if nil != err {
+		return nil, err
+	}
+
+	for _, user := range users {
+		if user.Username == username {
+			return user, nil
+		}
+	}
+
+	return nil, ErrUserNotFound
+}
+
+func (s *IntelligentStore) GetAllUsers() ([]*User, error) {
+	file, err := s.fs.Open(s.getUsersInformationPath())
+	if nil != err {
+		return nil, err
+	}
+	defer file.Close()
+
+	var users []*User
+	err = json.NewDecoder(file).Decode(&users)
+	if nil != err {
+		return nil, err
+	}
+
+	return users, nil
+}
+
+func (s *IntelligentStore) CreateUser(user *User) (*User, error) {
+	if user.ID != 0 {
+		return nil, errors.Errorf("tried to create a user with ID %d (expected 0)", user.ID)
+	}
+
+	users, err := s.GetAllUsers()
+	if nil != err {
+		return nil, err
+	}
+
+	highestID := int64(0)
+	for _, user := range users {
+		if user.ID > highestID {
+			highestID = user.ID
+		}
+	}
+
+	newUser := NewUser(highestID+1, user.Name, user.Username)
+
+	file, err := s.fs.OpenFile(s.getUsersInformationPath(), os.O_WRONLY, 0600)
+	if nil != err {
+		return nil, err
+	}
+	defer file.Close()
+
+	users = append(users, newUser)
+
+	err = json.NewEncoder(file).Encode(users)
+	if nil != err {
+		return nil, err
+	}
+
+	return newUser, nil
 }
 
 func (s *IntelligentStore) GetObjectByHash(hash Hash) (io.ReadCloser, error) {
 	objectPath := filepath.Join(s.StoreBasePath, ".backup_data", "objects", hash.FirstChunk(), hash.Remainder())
-
 	return s.fs.Open(objectPath)
 }

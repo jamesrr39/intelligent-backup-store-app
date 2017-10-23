@@ -14,7 +14,6 @@ import (
 	"github.com/jamesrr39/intelligent-backup-store-app/uploaders"
 	"github.com/jamesrr39/intelligent-backup-store-app/uploaders/localupload"
 	"github.com/jamesrr39/intelligent-backup-store-app/uploaders/webuploadclient"
-	"github.com/spf13/afero"
 	kingpin "gopkg.in/alecthomas/kingpin.v2"
 )
 
@@ -37,8 +36,7 @@ func main() {
 	initBucketBucketName := initBucketCommand.Arg("bucket name", "name of the bucket").Required().String()
 	initBucketCommand.Action(func(ctx *kingpin.ParseContext) error {
 		store, err := intelligentstore.NewIntelligentStoreConnToExisting(
-			*initBucketStoreLocation,
-			afero.NewOsFs())
+			*initBucketStoreLocation)
 
 		if nil != err {
 			return err
@@ -77,7 +75,11 @@ func main() {
 		if strings.HasPrefix(*backupStoreLocation, "http://") || strings.HasPrefix(*backupStoreLocation, "https://") {
 			uploaderClient = webuploadclient.NewWebUploadClient(*backupStoreLocation, *backupBucketName, *backupFromLocation, excludeMatcher)
 		} else {
-			uploaderClient = localupload.NewLocalUploader(*backupStoreLocation, *backupBucketName, *backupFromLocation, excludeMatcher, afero.NewOsFs())
+			backupStore, err := intelligentstore.NewIntelligentStoreConnToExisting(*backupStoreLocation)
+			if nil != err {
+				return err
+			}
+			uploaderClient = localupload.NewLocalUploader(backupStore, *backupBucketName, *backupFromLocation, excludeMatcher)
 		}
 
 		return uploaderClient.UploadToStore()
@@ -86,7 +88,7 @@ func main() {
 	listBucketsCommand := kingpin.Command("list-buckets", "produce a listing of all the buckets and the last backup time")
 	listBucketsStoreLocation := listBucketsCommand.Arg("store location", "location of the store").Default(".").String()
 	listBucketsCommand.Action(func(ctx *kingpin.ParseContext) error {
-		store, err := intelligentstore.NewIntelligentStoreConnToExisting(*listBucketsStoreLocation, afero.NewOsFs())
+		store, err := intelligentstore.NewIntelligentStoreConnToExisting(*listBucketsStoreLocation)
 		if nil != err {
 			return err
 		}
@@ -123,14 +125,13 @@ func main() {
 	listBucketRevisionsStoreLocation := listBucketRevisionsCommand.Arg("store location", "location of the store").Default(".").String()
 	listBucketRevisionsCommand.Action(func(ctx *kingpin.ParseContext) error {
 		store, err := intelligentstore.NewIntelligentStoreConnToExisting(
-			*listBucketRevisionsStoreLocation,
-			afero.NewOsFs())
+			*listBucketRevisionsStoreLocation)
 
 		if nil != err {
 			return err
 		}
 
-		bucket, err := store.GetBucket(*listBucketRevisionsBucketName)
+		bucket, err := store.GetBucketByName(*listBucketRevisionsBucketName)
 		if nil != err {
 			return err
 		}
@@ -153,8 +154,7 @@ func main() {
 	startWebappStoreLocation := startWebappCommand.Arg("store location", "location of the store").Default(".").String()
 	startWebappCommand.Action(func(ctx *kingpin.ParseContext) error {
 		store, err := intelligentstore.NewIntelligentStoreConnToExisting(
-			*startWebappStoreLocation,
-			afero.NewOsFs())
+			*startWebappStoreLocation)
 
 		if nil != err {
 			return err

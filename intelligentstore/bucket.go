@@ -21,6 +21,7 @@ var (
 // Bucket represents an organisational area of the Store.
 type Bucket struct {
 	*IntelligentStore `json:"-"`
+	ID                int64  `json:"id"`
 	BucketName        string `json:"name"`
 }
 
@@ -32,7 +33,7 @@ func (bucket *Bucket) Begin() *Transaction {
 }
 
 func (bucket *Bucket) bucketPath() string {
-	return filepath.Join(bucket.StoreBasePath, ".backup_data", "buckets", bucket.BucketName)
+	return filepath.Join(bucket.StoreBasePath, ".backup_data", "buckets", strconv.FormatInt(bucket.ID, 10))
 }
 
 func isValidBucketName(name string) error {

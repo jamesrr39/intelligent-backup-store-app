@@ -81,10 +81,16 @@ func Test_handleGetRevision(t *testing.T) {
 	require.Nil(t, err)
 
 	// create a new local uploader client
-	uploader := localupload.NewLocalUploader(store.Path, "docs", "/docs", excludeMatcher, fs)
+	uploader := &localupload.LocalUploader{
+		BackupStore:        store.IntelligentStore,
+		BackupBucketName:   "docs",
+		BackupFromLocation: "/docs",
+		ExcludeMatcher:     excludeMatcher,
+		Fs:                 fs,
+	}
 
 	err = uploader.UploadToStore()
-	assert.Nil(t, err)
+	require.Nil(t, err)
 
 	requestURL := &url.URL{Path: "/docs/latest"}
 	r1 := &http.Request{Method: "GET", URL: requestURL}

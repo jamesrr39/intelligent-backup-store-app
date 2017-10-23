@@ -50,6 +50,7 @@ func Test_UploadToStore(t *testing.T) {
 	// set up remote store server
 	remoteFs := afero.NewMemMapFs()
 	remoteStore := intelligentstore.NewMockStore(t, mockTimeProvider, remoteFs)
+
 	_, err = remoteStore.CreateBucket("docs")
 	require.Nil(t, err)
 
@@ -72,7 +73,7 @@ func Test_UploadToStore(t *testing.T) {
 	require.Nil(t, err)
 
 	// assertions
-	bucket, err := remoteStore.GetBucket("docs")
+	bucket, err := remoteStore.GetBucketByName("docs")
 	require.Nil(t, err)
 
 	revisions, err := bucket.GetRevisions()
@@ -99,6 +100,20 @@ func Test_UploadToStore(t *testing.T) {
 		assert.Equal(t, testFile.path, fileDescriptorNameMap[testFile.path].RelativePath)
 		assert.Equal(t, hash, fileDescriptorNameMap[testFile.path].Hash)
 	}
+}
+
+func Test_NewWebUploadClient(t *testing.T) {
+	matcher, err := excludesmatcher.NewExcludesMatcherFromReader(bytes.NewBuffer(nil))
+	require.Nil(t, err)
+
+	client := NewWebUploadClient(
+		"http://127.0.0.1:8080/test",
+		"docs",
+		"/docs",
+		matcher,
+	)
+
+	assert.Equal(t, afero.NewOsFs(), client.fs)
 }
 
 func mockTimeProvider() time.Time {

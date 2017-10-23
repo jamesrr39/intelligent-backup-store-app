@@ -27,7 +27,6 @@ func Test_newIntelligentStoreConnToExisting(t *testing.T) {
 
 	store, err := newIntelligentStoreConnToExisting("/ab", mockNowProvider, fs)
 	require.Nil(t, err)
-
 	assert.Equal(t, "/ab", store.StoreBasePath)
 
 	// try to connect to a file
@@ -54,4 +53,78 @@ func Test_createIntelligentStoreAndNewConn(t *testing.T) {
 	store, err = createIntelligentStoreAndNewConn("/ab", mockNowProvider, fs)
 	require.Nil(t, store)
 	assert.Equal(t, "'/ab' is not an empty folder. Creating a new store requires an empty folder. Please create a new folder and create the store in there", err.Error())
+}
+
+func Test_GetBucketByName(t *testing.T) {
+	fs := afero.NewMemMapFs()
+	mockStore := NewMockStore(t, mockNowProvider, fs)
+
+	bucket, err := mockStore.IntelligentStore.CreateBucket("test bucket")
+	require.Nil(t, err)
+	assert.Equal(t, int64(1), bucket.ID)
+	assert.Equal(t, "test bucket", bucket.BucketName)
+
+	fetchedBucket, err := mockStore.IntelligentStore.GetBucketByName("test bucket")
+	require.Nil(t, err)
+	assert.Equal(t, int64(1), fetchedBucket.ID)
+	assert.Equal(t, "test bucket", fetchedBucket.BucketName)
+}
+
+func Test_CreateUser(t *testing.T) {
+	fs := afero.NewMemMapFs()
+	mockStore := NewMockStore(t, mockNowProvider, fs)
+
+	_, err := mockStore.CreateUser(NewUser(1, "test öäø user", "me@example.test"))
+	assert.Equal(t, "tried to create a user with ID 1 (expected 0)", err.Error())
+
+	u := NewUser(0, "test öäø user", "me@example.test")
+	newUser, err := mockStore.CreateUser(u)
+	require.Nil(t, err)
+	assert.Equal(t, int64(0), u.ID, "a new object should be returned")
+	assert.Equal(t, int64(1), newUser.ID)
+}
+
+func Test_GetAllUsers(t *testing.T) {
+	fs := afero.NewMemMapFs()
+	mockStore := NewMockStore(t, mockNowProvider, fs)
+
+	u1 := NewUser(0, "test öäø user", "me@example.test")
+	_, err := mockStore.CreateUser(u1)
+	require.Nil(t, err)
+
+	u2 := NewUser(0, "test 2 öäø user", "me2@example.test")
+	_, err = mockStore.CreateUser(u2)
+	require.Nil(t, err)
+
+	users, err := mockStore.GetAllUsers()
+	require.Nil(t, err)
+
+	assert.Len(t, users, 2)
+}
+
+func Test_GetUserByUsername(t *testing.T) {
+	fs := afero.NewMemMapFs()
+	mockStore := NewMockStore(t, mockNowProvider, fs)
+
+	u1 := NewUser(0, "test öäø user", "me@example.test")
+	_, err := mockStore.CreateUser(u1)
+	require.Nil(t, err)
+
+	user1, err := mockStore.GetUserByUsername("me@example.test")
+	require.Nil(t, err)
+
+	assert.Equal(t, "test öäø user", user1.Name)
+	assert.Equal(t, "me@example.test", user1.Username)
+	assert.NotEqual(t, 0, user1.ID)
+
+	u2 := NewUser(0, "test 2 öäø user", "me2@example.test")
+	_, err = mockStore.CreateUser(u2)
+	require.Nil(t, err)
+
+	user2, err := mockStore.GetUserByUsername("me2@example.test")
+	require.Nil(t, err)
+
+	assert.Equal(t, "test 2 öäø user", user2.Name)
+	assert.Equal(t, "me2@example.test", user2.Username)
+	assert.NotEqual(t, 0, user2.ID)
 }
