@@ -10,7 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
+	"sync"
 
 	"github.com/jamesrr39/goutil/dirtraversal"
 	"github.com/pkg/errors"
@@ -19,17 +19,30 @@ import (
 
 type Transaction struct {
 	*Revision
-	FilesInVersion []*FileDescriptor
+	FilesInVersion                  []*FileDescriptor
+	isFileScheduledForUploadAlready map[Hash]bool
+	mu                              *sync.RWMutex
 }
 
-// TODO: test for >4GB file
-func (transaction *Transaction) BackupFile(fileName string, sourceFile io.Reader) error {
-	fileName = strings.TrimPrefix(fileName, string(filepath.Separator))
+func NewTransaction(revision *Revision, fileDescriptors []*FileDescriptor) (*Transaction, error) {
+	tx := &Transaction{revision, nil, make(map[Hash]bool), &sync.RWMutex{}}
+	for _, fileDescriptor := range fileDescriptors {
+		if dirtraversal.IsTryingToTraverseUp(string(fileDescriptor.RelativePath)) {
+			return nil, ErrIllegalDirectoryTraversal
+		}
 
-	if dirtraversal.IsTryingToTraverseUp(fileName) {
-		return ErrIllegalDirectoryTraversal
+		err := tx.addDescriptorToTransaction(fileDescriptor)
+		if nil != err {
+			return nil, errors.Wrapf(err, "couldn't add file %v to transaction", fileDescriptor)
+		}
 	}
+	return tx, nil
+}
 
+var ErrFileNotRequiredForTransaction = errors.New("hash is not scheduled for upload, or has already been uploaded")
+
+// TODO: test for >4GB file
+func (transaction *Transaction) BackupFile(sourceFile io.Reader) error {
 	sourceAsBytes, err := ioutil.ReadAll(sourceFile)
 	if nil != err {
 		return err
@@ -40,6 +53,10 @@ func (transaction *Transaction) BackupFile(fileName string, sourceFile io.Reader
 		return err
 	}
 
+	if !transaction.isFileScheduledForUploadAlready[hash] {
+		return ErrFileNotRequiredForTransaction
+	}
+
 	filePath := filepath.Join(
 		transaction.StoreBasePath,
 		".backup_data",
@@ -47,7 +64,7 @@ func (transaction *Transaction) BackupFile(fileName string, sourceFile io.Reader
 		hash.FirstChunk(),
 		hash.Remainder())
 
-	log.Printf("backing up %s into %s\n", fileName, filePath)
+	log.Printf("backing up %s into %s\n", hash, filePath)
 
 	_, err = transaction.fs.Stat(filePath)
 	if nil != err {
@@ -62,7 +79,7 @@ func (transaction *Transaction) BackupFile(fileName string, sourceFile io.Reader
 			return err
 		}
 
-		log.Printf("writing %s to %s\n", fileName, filePath)
+		log.Printf("writing %s to %s\n", hash, filePath)
 		err = afero.WriteFile(transaction.fs, filePath, sourceAsBytes, 0700)
 		if nil != err {
 			return err
@@ -76,35 +93,58 @@ func (transaction *Transaction) BackupFile(fileName string, sourceFile io.Reader
 		defer existingFile.Close()
 	}
 
-	transaction.FilesInVersion = append(transaction.FilesInVersion, NewFileInVersion(hash, NewRelativePath(fileName)))
+	transaction.mu.Lock()
+	delete(transaction.isFileScheduledForUploadAlready, hash)
+	transaction.mu.Unlock()
 
 	return nil
 }
 
-func (transaction *Transaction) AddAlreadyExistingHash(fileDescriptor *FileDescriptor) (bool, error) {
+// AddDescriptorToTransaction adds a descriptor to the transaction
+// returns (is_file_needed, err)
+func (transaction *Transaction) addDescriptorToTransaction(fileDescriptor *FileDescriptor) error {
 	isTryingToTraverse := dirtraversal.IsTryingToTraverseUp(string(fileDescriptor.Hash))
 	if isTryingToTraverse {
-		return false, fmt.Errorf("%s is attempting to traverse up the filesystem tree, which is not allowed (and this is not a hash)", fileDescriptor.Hash)
+		return fmt.Errorf("%s is attempting to traverse up the filesystem tree, which is not allowed (and this is not a hash)", fileDescriptor.Hash)
 	}
 
+	transaction.FilesInVersion = append(transaction.FilesInVersion, fileDescriptor)
+
+	// check if it's scheduled for upload already
+	transaction.mu.Lock()
+	defer transaction.mu.Unlock()
+
+	isFileScheduledForUploadAlready := transaction.isFileScheduledForUploadAlready[fileDescriptor.Hash]
+	if isFileScheduledForUploadAlready {
+		return nil
+	}
+
+	// check if the file exists on disk
 	bucketsDirPath := filepath.Join(transaction.StoreBasePath, ".backup_data", "objects")
 
 	filePath := filepath.Join(bucketsDirPath, fileDescriptor.Hash.FirstChunk(), fileDescriptor.Hash.Remainder())
-	_, err := os.Stat(filePath)
+	_, err := transaction.IntelligentStore.fs.Stat(filePath)
 	if nil != err {
 		if os.IsNotExist(err) {
-			return false, nil
+			transaction.isFileScheduledForUploadAlready[fileDescriptor.Hash] = true
+			return nil
 		}
-		return false, fmt.Errorf("couldn't detect if %s is already in the index. Error: %s", fileDescriptor.Hash, err)
+		return fmt.Errorf("couldn't detect if %s is already in the index. Error: %s", fileDescriptor.Hash, err)
 	}
 
-	// the hash already exists, we can add it to the transaction
-	transaction.FilesInVersion = append(transaction.FilesInVersion, fileDescriptor)
-	return true, nil
+	// file on disk was successfully stat'ed (and exists)
+	return nil
 }
 
 // Commit closes the transaction and writes the revision data to disk
 func (transaction *Transaction) Commit() error {
+	amountOfFilesRemainingToUpload := len(transaction.isFileScheduledForUploadAlready)
+	if amountOfFilesRemainingToUpload > 0 {
+		return fmt.Errorf(
+			"tried to commit the transaction but there are %d files left to upload",
+			amountOfFilesRemainingToUpload)
+	}
+
 	filePath := filepath.Join(
 		transaction.Revision.Bucket.bucketPath(),
 		"versions",
@@ -127,4 +167,16 @@ func (transaction *Transaction) Commit() error {
 	}
 
 	return nil
+}
+
+func (transaction *Transaction) GetHashesForRequiredContent() []Hash {
+	var hashes []Hash
+
+	transaction.mu.Lock()
+	defer transaction.mu.Unlock()
+	for hash := range transaction.isFileScheduledForUploadAlready {
+		hashes = append(hashes, hash)
+	}
+
+	return hashes
 }

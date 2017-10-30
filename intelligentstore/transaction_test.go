@@ -3,7 +3,6 @@ package intelligentstore
 import (
 	"bytes"
 	"testing"
-	"time"
 
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
@@ -11,36 +10,63 @@ import (
 )
 
 func Test_BackupFile(t *testing.T) {
-	minute := 0
-	nowProvider := func() time.Time {
-		return time.Date(2000, 01, 02, 03, minute, 05, 06, time.UTC)
-	}
 	fs := afero.NewMemMapFs()
 
-	mockStore := NewMockStore(t, nowProvider, fs)
+	mockStore := NewMockStore(t, mockNowProvider, fs)
 	bucket, err := mockStore.CreateBucket("docs")
 	require.Nil(t, err)
 
-	tx := bucket.Begin()
-
-	byteBuffer := bytes.NewBuffer(nil)
-
-	err = tx.BackupFile("../a.txt", byteBuffer)
-
-	assert.Error(t, err)
-	assert.Equal(t, ErrIllegalDirectoryTraversal, err)
-
-	bContents := "my file b"
-	err = tx.BackupFile("b.txt", bytes.NewBuffer([]byte(bContents)))
+	descriptor, err := NewFileDescriptorFromReader("../a.txt", bytes.NewBuffer(nil))
 	require.Nil(t, err)
 
+	tx1, err := bucket.Begin([]*FileDescriptor{descriptor})
+	assert.Error(t, err)
+	assert.Equal(t, ErrIllegalDirectoryTraversal, err)
+	assert.Nil(t, tx1)
+
+	aFileContents := "a text"
+	goodADescriptor, err := NewFileDescriptorFromReader("a.txt", bytes.NewBuffer([]byte(aFileContents)))
+	require.Nil(t, err)
+
+	tx, err := bucket.Begin([]*FileDescriptor{goodADescriptor})
+	require.Nil(t, err)
+
+	err = tx.BackupFile(bytes.NewBuffer([]byte("bad contents - not in Begin() manifest")))
+	require.NotNil(t, err)
+
 	// upload the same file contents at 2 different locations
-	err = tx.BackupFile("c.txt", bytes.NewBuffer([]byte(bContents)))
+	err = tx.BackupFile(bytes.NewBuffer([]byte(aFileContents)))
+	require.Nil(t, err)
+
+	assert.Len(t, tx.FilesInVersion, 1)
+
+}
+
+func Test_Commit(t *testing.T) {
+	aFileContents := "a text"
+	goodADescriptor, err := NewFileDescriptorFromReader("a.txt", bytes.NewBuffer([]byte(aFileContents)))
+	require.Nil(t, err)
+
+	bFileContents := "b text"
+	goodBDescriptor, err := NewFileDescriptorFromReader("b.txt", bytes.NewBuffer([]byte(bFileContents)))
+	require.Nil(t, err)
+
+	mockStore := NewMockStore(t, mockNowProvider, afero.NewMemMapFs())
+	bucket, err := mockStore.CreateBucket("docs")
+	require.Nil(t, err)
+
+	tx, err := bucket.Begin([]*FileDescriptor{goodADescriptor, goodBDescriptor})
+	require.Nil(t, err)
+
+	err = tx.BackupFile(bytes.NewBuffer([]byte(aFileContents)))
+	require.Nil(t, err)
+
+	err = tx.Commit()
+	require.NotNil(t, err) // should error because not all files have been uploaded
+
+	err = tx.BackupFile(bytes.NewBuffer([]byte(bFileContents)))
 	require.Nil(t, err)
 
 	err = tx.Commit()
 	require.Nil(t, err)
-
-	assert.Len(t, tx.FilesInVersion, 2)
-
 }

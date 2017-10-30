@@ -21,13 +21,15 @@ func Test_Begin(t *testing.T) {
 
 	store := &IntelligentStore{"", testNowProvider, afero.NewMemMapFs()}
 	bucket := &Bucket{store, 1, "test bucket"}
-	transaction := bucket.Begin()
+	transaction, err := bucket.Begin(nil)
+	require.Nil(t, err)
 
 	assert.Equal(t, int64(946782245), int64(transaction.VersionTimestamp))
 
 	year = 2001
 
-	transaction2 := bucket.Begin()
+	transaction2, err := bucket.Begin(nil)
+	require.Nil(t, err)
 
 	assert.NotEqual(t, transaction.VersionTimestamp, transaction2.VersionTimestamp)
 }
@@ -64,9 +66,18 @@ func Test_GetLatestRevision(t *testing.T) {
 	bucket, err := store.CreateBucket("docs")
 	require.Nil(t, err)
 
-	tx := bucket.Begin()
+	file := &testFile{
+		Name:     "a.txt",
+		Contents: "my text",
+	}
 
-	err = tx.BackupFile("a.txt", bytes.NewBuffer([]byte("my text")))
+	descriptor, err := NewFileDescriptorFromReader(NewRelativePath(file.Name), bytes.NewBuffer([]byte(file.Contents)))
+	require.Nil(t, err)
+
+	tx, err := bucket.Begin([]*FileDescriptor{descriptor})
+	require.Nil(t, err)
+
+	err = tx.BackupFile(bytes.NewBuffer([]byte(file.Contents)))
 	require.Nil(t, err)
 
 	err = tx.Commit()
@@ -85,7 +96,6 @@ func Test_GetLatestRevision(t *testing.T) {
 }
 
 func Test_GetRevisions(t *testing.T) {
-
 	mockNow := time.Date(2000, 1, 2, 3, 4, 5, 6, time.UTC)
 	mockNowProvider := func() time.Time {
 		return mockNow
@@ -96,9 +106,20 @@ func Test_GetRevisions(t *testing.T) {
 	bucket, err := store.CreateBucket("docs")
 	require.Nil(t, err)
 
-	tx1 := bucket.Begin()
+	aTxtFile := &testFile{
+		Name:     "a.txt",
+		Contents: "my text",
+	}
+	fileDescriptorA, err := NewFileDescriptorFromReader(
+		NewRelativePath(aTxtFile.Name),
+		bytes.NewBuffer([]byte(aTxtFile.Contents)),
+	)
+	require.Nil(t, err)
 
-	err = tx1.BackupFile("a.txt", bytes.NewBuffer([]byte("my text")))
+	tx1, err := bucket.Begin([]*FileDescriptor{fileDescriptorA})
+	require.Nil(t, err)
+
+	err = tx1.BackupFile(bytes.NewBuffer([]byte(aTxtFile.Contents)))
 	require.Nil(t, err)
 
 	err = tx1.Commit()
@@ -107,11 +128,25 @@ func Test_GetRevisions(t *testing.T) {
 	// FIXME: possible to have 2 transactions with the same version timestamp
 	mockNow = mockNow.Add(time.Second)
 
-	tx2 := bucket.Begin()
+	bTxtFile := &testFile{
+		Name:     "b.txt",
+		Contents: "my b text",
+	}
 
-	err = tx2.BackupFile("a.txt", bytes.NewBuffer([]byte("my text")))
+	fileDescriptorB, err := NewFileDescriptorFromReader(
+		NewRelativePath(bTxtFile.Name),
+		bytes.NewBuffer([]byte(bTxtFile.Contents)))
 	require.Nil(t, err)
-	err = tx2.BackupFile("b.txt", bytes.NewBuffer([]byte("my b text")))
+
+	descriptors := []*FileDescriptor{
+		fileDescriptorA,
+		fileDescriptorB,
+	}
+
+	tx2, err := bucket.Begin(descriptors)
+	require.Nil(t, err)
+
+	err = tx2.BackupFile(bytes.NewBuffer([]byte(bTxtFile.Contents)))
 	require.Nil(t, err)
 
 	err = tx2.Commit()
@@ -122,4 +157,9 @@ func Test_GetRevisions(t *testing.T) {
 
 	assert.Len(t, revs, 2)
 
+}
+
+type testFile struct {
+	Name     string
+	Contents string
 }

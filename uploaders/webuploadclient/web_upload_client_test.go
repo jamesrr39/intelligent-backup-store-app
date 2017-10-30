@@ -85,7 +85,6 @@ func Test_UploadToStore(t *testing.T) {
 	fileDescriptors, err := revision.GetFilesInRevision()
 	require.Nil(t, err)
 	assert.Len(t, fileDescriptors, 4)
-	t.Logf("revision: %d\n", revision.VersionTimestamp)
 
 	fileDescriptorNameMap := make(map[intelligentstore.RelativePath]*intelligentstore.FileDescriptor)
 	for _, fileDescriptor := range fileDescriptors {

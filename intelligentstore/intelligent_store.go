@@ -142,6 +142,8 @@ func (s *IntelligentStore) GetBucketByName(bucketName string) (*Bucket, error) {
 	return nil, ErrBucketDoesNotExist
 }
 
+var ErrBucketNameAlreadyTaken = errors.New("This bucket name is already taken")
+
 func (s *IntelligentStore) CreateBucket(bucketName string) (*Bucket, error) {
 	buckets, err := s.GetAllBuckets()
 	if nil != err {
@@ -150,6 +152,10 @@ func (s *IntelligentStore) CreateBucket(bucketName string) (*Bucket, error) {
 
 	highestID := int64(0)
 	for _, bucket := range buckets {
+		if bucketName == bucket.BucketName {
+			return nil, ErrBucketNameAlreadyTaken
+		}
+
 		if bucket.ID > highestID {
 			highestID = bucket.ID
 		}

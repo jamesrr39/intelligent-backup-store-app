@@ -242,7 +242,6 @@ func (s *BucketService) handleGetRevision(w http.ResponseWriter, r *http.Request
 }
 
 func (s *BucketService) handleCreateRevision(w http.ResponseWriter, r *http.Request) {
-
 	vars := mux.Vars(r)
 
 	bucketName := vars["bucketName"]
@@ -257,45 +256,47 @@ func (s *BucketService) handleCreateRevision(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	transaction := bucket.Begin()
-	s.openTransactionsMap[bucket.BucketName+"__"+strconv.FormatInt(int64(transaction.VersionTimestamp), 10)] = transaction
-
 	requestBytes, err := ioutil.ReadAll(r.Body)
 	if nil != err {
 		http.Error(w, "couldn't read request body. Error: "+err.Error(), 400)
 		return
 	}
 
-	var openTxRequest protofiles.OpenTxRequest
+	openTxRequest := protofiles.OpenTxRequest{}
 	err = proto.Unmarshal(requestBytes, &openTxRequest)
 	if nil != err {
 		http.Error(w, "couldn't unmarshal proto of request body. Error: "+err.Error(), 400)
 		return
 	}
 
-	fileDetectorsForRequiredFiles := &protofiles.FileDescriptorProtoList{}
-	var hashAlreadyExists bool
+	if nil == openTxRequest.GetFileDescriptors() {
+		http.Error(w, "expected file descriptor list but couldn't find one", 400)
+		return
+	}
 
-	for _, fileDescriptorProto := range openTxRequest.FileDescriptorList.FileDescriptors {
+	var descriptors []*intelligentstore.FileDescriptor
+
+	for _, fileDescriptorProto := range openTxRequest.GetFileDescriptors() {
 		fileDescriptor := protobufs.FileDescriptorProtoToFileDescriptor(fileDescriptorProto)
 
-		hashAlreadyExists, err = transaction.AddAlreadyExistingHash(fileDescriptor)
-		if nil != err {
-			http.Error(w, fmt.Sprintf("error detecting if a hash for %s (%s) already exists", fileDescriptor.Hash, fileDescriptor.RelativePath), 500)
-			return
-		}
+		descriptors = append(descriptors, fileDescriptor)
+	}
 
-		// if a file for the hash already exists, the transaction adds it to the files in version and we don't need it from the client
-		if !hashAlreadyExists {
-			fileDetectorsForRequiredFiles.FileDescriptors = append(
-				fileDetectorsForRequiredFiles.FileDescriptors,
-				fileDescriptorProto)
-		}
+	transaction, err := bucket.Begin(descriptors)
+	if nil != err {
+		http.Error(w, "couldn't start a transaction. Error: "+err.Error(), 500)
+		return
+	}
+	s.openTransactionsMap[bucket.BucketName+"__"+strconv.FormatInt(int64(transaction.VersionTimestamp), 10)] = transaction
+
+	var hashesStrings []string
+	for _, hash := range transaction.GetHashesForRequiredContent() {
+		hashesStrings = append(hashesStrings, string(hash))
 	}
 
 	openTxReponse := &protofiles.OpenTxResponse{
-		RevisionStr:        int64(transaction.VersionTimestamp),
-		FileDescriptorList: fileDetectorsForRequiredFiles,
+		RevisionID: int64(transaction.VersionTimestamp),
+		Hashes:     hashesStrings,
 	}
 
 	responseBytes, err := proto.Marshal(openTxReponse)
@@ -350,10 +351,13 @@ func (s *BucketService) handleUploadFile(w http.ResponseWriter, r *http.Request)
 	}
 
 	err = transaction.BackupFile(
-		uploadedFile.Descriptor_.Filename,
 		bytes.NewBuffer(uploadedFile.Contents))
 	if nil != err {
-		http.Error(w, err.Error(), 500)
+		errCode := 500
+		if intelligentstore.ErrFileNotRequiredForTransaction == err {
+			errCode = 400
+		}
+		http.Error(w, err.Error(), errCode)
 		return
 	}
 }

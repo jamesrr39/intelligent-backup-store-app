@@ -3,6 +3,8 @@ package storewebserver
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -10,12 +12,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/protobuf/proto"
+
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore"
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
-	"github.com/jamesrr39/intelligent-backup-store-app/uploaders/localupload"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	protofiles "github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/protobufs/proto_files"
 )
 
 func testNowProvider() time.Time {
@@ -70,27 +74,26 @@ func Test_handleGetRevision(t *testing.T) {
 		&testfile{"folder-1/c.txt", "file 1/c"},
 	}
 
-	fs := generateTestFSWithData(t, testFiles)
-	store := intelligentstore.NewMockStore(t, testNowProvider, fs)
-	bucketService := NewBucketService(store.IntelligentStore)
-	_, err := bucketService.store.CreateBucket("docs")
-	require.Nil(t, err)
-
-	excludeMatcher, err := excludesmatcher.NewExcludesMatcherFromReader(
-		bytes.NewBuffer([]byte("\nexclude*\n")))
-	require.Nil(t, err)
-
-	// create a new local uploader client
-	uploader := &localupload.LocalUploader{
-		BackupStore:        store.IntelligentStore,
-		BackupBucketName:   "docs",
-		BackupFromLocation: "/docs",
-		ExcludeMatcher:     excludeMatcher,
-		Fs:                 fs,
+	var descriptors []*intelligentstore.FileDescriptor
+	for _, testFile := range testFiles {
+		descriptors = append(descriptors, testFile.toFileDescriptor(t))
 	}
 
-	err = uploader.UploadToStore()
+	store := intelligentstore.NewMockStore(t, testNowProvider, afero.NewMemMapFs())
+	bucket, err := store.CreateBucket("docs")
 	require.Nil(t, err)
+
+	tx1, err := bucket.Begin(descriptors)
+	require.Nil(t, err)
+
+	for _, testFile := range testFiles {
+		backupErr := tx1.BackupFile(bytes.NewBuffer([]byte(testFile.contents)))
+		require.Nil(t, backupErr)
+	}
+	err = tx1.Commit()
+	require.Nil(t, err)
+
+	bucketService := NewBucketService(store.IntelligentStore)
 
 	requestURL := &url.URL{Path: "/docs/latest"}
 	r1 := &http.Request{Method: "GET", URL: requestURL}
@@ -135,25 +138,184 @@ func Test_handleGetRevision(t *testing.T) {
 	assert.Equal(t, testFiles[3].path, revInfoWithFiles2.Files[1].RelativePath)
 }
 
+func Test_CreateRevision(t *testing.T) {
+	aFileText := "my file a.txt"
+	hashAtxt, err := intelligentstore.NewHash(bytes.NewBuffer([]byte(aFileText)))
+	require.Nil(t, err)
+
+	// Create a bucket and fill it with some data
+	store := intelligentstore.NewMockStore(t, testNowProvider, afero.NewMemMapFs())
+	bucket, err := store.CreateBucket("docs")
+	require.Nil(t, err)
+
+	tx1Descriptor, err := intelligentstore.NewFileDescriptorFromReader(
+		"already-in_a.txt",
+		bytes.NewBuffer([]byte(aFileText)))
+	require.Nil(t, err)
+
+	descriptors := []*intelligentstore.FileDescriptor{tx1Descriptor}
+
+	tx1, err := bucket.Begin(descriptors)
+	require.Nil(t, err)
+
+	err = tx1.BackupFile(bytes.NewBuffer([]byte(aFileText)))
+	require.Nil(t, err)
+
+	err = tx1.Commit()
+	require.Nil(t, err)
+	// end filling it with data
+
+	bucketService := NewBucketService(store.IntelligentStore)
+
+	openTxRequest := &protofiles.OpenTxRequest{
+		FileDescriptors: []*protofiles.FileDescriptorProto{
+			&protofiles.FileDescriptorProto{
+				Filename: "a.txt",
+				Hash:     string(hashAtxt),
+			},
+			&protofiles.FileDescriptorProto{
+				Filename: "mydir/b.txt",
+				Hash:     "ijklmn",
+			},
+			&protofiles.FileDescriptorProto{
+				Filename: "mydir/c.txt",
+				Hash:     "ijklmn",
+			},
+		},
+	}
+
+	openTxRequestBytes, err := proto.Marshal(openTxRequest)
+	require.Nil(t, err)
+
+	r1 := &http.Request{
+		Method: "POST",
+		URL:    &url.URL{Path: "/docs/upload"},
+		Body:   ioutil.NopCloser(bytes.NewBuffer(openTxRequestBytes)),
+	}
+	w1 := httptest.NewRecorder()
+
+	bucketService.ServeHTTP(w1, r1)
+
+	assert.Equal(t, 200, w1.Code)
+
+	var openTxResponse protofiles.OpenTxResponse
+	err = proto.Unmarshal(w1.Body.Bytes(), &openTxResponse)
+	require.Nil(t, err)
+
+	assert.Equal(t, int64(946782245), openTxResponse.GetRevisionID())
+
+	require.Len(t, openTxResponse.GetHashes(), 1) // shouldn't ask for a.txt, as that is already in the store
+	assert.Equal(t, "ijklmn", openTxResponse.GetHashes()[0])
+}
+
+func Test_handleUploadFile(t *testing.T) {
+	aFileText := "my file a.txt"
+	hashAtxt, err := intelligentstore.NewHash(bytes.NewBuffer([]byte(aFileText)))
+	require.Nil(t, err)
+
+	store := intelligentstore.NewMockStore(t, testNowProvider, afero.NewMemMapFs())
+	_, err = store.CreateBucket("docs")
+	require.Nil(t, err)
+
+	// create a Revision
+	openTxRequest := &protofiles.OpenTxRequest{
+		FileDescriptors: []*protofiles.FileDescriptorProto{
+			&protofiles.FileDescriptorProto{
+				Filename: "a.txt",
+				Hash:     string(hashAtxt),
+			},
+			&protofiles.FileDescriptorProto{
+				Filename: "b.txt",
+				Hash:     string(hashAtxt),
+			},
+		},
+	}
+
+	openTxRequestBytes, err := proto.Marshal(openTxRequest)
+	require.Nil(t, err)
+
+	bucketService := NewBucketService(store.IntelligentStore)
+
+	openTxW := httptest.NewRecorder()
+	openTxR := &http.Request{
+		Method: "POST",
+		URL:    &url.URL{Path: "/docs/upload"},
+		Body:   ioutil.NopCloser(bytes.NewBuffer(openTxRequestBytes)),
+	}
+
+	bucketService.ServeHTTP(openTxW, openTxR)
+	require.Equal(t, 200, openTxW.Code)
+
+	var openTxResponse protofiles.OpenTxResponse
+	err = proto.Unmarshal(openTxW.Body.Bytes(), &openTxResponse)
+	require.Nil(t, err)
+
+	uploadedFileProto := &protofiles.FileProto{
+		Contents: []byte(aFileText),
+		Hash:     string(hashAtxt),
+	}
+	uploadedFileProtoBytes, err := proto.Marshal(uploadedFileProto)
+	require.Nil(t, err)
+
+	r1 := &http.Request{
+		Body:   ioutil.NopCloser(bytes.NewBuffer(uploadedFileProtoBytes)),
+		URL:    &url.URL{Path: fmt.Sprintf("/docs/upload/%d/file", openTxResponse.GetRevisionID())},
+		Method: "POST",
+	}
+	w1 := httptest.NewRecorder()
+
+	// upload wanted file
+	bucketService.ServeHTTP(w1, r1)
+	assert.Equal(t, 200, w1.Code)
+
+	// upload unwanted file
+	unwantedUploadedFileProto := &protofiles.FileProto{
+		Contents: []byte("unwanted file"),
+		Hash:     "123",
+	}
+	unwantedUploadedFileProtoBytes, err := proto.Marshal(unwantedUploadedFileProto)
+	require.Nil(t, err)
+
+	rUnwanted := &http.Request{
+		Body:   ioutil.NopCloser(bytes.NewBuffer(unwantedUploadedFileProtoBytes)),
+		URL:    &url.URL{Path: fmt.Sprintf("/docs/upload/%d/file", openTxResponse.GetRevisionID())},
+		Method: "POST",
+	}
+	wUnwanted := httptest.NewRecorder()
+
+	bucketService.ServeHTTP(wUnwanted, rUnwanted)
+	assert.Equal(t, 400, wUnwanted.Code)
+	assert.Equal(
+		t,
+		intelligentstore.ErrFileNotRequiredForTransaction.Error(),
+		strings.TrimSuffix(string(wUnwanted.Body.Bytes()), "\n"),
+	)
+
+	// upload file already uploaded
+	rAlreadyUploaded := &http.Request{
+		Body:   ioutil.NopCloser(bytes.NewBuffer(uploadedFileProtoBytes)),
+		URL:    &url.URL{Path: fmt.Sprintf("/docs/upload/%d/file", openTxResponse.GetRevisionID())},
+		Method: "POST",
+	}
+	wAlreadyUploaded := httptest.NewRecorder()
+
+	// upload wanted file
+	bucketService.ServeHTTP(wAlreadyUploaded, rAlreadyUploaded)
+	assert.Equal(t, 400, wAlreadyUploaded.Code)
+	assert.Equal(
+		t,
+		intelligentstore.ErrFileNotRequiredForTransaction.Error(),
+		strings.TrimSuffix(string(wAlreadyUploaded.Body.Bytes()), "\n"),
+	)
+}
+
 type testfile struct {
 	path     intelligentstore.RelativePath
 	contents string
 }
 
-func generateTestFSWithData(t *testing.T, testFiles []*testfile) afero.Fs {
-	fs := afero.NewMemMapFs()
-	err := fs.MkdirAll("/docs/folder1", 0700)
+func (testFile *testfile) toFileDescriptor(t *testing.T) *intelligentstore.FileDescriptor {
+	descriptor, err := intelligentstore.NewFileDescriptorFromReader(testFile.path, bytes.NewBuffer([]byte(testFile.contents)))
 	require.Nil(t, err)
-
-	for _, testFile := range testFiles {
-		err = afero.WriteFile(fs, string("/docs/"+testFile.path), []byte(testFile.contents), 0600)
-		require.Nil(t, err)
-	}
-
-	err = afero.WriteFile(fs, "/docs/excludefile.txt", []byte("file 1/c"), 0600)
-	require.Nil(t, err)
-	err = afero.WriteFile(fs, "/docs/excludeme/a.txt", []byte("file 1/c"), 0600)
-	require.Nil(t, err)
-
-	return fs
+	return descriptor
 }

@@ -14,7 +14,6 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/protobufs"
 	protofiles "github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/protobufs/proto_files"
 	"github.com/pkg/errors"
 	"github.com/spf13/afero"
@@ -47,6 +46,7 @@ func NewWebUploadClient(
 // UploadToStore backs up a directory on the local machine to the bucket in the store in the WebUploadClient
 func (c *WebUploadClient) UploadToStore() error {
 	var fileList []*intelligentstore.FileDescriptor
+	hashDescriptorMap := make(map[intelligentstore.Hash][]*intelligentstore.FileDescriptor)
 
 	var totalFilesToUpload int64
 	var totalBytesToUpload int64
@@ -91,6 +91,7 @@ func (c *WebUploadClient) UploadToStore() error {
 		}
 
 		fileList = append(fileList, fileDescriptor)
+		hashDescriptorMap[fileDescriptor.Hash] = append(hashDescriptorMap[fileDescriptor.Hash], fileDescriptor)
 
 		return nil
 	})
@@ -99,19 +100,20 @@ func (c *WebUploadClient) UploadToStore() error {
 	}
 
 	// open transaction
-	revisionStr, filesToSendDescriptors, err := c.openTx(fileList)
+	revisionID, wantedHashes, err := c.openTx(fileList)
 	if nil != err {
 		return err
 	}
-	log.Printf("opened Tx. Rev: %d\n", revisionStr)
+	log.Printf("opened Tx. Rev: %d\n", revisionID)
 
 	var filesSuccessfullyBackedUpCount int64
 	var filesFailedToBackup []*intelligentstore.FileDescriptor
-	amountOfFilesToSend := len(filesToSendDescriptors)
+	amountOfFilesToSend := len(wantedHashes)
 	filesAlreadyOnServerCount := totalFilesToUpload - int64(amountOfFilesToSend)
 
-	for _, fileDescriptor := range filesToSendDescriptors {
-		err = c.backupFile(revisionStr, fileDescriptor)
+	for _, wantedHash := range wantedHashes {
+		fileDescriptor := hashDescriptorMap[wantedHash][0]
+		err = c.backupFile(revisionID, fileDescriptor)
 		if nil != err {
 			filesFailedToBackup = append(filesFailedToBackup, fileDescriptor)
 			log.Printf("failed to backup %s. Error: %s\n", fileDescriptor, err)
@@ -130,7 +132,7 @@ func (c *WebUploadClient) UploadToStore() error {
 	}
 
 	log.Println("commiting Tx")
-	err = c.commitTx(revisionStr)
+	err = c.commitTx(revisionID)
 	if nil != err {
 		return err
 	}
@@ -139,19 +141,17 @@ func (c *WebUploadClient) UploadToStore() error {
 }
 
 // openTx opens a transaction with the server and sends a list of files it wants to back up
-func (c *WebUploadClient) openTx(fileDescriptors []*intelligentstore.FileDescriptor) (intelligentstore.RevisionVersion, []*intelligentstore.FileDescriptor, error) {
-	protoFileDescriptors := &protofiles.FileDescriptorProtoList{}
+func (c *WebUploadClient) openTx(fileDescriptors []*intelligentstore.FileDescriptor) (intelligentstore.RevisionVersion, []intelligentstore.Hash, error) {
+	openTxRequest := &protofiles.OpenTxRequest{
+		FileDescriptors: []*protofiles.FileDescriptorProto{},
+	}
 	for _, descriptor := range fileDescriptors {
 		descriptorProto := &protofiles.FileDescriptorProto{
 			Filename: string(descriptor.RelativePath),
 			Hash:     string(descriptor.Hash),
 		}
 
-		protoFileDescriptors.FileDescriptors = append(protoFileDescriptors.FileDescriptors, descriptorProto)
-	}
-
-	openTxRequest := &protofiles.OpenTxRequest{
-		FileDescriptorList: protoFileDescriptors,
+		openTxRequest.FileDescriptors = append(openTxRequest.FileDescriptors, descriptorProto)
 	}
 
 	openTxRequestBodyBytes, err := proto.Marshal(openTxRequest)
@@ -197,14 +197,12 @@ func (c *WebUploadClient) openTx(fileDescriptors []*intelligentstore.FileDescrip
 		return 0, nil, fmt.Errorf("couldn't unmarshal OpenTx response. Error: %s", err)
 	}
 
-	var filesToSendDescriptors []*intelligentstore.FileDescriptor
-	for _, fileDescriptorProto := range openTxResponse.FileDescriptorList.FileDescriptors {
-		filesToSendDescriptors = append(
-			filesToSendDescriptors,
-			protobufs.FileDescriptorProtoToFileDescriptor(fileDescriptorProto))
+	var wantedHashes []intelligentstore.Hash
+	for _, wantedHash := range openTxResponse.GetHashes() {
+		wantedHashes = append(wantedHashes, intelligentstore.Hash(wantedHash))
 	}
-	log.Printf("created a new version: %d\n", openTxResponse.RevisionStr)
-	return intelligentstore.RevisionVersion(openTxResponse.RevisionStr), filesToSendDescriptors, nil
+	log.Printf("created a new version: %d\n", openTxResponse.GetRevisionID())
+	return intelligentstore.RevisionVersion(openTxResponse.GetRevisionID()), wantedHashes, nil
 }
 
 func (c *WebUploadClient) backupFile(revisionStr intelligentstore.RevisionVersion, fileDescriptor *intelligentstore.FileDescriptor) error {
@@ -219,8 +217,8 @@ func (c *WebUploadClient) backupFile(revisionStr intelligentstore.RevisionVersio
 	}
 
 	protoBufFile := &protofiles.FileProto{
-		Descriptor_: protobufs.FileDescriptorToProto(fileDescriptor),
-		Contents:    fileContents,
+		Hash:     string(fileDescriptor.Hash),
+		Contents: fileContents,
 	}
 
 	marshalledFile, err := proto.Marshal(protoBufFile)

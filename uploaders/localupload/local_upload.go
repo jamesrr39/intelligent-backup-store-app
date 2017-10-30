@@ -41,6 +41,7 @@ func NewLocalUploader(
 	}
 }
 
+// UploadToStore uses the LocalUploader configurations to backup to a store
 func (uploader *LocalUploader) UploadToStore() error {
 	startTime := time.Now()
 
@@ -50,16 +51,14 @@ func (uploader *LocalUploader) UploadToStore() error {
 		return err
 	}
 
-	log.Println("reached 1")
-	backupTx := bucket.Begin()
-
 	absBackupFromLocation, err := filepath.Abs(
 		uploader.BackupFromLocation)
 	if nil != err {
 		return errors.Wrapf(err, "couldn't get the absolute filepath of '%s'", uploader.BackupFromLocation)
 	}
 
-	var filePathsToUpload []string
+	var fileDescriptors []*intelligentstore.FileDescriptor
+	hashLocationMap := make(map[intelligentstore.Hash]string)
 
 	err = afero.Walk(uploader.Fs, absBackupFromLocation, func(path string, fileInfo os.FileInfo, err error) error {
 		if nil != err {
@@ -77,7 +76,19 @@ func (uploader *LocalUploader) UploadToStore() error {
 			return nil
 		}
 
-		filePathsToUpload = append(filePathsToUpload, path)
+		file, err := uploader.Fs.Open(path)
+		if nil != err {
+			return err
+		}
+		defer file.Close()
+
+		fileDescriptor, err := intelligentstore.NewFileDescriptorFromReader(relativeFilePath, file)
+		if nil != err {
+			return err
+		}
+
+		fileDescriptors = append(fileDescriptors, fileDescriptor)
+		hashLocationMap[fileDescriptor.Hash] = path
 
 		return nil
 	})
@@ -88,8 +99,14 @@ func (uploader *LocalUploader) UploadToStore() error {
 	var errs []error
 	fileCount := 0
 
-	for _, filePath := range filePathsToUpload {
-		uploadFileErr := uploader.uploadFile(backupTx, absBackupFromLocation, filePath)
+	backupTx, err := bucket.Begin(fileDescriptors)
+	if nil != err {
+		return err
+	}
+
+	for _, hash := range backupTx.GetHashesForRequiredContent() {
+		fileAbsolutePath := hashLocationMap[hash]
+		uploadFileErr := uploader.uploadFile(backupTx, fileAbsolutePath)
 		if nil != uploadFileErr {
 			log.Println(uploadFileErr.Error())
 			errs = append(errs, uploadFileErr)
@@ -118,18 +135,17 @@ func (uploader *LocalUploader) UploadToStore() error {
 
 }
 
-func (uploader *LocalUploader) uploadFile(backupTx *intelligentstore.Transaction, absBackupFromLocation, filePath string) error {
+func (uploader *LocalUploader) uploadFile(backupTx *intelligentstore.Transaction, fileAbsolutePath string) error {
 
-	file, err := uploader.Fs.Open(filePath)
+	file, err := uploader.Fs.Open(fileAbsolutePath)
 	if nil != err {
-		return errors.Wrapf(err, "couldn't open '%s'", filePath)
+		return errors.Wrapf(err, "couldn't open '%s'", fileAbsolutePath)
 	}
 	defer file.Close()
 
-	relativeFilePath := fullPathToRelative(absBackupFromLocation, filePath)
-	err = backupTx.BackupFile(string(relativeFilePath), file)
+	err = backupTx.BackupFile(file)
 	if nil != err {
-		return errors.Wrapf(err, "failed to backup '%s'", filePath)
+		return errors.Wrapf(err, "failed to backup '%s'", fileAbsolutePath)
 	}
 	return nil
 }

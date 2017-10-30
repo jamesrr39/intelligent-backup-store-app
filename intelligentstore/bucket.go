@@ -26,10 +26,10 @@ type Bucket struct {
 }
 
 // Begin creates a new Transaction to create a new revision of files in the Bucket.
-func (bucket *Bucket) Begin() *Transaction {
+func (bucket *Bucket) Begin(fileDescriptors []*FileDescriptor) (*Transaction, error) {
 	versionTimestamp := bucket.nowProvider().Unix()
 
-	return &Transaction{&Revision{bucket, RevisionVersion(versionTimestamp)}, nil}
+	return NewTransaction(&Revision{bucket, RevisionVersion(versionTimestamp)}, fileDescriptors)
 }
 
 func (bucket *Bucket) bucketPath() string {

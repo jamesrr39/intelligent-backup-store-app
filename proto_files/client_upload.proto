@@ -7,19 +7,15 @@ message FileDescriptorProto {
 }
 
 message FileProto {
-  FileDescriptorProto descriptor = 1;
+  string hash = 1; // TODO remove
   bytes contents = 2;
 }
 
-message FileDescriptorProtoList {
+message OpenTxRequest {
   repeated FileDescriptorProto fileDescriptors = 1;
 }
 
-message OpenTxRequest {
-  FileDescriptorProtoList fileDescriptorList = 1;
-}
-
 message OpenTxResponse {
-  int64 revisionStr = 1;
-  FileDescriptorProtoList FileDescriptorList = 2;
+  int64 revisionID = 1;
+  repeated string hashes = 2;
 }

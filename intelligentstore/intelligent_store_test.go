@@ -70,6 +70,24 @@ func Test_GetBucketByName(t *testing.T) {
 	assert.Equal(t, "test bucket", fetchedBucket.BucketName)
 }
 
+func Test_CreateBucket(t *testing.T) {
+	mockStore := NewMockStore(t, mockNowProvider, afero.NewMemMapFs())
+
+	bucket1, err := mockStore.IntelligentStore.CreateBucket("test bucket")
+	require.Nil(t, err)
+	assert.Equal(t, int64(1), bucket1.ID)
+	assert.Equal(t, "test bucket", bucket1.BucketName)
+
+	bucket2, err := mockStore.IntelligentStore.CreateBucket("test bucket 2")
+	require.Nil(t, err)
+	assert.Equal(t, int64(2), bucket2.ID)
+	assert.Equal(t, "test bucket 2", bucket2.BucketName)
+
+	bucket3, err := mockStore.IntelligentStore.CreateBucket("test bucket")
+	require.Nil(t, bucket3)
+	assert.Equal(t, ErrBucketNameAlreadyTaken, err)
+}
+
 func Test_CreateUser(t *testing.T) {
 	fs := afero.NewMemMapFs()
 	mockStore := NewMockStore(t, mockNowProvider, fs)
