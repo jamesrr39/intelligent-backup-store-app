@@ -66,8 +66,17 @@ define([
   };
 
   return function(bucketName, revisionStr, rootDir) {
+    var _$container;
+
+    var onRevisionChange = function(event){
+      var newTimestamp = $(event.currentTarget).val();
+      window.location = "#/buckets/docs/" + newTimestamp + "/" + rootDir;
+    };
+
     return {
       render($container) {
+        _$container = $container;
+
         var url = "/api/buckets/" + encodeURIComponent(bucketName) + "/" + revisionStr;
         if (rootDir) {
           url += "?rootDir=" + encodeURIComponent(rootDir);
@@ -132,15 +141,15 @@ define([
             homeURL: "#/buckets/" + encodeURIComponent(bucketName) + "/" + revisionStr
           }));
 
-          $container.find("[name='change-revision-select']").on("change", function(event){
-            var newTimestamp = $(event.currentTarget).val();
-            window.location = "#/buckets/docs/" + newTimestamp + "/" + rootDir;
-          });
+          $container.find("[name='change-revision-select']").on("change", onRevisionChange);
 
 
         }).fail(function(xhr) {
           $container.html(new ErrorView("Error fetching revisions data: " + xhr.responseText).render());
         });
+      },
+      onClose: function() {
+        _$container.find("[name='change-revision-select']").off("change", onRevisionChange);
       }
     };
   };
