@@ -217,7 +217,6 @@ func (c *WebUploadClient) backupFile(revisionStr intelligentstore.RevisionVersio
 	}
 
 	protoBufFile := &protofiles.FileProto{
-		Hash:     string(fileDescriptor.Hash),
 		Contents: fileContents,
 	}
 

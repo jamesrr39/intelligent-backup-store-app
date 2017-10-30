@@ -252,7 +252,6 @@ func Test_handleUploadFile(t *testing.T) {
 
 	uploadedFileProto := &protofiles.FileProto{
 		Contents: []byte(aFileText),
-		Hash:     string(hashAtxt),
 	}
 	uploadedFileProtoBytes, err := proto.Marshal(uploadedFileProto)
 	require.Nil(t, err)
@@ -271,7 +270,6 @@ func Test_handleUploadFile(t *testing.T) {
 	// upload unwanted file
 	unwantedUploadedFileProto := &protofiles.FileProto{
 		Contents: []byte("unwanted file"),
-		Hash:     "123",
 	}
 	unwantedUploadedFileProtoBytes, err := proto.Marshal(unwantedUploadedFileProto)
 	require.Nil(t, err)

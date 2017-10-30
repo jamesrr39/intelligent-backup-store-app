@@ -7,8 +7,7 @@ message FileDescriptorProto {
 }
 
 message FileProto {
-  string hash = 1; // TODO remove
-  bytes contents = 2;
+  bytes contents = 1;
 }
 
 message OpenTxRequest {
