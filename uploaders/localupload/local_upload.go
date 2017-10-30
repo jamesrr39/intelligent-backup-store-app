@@ -97,21 +97,23 @@ func (uploader *LocalUploader) UploadToStore() error {
 	}
 
 	var errs []error
-	fileCount := 0
+	filesToUploadCount := 0
 
 	backupTx, err := bucket.Begin(fileDescriptors)
 	if nil != err {
 		return err
 	}
 
-	for _, hash := range backupTx.GetHashesForRequiredContent() {
+	requiredHashes := backupTx.GetHashesForRequiredContent()
+
+	for _, hash := range requiredHashes {
 		fileAbsolutePath := hashLocationMap[hash]
 		uploadFileErr := uploader.uploadFile(backupTx, fileAbsolutePath)
 		if nil != uploadFileErr {
 			log.Println(uploadFileErr.Error())
 			errs = append(errs, uploadFileErr)
 		}
-		fileCount++
+		filesToUploadCount++
 	}
 
 	err = backupTx.Commit()
@@ -129,7 +131,11 @@ func (uploader *LocalUploader) UploadToStore() error {
 		return errors.New(errMessage)
 	}
 
-	log.Printf("backed up %d files in %f seconds\n", fileCount, time.Now().Sub(startTime).Seconds())
+	log.Printf("backed up %d files in %f seconds (%d were already in the store)\n",
+		len(fileDescriptors),
+		time.Now().Sub(startTime).Seconds(),
+		len(fileDescriptors)-len(requiredHashes),
+	)
 
 	return nil
 
