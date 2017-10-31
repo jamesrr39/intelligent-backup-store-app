@@ -264,3 +264,60 @@ func (s *IntelligentStore) GetObjectByHash(hash Hash) (io.ReadCloser, error) {
 	objectPath := filepath.Join(s.StoreBasePath, ".backup_data", "objects", hash.FirstChunk(), hash.Remainder())
 	return s.fs.Open(objectPath)
 }
+
+func (s *IntelligentStore) GetLockInformation() (*StoreLock, error) {
+	file, err := s.fs.Open(s.getLockFilePath())
+	if nil != err {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer file.Close()
+
+	var storeLock *StoreLock
+	err = json.NewDecoder(file).Decode(&storeLock)
+	if nil != err {
+		return nil, err
+	}
+
+	return storeLock, nil
+}
+
+var ErrLockAlreadyTaken = errors.New("lock already taken")
+
+func (s *IntelligentStore) acquireStoreLock(text string) error {
+	_, err := s.fs.Stat(s.getLockFilePath())
+	if nil == err {
+		return ErrLockAlreadyTaken
+	}
+	if !os.IsNotExist(err) {
+		return err
+	}
+
+	lockFile, err := s.fs.OpenFile(s.getLockFilePath(), os.O_CREATE, 0600)
+	if nil != err {
+		return err
+	}
+	defer lockFile.Close()
+
+	err = json.NewEncoder(lockFile).Encode(&StoreLock{os.Getpid(), text})
+	if nil != err {
+		return err
+	}
+
+	return nil
+}
+
+func (s *IntelligentStore) removeStoreLock() error {
+	return s.fs.RemoveAll(s.getLockFilePath())
+}
+
+func (s *IntelligentStore) getLockFilePath() string {
+	return filepath.Join(s.StoreBasePath, ".backup_data", "locks", "store_lock.txt")
+}
+
+type StoreLock struct {
+	Pid  int    `json:"pid"`
+	Text string `json:"text"`
+}

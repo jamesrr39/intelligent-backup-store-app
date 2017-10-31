@@ -65,7 +65,9 @@ func (uploader *LocalUploader) UploadToStore() error {
 			return err
 		}
 
-		if fileInfo.IsDir() {
+		if !fileInfo.Mode().IsRegular() {
+			// skip symlinks
+			// FIXME: support symlinks
 			return nil
 		}
 
@@ -106,11 +108,19 @@ func (uploader *LocalUploader) UploadToStore() error {
 
 	requiredHashes := backupTx.GetHashesForRequiredContent()
 
+	log.Println("asked for hashes:")
+	for _, hash := range requiredHashes {
+		log.Println(hash)
+	}
+	log.Println("---")
+
 	for _, hash := range requiredHashes {
 		fileAbsolutePath := hashLocationMap[hash]
+		log.Printf("uploading %s from '%s'\n", hash, fileAbsolutePath)
 		uploadFileErr := uploader.uploadFile(backupTx, fileAbsolutePath)
 		if nil != uploadFileErr {
-			log.Println(uploadFileErr.Error())
+			log.Printf("couldn't upload file hash %s from '%s'. Error: %s",
+				hash, fileAbsolutePath, uploadFileErr)
 			errs = append(errs, uploadFileErr)
 		}
 		filesToUploadCount++

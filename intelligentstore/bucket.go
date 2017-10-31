@@ -29,7 +29,21 @@ type Bucket struct {
 func (bucket *Bucket) Begin(fileDescriptors []*FileDescriptor) (*Transaction, error) {
 	versionTimestamp := bucket.nowProvider().Unix()
 
-	return NewTransaction(&Revision{bucket, RevisionVersion(versionTimestamp)}, fileDescriptors)
+	err := bucket.IntelligentStore.acquireStoreLock(fmt.Sprintf("bucket: %s", bucket.BucketName))
+	if nil != err {
+		return nil, err
+	}
+
+	tx, err := NewTransaction(&Revision{bucket, RevisionVersion(versionTimestamp)}, fileDescriptors)
+	if nil != err {
+		removeStockLockErr := bucket.IntelligentStore.removeStoreLock()
+		if nil != removeStockLockErr {
+			return nil, errors.Errorf("couldn't start a transaction and remove Stock lock. Start transaction error: '%s'. Remove Store lock error: '%s'", err, removeStockLockErr)
+		}
+		return nil, errors.Errorf("couldn't start a transaction. Error: '%s'", err)
+	}
+
+	return tx, nil
 }
 
 func (bucket *Bucket) bucketPath() string {

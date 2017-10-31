@@ -21,7 +21,7 @@ func Test_BackupFile(t *testing.T) {
 
 	tx1, err := bucket.Begin([]*FileDescriptor{descriptor})
 	assert.Error(t, err)
-	assert.Equal(t, ErrIllegalDirectoryTraversal, err)
+	assert.Equal(t, "couldn't start a transaction. Error: 'filepath contains .. and is trying to traverse a directory'", err.Error())
 	assert.Nil(t, tx1)
 
 	aFileContents := "a text"

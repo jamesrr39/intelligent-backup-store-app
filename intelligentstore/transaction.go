@@ -140,6 +140,10 @@ func (transaction *Transaction) addDescriptorToTransaction(fileDescriptor *FileD
 func (transaction *Transaction) Commit() error {
 	amountOfFilesRemainingToUpload := len(transaction.isFileScheduledForUploadAlready)
 	if amountOfFilesRemainingToUpload > 0 {
+		log.Println("remaining files:")
+		for hash, isScheduledForUpload := range transaction.isFileScheduledForUploadAlready {
+			log.Printf("hash: %s, %v\n", hash, isScheduledForUpload)
+		}
 		return fmt.Errorf(
 			"tried to commit the transaction but there are %d files left to upload",
 			amountOfFilesRemainingToUpload)
@@ -164,6 +168,20 @@ func (transaction *Transaction) Commit() error {
 	err = versionContentsFile.Sync()
 	if nil != err {
 		return errors.Wrap(err, "couldn't sync the version contents file")
+	}
+
+	err = transaction.IntelligentStore.removeStoreLock()
+	if nil != err {
+		return errors.Wrap(err, "couldn't remove lock file")
+	}
+
+	return nil
+}
+
+func (transaction *Transaction) Rollback() error {
+	err := transaction.IntelligentStore.removeStoreLock()
+	if nil != err {
+		return errors.Wrap(err, "couldn't remove lock file")
 	}
 
 	return nil

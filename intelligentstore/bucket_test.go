@@ -28,6 +28,14 @@ func Test_Begin(t *testing.T) {
 
 	year = 2001
 
+	txWithAnotherTxRunning, err := bucket.Begin(nil)
+	require.NotNil(t, err)
+	assert.Equal(t, ErrLockAlreadyTaken, err)
+	require.Nil(t, txWithAnotherTxRunning)
+
+	err = transaction.Rollback()
+	require.Nil(t, err)
+
 	transaction2, err := bucket.Begin(nil)
 	require.Nil(t, err)
 

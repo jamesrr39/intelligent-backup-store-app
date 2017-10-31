@@ -1,6 +1,8 @@
 package intelligentstore
 
 import (
+	"bytes"
+	"io/ioutil"
 	"testing"
 	"time"
 
@@ -121,8 +123,7 @@ func Test_GetAllUsers(t *testing.T) {
 }
 
 func Test_GetUserByUsername(t *testing.T) {
-	fs := afero.NewMemMapFs()
-	mockStore := NewMockStore(t, mockNowProvider, fs)
+	mockStore := NewMockStore(t, mockNowProvider, afero.NewMemMapFs())
 
 	u1 := NewUser(0, "test öäø user", "me@example.test")
 	_, err := mockStore.CreateUser(u1)
@@ -145,4 +146,60 @@ func Test_GetUserByUsername(t *testing.T) {
 	assert.Equal(t, "test 2 öäø user", user2.Name)
 	assert.Equal(t, "me2@example.test", user2.Username)
 	assert.NotEqual(t, 0, user2.ID)
+}
+
+func Test_GetObjectByHash(t *testing.T) {
+	mockStore := NewMockStore(t, mockNowProvider, afero.NewMemMapFs())
+	bucket, err := mockStore.CreateBucket("docs")
+	require.Nil(t, err)
+
+	fileContents := "my file contents"
+	descriptor, err := NewFileDescriptorFromReader("a.txt", bytes.NewBuffer([]byte(fileContents)))
+	require.Nil(t, err)
+
+	_, err = mockStore.GetObjectByHash(descriptor.Hash)
+	require.NotNil(t, err)
+
+	descriptors := []*FileDescriptor{descriptor}
+
+	tx, err := bucket.Begin(descriptors)
+	require.Nil(t, err)
+
+	err = tx.BackupFile(bytes.NewBuffer([]byte(fileContents)))
+	require.Nil(t, err)
+
+	err = tx.Commit()
+	require.Nil(t, err)
+
+	file, err := mockStore.GetObjectByHash(descriptor.Hash)
+	require.Nil(t, err)
+	defer file.Close()
+
+	b, err := ioutil.ReadAll(file)
+	require.Nil(t, err)
+	require.Equal(t, fileContents, string(b))
+}
+
+func Test_GetLockInformation(t *testing.T) {
+	mockStore := NewMockStore(t, mockNowProvider, afero.NewMemMapFs())
+	bucket, err := mockStore.CreateBucket("docs")
+	require.Nil(t, err)
+
+	lock, err := mockStore.GetLockInformation()
+	require.Nil(t, err)
+	require.Nil(t, lock)
+
+	tx, err := bucket.Begin(nil)
+	require.Nil(t, err)
+
+	lock, err = mockStore.GetLockInformation()
+	require.Nil(t, err)
+	require.NotNil(t, lock)
+
+	err = tx.Commit()
+	require.Nil(t, err)
+
+	lock, err = mockStore.GetLockInformation()
+	require.Nil(t, err)
+	require.Nil(t, lock)
 }
