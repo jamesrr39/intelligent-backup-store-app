@@ -2,6 +2,7 @@ package intelligentstore
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strconv"
 
@@ -120,12 +121,17 @@ func (bucket *Bucket) GetRevisions() ([]*Revision, error) {
 	return versions, nil
 }
 
+var ErrRevisionDoesNotExist = errors.New("revision doesn't exist")
+
 // GetRevision gets a specific version of this bucket
 func (bucket *Bucket) GetRevision(revisionTimeStamp RevisionVersion) (*Revision, error) {
 	versionsFolderPath := filepath.Join(bucket.bucketPath(), "versions")
 
 	_, err := bucket.fs.Stat(filepath.Join(versionsFolderPath, revisionTimeStamp.String()))
 	if nil != err {
+		if os.IsNotExist(err) {
+			return nil, ErrRevisionDoesNotExist
+		}
 		return nil, errors.Wrapf(err, "couldn't get revision '%d'", revisionTimeStamp)
 	}
 

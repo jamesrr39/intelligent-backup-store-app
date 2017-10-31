@@ -26,13 +26,9 @@ func testNowProvider() time.Time {
 	return time.Date(2000, 1, 2, 3, 4, 5, 6, time.UTC)
 }
 
-func newTestBucketService(t *testing.T) *BucketService {
-	mockStore := intelligentstore.NewMockStore(t, testNowProvider, afero.NewMemMapFs())
-	return NewBucketService(mockStore.IntelligentStore)
-}
-
 func Test_handleGetAllBuckets(t *testing.T) {
-	bucketService := newTestBucketService(t)
+	mockStore := intelligentstore.NewMockStore(t, testNowProvider, afero.NewMemMapFs())
+	bucketService := NewBucketService(mockStore.IntelligentStore)
 
 	requestURL := &url.URL{Path: "/"}
 	r1 := &http.Request{Method: "GET", URL: requestURL}
@@ -305,6 +301,170 @@ func Test_handleUploadFile(t *testing.T) {
 		intelligentstore.ErrFileNotRequiredForTransaction.Error(),
 		strings.TrimSuffix(string(wAlreadyUploaded.Body.Bytes()), "\n"),
 	)
+}
+
+func Test_handleCommitTransaction(t *testing.T) {
+	aFileText := "my file a.txt"
+	hashAtxt, err := intelligentstore.NewHash(bytes.NewBuffer([]byte(aFileText)))
+	require.Nil(t, err)
+
+	store := intelligentstore.NewMockStore(t, testNowProvider, afero.NewMemMapFs())
+	bucket, err := store.CreateBucket("docs")
+	require.Nil(t, err)
+
+	bucketRevisions, err := bucket.GetRevisions()
+	require.Nil(t, err)
+	require.Len(t, bucketRevisions, 0)
+
+	// create a Revision
+	openTxRequest := &protofiles.OpenTxRequest{
+		FileDescriptors: []*protofiles.FileDescriptorProto{
+			&protofiles.FileDescriptorProto{
+				Filename: "a.txt",
+				Hash:     string(hashAtxt),
+			},
+		},
+	}
+
+	openTxRequestBytes, err := proto.Marshal(openTxRequest)
+	require.Nil(t, err)
+
+	bucketService := NewBucketService(store.IntelligentStore)
+
+	// open transaction
+	openTxW := httptest.NewRecorder()
+	openTxR := &http.Request{
+		Method: "POST",
+		URL:    &url.URL{Path: "/docs/upload"},
+		Body:   ioutil.NopCloser(bytes.NewBuffer(openTxRequestBytes)),
+	}
+
+	bucketService.ServeHTTP(openTxW, openTxR)
+
+	var openTxResponse protofiles.OpenTxResponse
+	err = proto.Unmarshal(openTxW.Body.Bytes(), &openTxResponse)
+	require.Nil(t, err)
+
+	require.Len(t, openTxResponse.GetHashes(), 1)
+	require.Equal(t, openTxResponse.GetHashes()[0], string(hashAtxt))
+
+	// upload file
+	uploadFileProto := &protofiles.FileProto{
+		Contents: []byte(aFileText),
+	}
+
+	uploadFileProtoBytes, err := proto.Marshal(uploadFileProto)
+	require.Nil(t, err)
+
+	uploadFileW := httptest.NewRecorder()
+	uploadFileR := &http.Request{
+		Method: "POST",
+		URL: &url.URL{
+			Path: fmt.Sprintf("/docs/upload/%d/file", openTxResponse.GetRevisionID()),
+		},
+		Body: ioutil.NopCloser(bytes.NewBuffer(uploadFileProtoBytes)),
+	}
+
+	bucketService.ServeHTTP(uploadFileW, uploadFileR)
+
+	// commit transaction
+	commitTxW := httptest.NewRecorder()
+	commitTxR := &http.Request{
+		Method: "GET",
+		URL: &url.URL{
+			Path: fmt.Sprintf("/docs/upload/%d/commit", openTxResponse.GetRevisionID()),
+		},
+	}
+
+	bucketService.ServeHTTP(commitTxW, commitTxR)
+	assert.Equal(t, 200, commitTxW.Code)
+
+	bucketRevisions, err = bucket.GetRevisions()
+	require.Nil(t, err)
+	require.Len(t, bucketRevisions, 1)
+	assert.Equal(t,
+		openTxResponse.GetRevisionID(),
+		int64(bucketRevisions[0].VersionTimestamp))
+
+}
+
+func Test_handleGetFileContents(t *testing.T) {
+	mockStore := intelligentstore.NewMockStore(t, testNowProvider, afero.NewMemMapFs())
+	bucket, err := mockStore.CreateBucket("docs")
+	require.Nil(t, err)
+
+	bucketService := NewBucketService(mockStore.IntelligentStore)
+
+	fileContents := "my file contents"
+	fileName := "folder1/file a.txt"
+	descriptor, err := intelligentstore.NewFileDescriptorFromReader(
+		intelligentstore.NewRelativePath(fileName),
+		bytes.NewBuffer([]byte(fileContents)))
+	require.Nil(t, err)
+
+	rBucketNotExist := &http.Request{
+		Method: "GET",
+		URL: &url.URL{
+			Path:     "/bad-bucket/1234/file",
+			RawQuery: fmt.Sprintf("relativePath=%s", fileName),
+		},
+	}
+	wBucketNotExist := httptest.NewRecorder()
+
+	bucketService.ServeHTTP(wBucketNotExist, rBucketNotExist)
+	assert.Equal(t, 404, wBucketNotExist.Code)
+
+	rRevisionNotExist := &http.Request{
+		Method: "GET",
+		URL: &url.URL{
+			Path:     "/docs/1234/file",
+			RawQuery: fmt.Sprintf("relativePath=%s", fileName),
+		},
+	}
+	wRevisionNotExist := httptest.NewRecorder()
+
+	bucketService.ServeHTTP(wRevisionNotExist, rRevisionNotExist)
+	assert.Equal(t, 404, wRevisionNotExist.Code)
+
+	descriptors := []*intelligentstore.FileDescriptor{descriptor}
+
+	tx, err := bucket.Begin(descriptors)
+	require.Nil(t, err)
+
+	err = tx.BackupFile(bytes.NewBuffer([]byte(fileContents)))
+	require.Nil(t, err)
+
+	err = tx.Commit()
+	require.Nil(t, err)
+
+	file, err := mockStore.GetObjectByHash(descriptor.Hash)
+	require.Nil(t, err)
+	defer file.Close()
+
+	rRevisionExistsButFileDoesNotExist := &http.Request{
+		Method: "GET",
+		URL: &url.URL{
+			Path:     fmt.Sprintf("/docs/%d/file", tx.VersionTimestamp),
+			RawQuery: fmt.Sprintf("relativePath=notexist_%s", fileName),
+		},
+	}
+	wRevisionExistsButFileDoesNotExist := httptest.NewRecorder()
+
+	bucketService.ServeHTTP(wRevisionExistsButFileDoesNotExist, rRevisionExistsButFileDoesNotExist)
+	assert.Equal(t, 404, wRevisionExistsButFileDoesNotExist.Code)
+
+	rExists := &http.Request{
+		Method: "GET",
+		URL: &url.URL{
+			Path:     fmt.Sprintf("/docs/%d/file", tx.VersionTimestamp),
+			RawQuery: fmt.Sprintf("relativePath=%s", url.QueryEscape(fileName)),
+		},
+	}
+	wExists := httptest.NewRecorder()
+
+	bucketService.ServeHTTP(wExists, rExists)
+	require.Equal(t, 200, wExists.Code)
+	require.Equal(t, fileContents, string(wExists.Body.Bytes()))
 }
 
 type testfile struct {

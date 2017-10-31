@@ -153,13 +153,12 @@ func (s *BucketService) handleGetBucket(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *BucketService) getRevision(bucketName, revisionTsString string) (*intelligentstore.Revision, *HTTPError) {
-
 	bucket, err := s.store.GetBucketByName(bucketName)
 	if nil != err {
 		if intelligentstore.ErrBucketDoesNotExist == err {
 			return nil, NewHTTPError(fmt.Errorf("couldn't find bucket '%s'. Error: %s", bucketName, err), 404)
 		}
-		return nil, NewHTTPError(err, 404)
+		return nil, NewHTTPError(err, 500)
 	}
 
 	var revision *intelligentstore.Revision
@@ -174,6 +173,9 @@ func (s *BucketService) getRevision(bucketName, revisionTsString string) (*intel
 		revision, err = bucket.GetRevision(intelligentstore.RevisionVersion(revisionTimestamp))
 	}
 	if nil != err {
+		if err == intelligentstore.ErrRevisionDoesNotExist {
+			return nil, NewHTTPError(err, 404)
+		}
 		return nil, NewHTTPError(err, 500)
 	}
 	return revision, nil
@@ -399,7 +401,6 @@ func (s *BucketService) handleGetFileContents(w http.ResponseWriter, r *http.Req
 	revisionTsString := vars["revisionTs"]
 
 	relativePath := intelligentstore.NewRelativePath(r.URL.Query().Get("relativePath"))
-
 	revision, revErr := s.getRevision(bucketName, revisionTsString)
 	if nil != revErr {
 		http.Error(w, revErr.Error(), revErr.StatusCode)
