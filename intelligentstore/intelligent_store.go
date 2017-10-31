@@ -260,11 +260,17 @@ func (s *IntelligentStore) CreateUser(user *User) (*User, error) {
 	return newUser, nil
 }
 
+// GetObjectByHash gets an object (file) by it's Hash value
 func (s *IntelligentStore) GetObjectByHash(hash Hash) (io.ReadCloser, error) {
 	objectPath := filepath.Join(s.StoreBasePath, ".backup_data", "objects", hash.FirstChunk(), hash.Remainder())
 	return s.fs.Open(objectPath)
 }
 
+// GetLockInformation gets the information about the current Lock on the Store, if any.
+// It returns
+// - (*StoreLock, nil) if there is a lock
+// - (nil, nil) if there is currently no lock
+// - (nil, error) for any error
 func (s *IntelligentStore) GetLockInformation() (*StoreLock, error) {
 	file, err := s.fs.Open(s.getLockFilePath())
 	if nil != err {

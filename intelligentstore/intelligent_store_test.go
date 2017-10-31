@@ -195,6 +195,7 @@ func Test_GetLockInformation(t *testing.T) {
 	lock, err = mockStore.GetLockInformation()
 	require.Nil(t, err)
 	require.NotNil(t, lock)
+	assert.Equal(t, "bucket: docs", lock.Text)
 
 	err = tx.Commit()
 	require.Nil(t, err)
