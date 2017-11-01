@@ -17,29 +17,90 @@ import (
 	"github.com/spf13/afero"
 )
 
+var ErrFileNotRequiredForTransaction = errors.New("hash is not scheduled for upload, or has already been uploaded, or map of required hashes has not been built yet")
+
 type Transaction struct {
 	*Revision
 	FilesInVersion                  []*FileDescriptor
+	fileInfosMissingHashes          map[RelativePath]*FileInfo
 	isFileScheduledForUploadAlready map[Hash]bool
 	mu                              *sync.RWMutex
 }
 
-func NewTransaction(revision *Revision, fileDescriptors []*FileDescriptor) (*Transaction, error) {
-	tx := &Transaction{revision, nil, make(map[Hash]bool), &sync.RWMutex{}}
-	for _, fileDescriptor := range fileDescriptors {
-		if dirtraversal.IsTryingToTraverseUp(string(fileDescriptor.RelativePath)) {
+func NewTransaction(revision *Revision, fileInfos []*FileInfo) (*Transaction, error) {
+	tx := &Transaction{
+		revision,
+		[]*FileDescriptor{},
+		make(map[RelativePath]*FileInfo),
+		make(map[Hash]bool),
+		&sync.RWMutex{},
+	}
+
+	var previousRevisionMap map[RelativePath]*FileDescriptor
+
+	previousRevision, err := revision.Bucket.GetLatestRevision()
+	if nil != err {
+		if err != ErrNoRevisionsForBucket {
+			return nil, err
+		}
+		previousRevisionMap = make(map[RelativePath]*FileDescriptor)
+	} else {
+		previousRevisionMap, err = previousRevision.ToFileDescriptorMapByName()
+		if nil != err {
+			return nil, err
+		}
+	}
+
+	for _, fileInfo := range fileInfos {
+		if dirtraversal.IsTryingToTraverseUp(string(fileInfo.RelativePath)) {
 			return nil, ErrIllegalDirectoryTraversal
 		}
 
-		err := tx.addDescriptorToTransaction(fileDescriptor)
-		if nil != err {
-			return nil, errors.Wrapf(err, "couldn't add file %v to transaction", fileDescriptor)
+		descriptorFromPreviousRevision := previousRevisionMap[fileInfo.RelativePath]
+		fileAlreadyExistsInStore := (nil != descriptorFromPreviousRevision &&
+			descriptorFromPreviousRevision.ModTime.Equal(fileInfo.ModTime) &&
+			descriptorFromPreviousRevision.Size == fileInfo.Size)
+		if fileAlreadyExistsInStore {
+			// same as previous version, so just use that
+			tx.FilesInVersion = append(tx.FilesInVersion, descriptorFromPreviousRevision)
+		} else {
+			// file not in previous version, so mark for hash calculation
+			tx.fileInfosMissingHashes[fileInfo.RelativePath] = fileInfo
 		}
 	}
 	return tx, nil
 }
 
-var ErrFileNotRequiredForTransaction = errors.New("hash is not scheduled for upload, or has already been uploaded")
+func (transaction *Transaction) GetRelativePathsRequired() []RelativePath {
+	var relativePaths []RelativePath
+	for _, fileInfo := range transaction.fileInfosMissingHashes {
+		relativePaths = append(relativePaths, fileInfo.RelativePath)
+	}
+	return relativePaths
+}
+
+// BuildRequiredHashesMap takes the list of relative paths and hashes, and figures out which hashes need to be uploaded
+func (transaction *Transaction) BuildRequiredHashesMapAndGetRequiredHashes(relativePathsWithHashes []*RelativePathWithHash) ([]Hash, error) {
+	for _, relativePathWithHash := range relativePathsWithHashes {
+		fileInfo := transaction.fileInfosMissingHashes[relativePathWithHash.RelativePath]
+		if nil == fileInfo {
+			return nil, errors.New("file info not required for upload")
+		}
+
+		fileDescriptor := NewFileInVersion(
+			NewFileInfo(
+				relativePathWithHash.RelativePath,
+				fileInfo.ModTime,
+				fileInfo.Size,
+			),
+			relativePathWithHash.Hash,
+		)
+
+		transaction.addDescriptorToTransaction(fileDescriptor)
+	}
+
+	return transaction.GetHashesForRequiredContent(), nil
+}
 
 // TODO: test for >4GB file
 func (transaction *Transaction) BackupFile(sourceFile io.Reader) error {
@@ -100,8 +161,7 @@ func (transaction *Transaction) BackupFile(sourceFile io.Reader) error {
 	return nil
 }
 
-// AddDescriptorToTransaction adds a descriptor to the transaction
-// returns (is_file_needed, err)
+// addDescriptorToTransaction adds a descriptor to the transaction
 func (transaction *Transaction) addDescriptorToTransaction(fileDescriptor *FileDescriptor) error {
 	isTryingToTraverse := dirtraversal.IsTryingToTraverseUp(string(fileDescriptor.Hash))
 	if isTryingToTraverse {

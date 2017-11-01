@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -19,8 +18,10 @@ func Test_Begin(t *testing.T) {
 		return time.Date(year, 1, 2, 3, 4, 5, 6, time.UTC)
 	}
 
-	store := &IntelligentStore{"", testNowProvider, afero.NewMemMapFs()}
-	bucket := &Bucket{store, 1, "test bucket"}
+	store := NewMockStore(t, testNowProvider)
+	bucket, err := store.CreateBucket("test bucket")
+	require.Nil(t, err)
+
 	transaction, err := bucket.Begin(nil)
 	require.Nil(t, err)
 
@@ -69,7 +70,7 @@ func Test_isValidBucketName(t *testing.T) {
 }
 
 func Test_GetLatestRevision(t *testing.T) {
-	store := NewMockStore(t, mockNowProvider, afero.NewMemMapFs())
+	store := NewMockStore(t, mockNowProvider)
 
 	bucket, err := store.CreateBucket("docs")
 	require.Nil(t, err)
@@ -79,10 +80,14 @@ func Test_GetLatestRevision(t *testing.T) {
 		Contents: "my text",
 	}
 
-	descriptor, err := NewFileDescriptorFromReader(NewRelativePath(file.Name), bytes.NewBuffer([]byte(file.Contents)))
+	descriptor, err := NewFileDescriptorFromReader(
+		NewRelativePath(file.Name),
+		time.Unix(0, 0),
+		bytes.NewBuffer([]byte(file.Contents)),
+	)
 	require.Nil(t, err)
 
-	tx, err := bucket.Begin([]*FileDescriptor{descriptor})
+	tx, err := bucket.Begin([]*FileInfo{descriptor.FileInfo})
 	require.Nil(t, err)
 
 	err = tx.BackupFile(bytes.NewBuffer([]byte(file.Contents)))
@@ -109,7 +114,7 @@ func Test_GetRevisions(t *testing.T) {
 		return mockNow
 	}
 
-	store := NewMockStore(t, mockNowProvider, afero.NewMemMapFs())
+	store := NewMockStore(t, mockNowProvider)
 
 	bucket, err := store.CreateBucket("docs")
 	require.Nil(t, err)
@@ -120,11 +125,12 @@ func Test_GetRevisions(t *testing.T) {
 	}
 	fileDescriptorA, err := NewFileDescriptorFromReader(
 		NewRelativePath(aTxtFile.Name),
+		time.Unix(0, 0),
 		bytes.NewBuffer([]byte(aTxtFile.Contents)),
 	)
 	require.Nil(t, err)
 
-	tx1, err := bucket.Begin([]*FileDescriptor{fileDescriptorA})
+	tx1, err := bucket.Begin([]*FileInfo{fileDescriptorA.FileInfo})
 	require.Nil(t, err)
 
 	err = tx1.BackupFile(bytes.NewBuffer([]byte(aTxtFile.Contents)))
@@ -143,15 +149,16 @@ func Test_GetRevisions(t *testing.T) {
 
 	fileDescriptorB, err := NewFileDescriptorFromReader(
 		NewRelativePath(bTxtFile.Name),
+		time.Unix(0, 0),
 		bytes.NewBuffer([]byte(bTxtFile.Contents)))
 	require.Nil(t, err)
 
-	descriptors := []*FileDescriptor{
-		fileDescriptorA,
-		fileDescriptorB,
+	fileInfos := []*FileInfo{
+		fileDescriptorA.FileInfo,
+		fileDescriptorB.FileInfo,
 	}
 
-	tx2, err := bucket.Begin(descriptors)
+	tx2, err := bucket.Begin(fileInfos)
 	require.Nil(t, err)
 
 	err = tx2.BackupFile(bytes.NewBuffer([]byte(bTxtFile.Contents)))

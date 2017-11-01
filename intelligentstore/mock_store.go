@@ -12,10 +12,14 @@ import (
 type MockStore struct {
 	*IntelligentStore
 	Path string
+	Fs   *afero.MemMapFs
 }
 
-func NewMockStore(t *testing.T, nowFunc nowProvider, fs afero.Fs) *MockStore {
+// NewMockStore creates a Store under the path /test-store
+func NewMockStore(t *testing.T, nowFunc nowProvider) *MockStore {
 	path := "/test-store"
+
+	fs := &afero.MemMapFs{}
 
 	err := fs.Mkdir(path, 0700)
 	require.Nil(t, err)
@@ -23,5 +27,5 @@ func NewMockStore(t *testing.T, nowFunc nowProvider, fs afero.Fs) *MockStore {
 	store, err := createIntelligentStoreAndNewConn(path, nowFunc, fs)
 	require.Nil(t, err)
 
-	return &MockStore{store, path}
+	return &MockStore{store, path, fs}
 }

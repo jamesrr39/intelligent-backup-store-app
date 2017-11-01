@@ -3,6 +3,12 @@ package protobufgenerated;
 
 message FileDescriptorProto {
   string filename = 1;
+  uint64 modTime = 2;
+  uint64 size = 3;
+}
+
+message FileNameAndHashProto {
+  string filename = 1;
   string hash = 2;
 }
 
@@ -16,5 +22,12 @@ message OpenTxRequest {
 
 message OpenTxResponse {
   int64 revisionID = 1;
-  repeated string hashes = 2;
+}
+
+message GetRequiredHashesRequest {
+  repeated FileNameAndHashProto = 1;
+}
+
+message GetRequiredHashesResponse {
+  repeated string hashes = 1;
 }

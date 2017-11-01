@@ -58,8 +58,7 @@ func Test_createIntelligentStoreAndNewConn(t *testing.T) {
 }
 
 func Test_GetBucketByName(t *testing.T) {
-	fs := afero.NewMemMapFs()
-	mockStore := NewMockStore(t, mockNowProvider, fs)
+	mockStore := NewMockStore(t, mockNowProvider)
 
 	bucket, err := mockStore.IntelligentStore.CreateBucket("test bucket")
 	require.Nil(t, err)
@@ -73,7 +72,7 @@ func Test_GetBucketByName(t *testing.T) {
 }
 
 func Test_CreateBucket(t *testing.T) {
-	mockStore := NewMockStore(t, mockNowProvider, afero.NewMemMapFs())
+	mockStore := NewMockStore(t, mockNowProvider)
 
 	bucket1, err := mockStore.IntelligentStore.CreateBucket("test bucket")
 	require.Nil(t, err)
@@ -91,8 +90,7 @@ func Test_CreateBucket(t *testing.T) {
 }
 
 func Test_CreateUser(t *testing.T) {
-	fs := afero.NewMemMapFs()
-	mockStore := NewMockStore(t, mockNowProvider, fs)
+	mockStore := NewMockStore(t, mockNowProvider)
 
 	_, err := mockStore.CreateUser(NewUser(1, "test öäø user", "me@example.test"))
 	assert.Equal(t, "tried to create a user with ID 1 (expected 0)", err.Error())
@@ -105,8 +103,7 @@ func Test_CreateUser(t *testing.T) {
 }
 
 func Test_GetAllUsers(t *testing.T) {
-	fs := afero.NewMemMapFs()
-	mockStore := NewMockStore(t, mockNowProvider, fs)
+	mockStore := NewMockStore(t, mockNowProvider)
 
 	u1 := NewUser(0, "test öäø user", "me@example.test")
 	_, err := mockStore.CreateUser(u1)
@@ -123,7 +120,7 @@ func Test_GetAllUsers(t *testing.T) {
 }
 
 func Test_GetUserByUsername(t *testing.T) {
-	mockStore := NewMockStore(t, mockNowProvider, afero.NewMemMapFs())
+	mockStore := NewMockStore(t, mockNowProvider)
 
 	u1 := NewUser(0, "test öäø user", "me@example.test")
 	_, err := mockStore.CreateUser(u1)
@@ -149,20 +146,24 @@ func Test_GetUserByUsername(t *testing.T) {
 }
 
 func Test_GetObjectByHash(t *testing.T) {
-	mockStore := NewMockStore(t, mockNowProvider, afero.NewMemMapFs())
+	mockStore := NewMockStore(t, mockNowProvider)
 	bucket, err := mockStore.CreateBucket("docs")
 	require.Nil(t, err)
 
 	fileContents := "my file contents"
-	descriptor, err := NewFileDescriptorFromReader("a.txt", bytes.NewBuffer([]byte(fileContents)))
+	descriptor, err := NewFileDescriptorFromReader(
+		"a.txt",
+		time.Unix(0, 0),
+		bytes.NewBuffer([]byte(fileContents)),
+	)
 	require.Nil(t, err)
 
 	_, err = mockStore.GetObjectByHash(descriptor.Hash)
 	require.NotNil(t, err)
 
-	descriptors := []*FileDescriptor{descriptor}
+	fileInfos := []*FileInfo{descriptor.FileInfo}
 
-	tx, err := bucket.Begin(descriptors)
+	tx, err := bucket.Begin(fileInfos)
 	require.Nil(t, err)
 
 	err = tx.BackupFile(bytes.NewBuffer([]byte(fileContents)))
@@ -181,7 +182,7 @@ func Test_GetObjectByHash(t *testing.T) {
 }
 
 func Test_GetLockInformation(t *testing.T) {
-	mockStore := NewMockStore(t, mockNowProvider, afero.NewMemMapFs())
+	mockStore := NewMockStore(t, mockNowProvider)
 	bucket, err := mockStore.CreateBucket("docs")
 	require.Nil(t, err)
 

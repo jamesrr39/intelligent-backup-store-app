@@ -56,3 +56,18 @@ func (r *Revision) GetFileContentsInRevision(relativePath RelativePath) (io.Read
 
 	return nil, ErrNoFileWithThisRelativePathInRevision
 }
+
+func (r *Revision) ToFileDescriptorMapByName() (map[RelativePath]*FileDescriptor, error) {
+	m := make(map[RelativePath]*FileDescriptor)
+
+	filesInRevision, err := r.GetFilesInRevision()
+	if nil != err {
+		return nil, err
+	}
+
+	for _, fileInRevision := range filesInRevision {
+		m[fileInRevision.RelativePath] = fileInRevision
+	}
+
+	return m, nil
+}

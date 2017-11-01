@@ -3,32 +3,37 @@ package intelligentstore
 import (
 	"bytes"
 	"testing"
+	"time"
 
-	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func Test_BackupFile(t *testing.T) {
-	fs := afero.NewMemMapFs()
-
-	mockStore := NewMockStore(t, mockNowProvider, fs)
+	mockStore := NewMockStore(t, mockNowProvider)
 	bucket, err := mockStore.CreateBucket("docs")
 	require.Nil(t, err)
 
-	descriptor, err := NewFileDescriptorFromReader("../a.txt", bytes.NewBuffer(nil))
+	descriptor, err := NewFileDescriptorFromReader(
+		"../a.txt",
+		time.Unix(0, 0),
+		bytes.NewBuffer(nil),
+	)
 	require.Nil(t, err)
 
-	tx1, err := bucket.Begin([]*FileDescriptor{descriptor})
+	tx1, err := bucket.Begin([]*FileInfo{descriptor.FileInfo})
 	assert.Error(t, err)
 	assert.Equal(t, "couldn't start a transaction. Error: 'filepath contains .. and is trying to traverse a directory'", err.Error())
 	assert.Nil(t, tx1)
 
 	aFileContents := "a text"
-	goodADescriptor, err := NewFileDescriptorFromReader("a.txt", bytes.NewBuffer([]byte(aFileContents)))
+	goodADescriptor, err := NewFileDescriptorFromReader(
+		"a.txt", time.Unix(0, 0),
+		bytes.NewBuffer([]byte(aFileContents)),
+	)
 	require.Nil(t, err)
 
-	tx, err := bucket.Begin([]*FileDescriptor{goodADescriptor})
+	tx, err := bucket.Begin([]*FileInfo{goodADescriptor.FileInfo})
 	require.Nil(t, err)
 
 	err = tx.BackupFile(bytes.NewBuffer([]byte("bad contents - not in Begin() manifest")))
@@ -44,18 +49,27 @@ func Test_BackupFile(t *testing.T) {
 
 func Test_Commit(t *testing.T) {
 	aFileContents := "a text"
-	goodADescriptor, err := NewFileDescriptorFromReader("a.txt", bytes.NewBuffer([]byte(aFileContents)))
+	goodADescriptor, err := NewFileDescriptorFromReader(
+		"a.txt",
+		time.Unix(0, 0),
+		bytes.NewBuffer([]byte(aFileContents)),
+	)
 	require.Nil(t, err)
 
 	bFileContents := "b text"
-	goodBDescriptor, err := NewFileDescriptorFromReader("b.txt", bytes.NewBuffer([]byte(bFileContents)))
+	goodBDescriptor, err := NewFileDescriptorFromReader(
+		"b.txt", time.Unix(0, 0),
+		bytes.NewBuffer([]byte(bFileContents)),
+	)
 	require.Nil(t, err)
 
-	mockStore := NewMockStore(t, mockNowProvider, afero.NewMemMapFs())
+	mockStore := NewMockStore(t, mockNowProvider)
 	bucket, err := mockStore.CreateBucket("docs")
 	require.Nil(t, err)
 
-	tx, err := bucket.Begin([]*FileDescriptor{goodADescriptor, goodBDescriptor})
+	fileInfos := []*FileInfo{goodADescriptor.FileInfo, goodBDescriptor.FileInfo}
+
+	tx, err := bucket.Begin(fileInfos)
 	require.Nil(t, err)
 
 	err = tx.BackupFile(bytes.NewBuffer([]byte(aFileContents)))
