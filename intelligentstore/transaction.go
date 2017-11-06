@@ -17,7 +17,46 @@ import (
 	"github.com/spf13/afero"
 )
 
-var ErrFileNotRequiredForTransaction = errors.New("hash is not scheduled for upload, or has already been uploaded, or map of required hashes has not been built yet")
+type TransactionStage int
+
+const (
+	TransactionStageAwaitingFileHashes TransactionStage = iota + 1
+	TransactionStageReadyToUploadFiles
+	TransactionStageCommitted
+	TransactionStageAborted
+)
+
+var transactionStages = [...]string{
+	"Awaiting File Hashes",
+	"Ready To Upload Files",
+	"Committed",
+	"Aborted",
+}
+
+func (transaction *Transaction) checkStage(expectedStages ...TransactionStage) error {
+	var expectedStagesString string
+
+	for _, expectedStage := range expectedStages {
+		if transaction.stage == expectedStage {
+			return nil
+		}
+
+		expectedStageName := transactionStages[expectedStage-1]
+
+		if expectedStagesString == "" {
+			expectedStagesString = expectedStageName
+		} else {
+			expectedStagesString += (" OR " + expectedStageName)
+		}
+	}
+
+	return fmt.Errorf("expected transaction to be in stage '%s' but it was in stage '%s'",
+		expectedStagesString,
+		transactionStages[transaction.stage-1],
+	)
+}
+
+var ErrFileNotRequiredForTransaction = errors.New("hash is not scheduled for upload, or has already been uploaded")
 
 type Transaction struct {
 	*Revision
@@ -25,6 +64,7 @@ type Transaction struct {
 	fileInfosMissingHashes          map[RelativePath]*FileInfo
 	isFileScheduledForUploadAlready map[Hash]bool
 	mu                              *sync.RWMutex
+	stage                           TransactionStage
 }
 
 func NewTransaction(revision *Revision, fileInfos []*FileInfo) (*Transaction, error) {
@@ -34,6 +74,7 @@ func NewTransaction(revision *Revision, fileInfos []*FileInfo) (*Transaction, er
 		make(map[RelativePath]*FileInfo),
 		make(map[Hash]bool),
 		&sync.RWMutex{},
+		TransactionStageAwaitingFileHashes,
 	}
 
 	var previousRevisionMap map[RelativePath]*FileDescriptor
@@ -79,12 +120,17 @@ func (transaction *Transaction) GetRelativePathsRequired() []RelativePath {
 	return relativePaths
 }
 
-// BuildRequiredHashesMap takes the list of relative paths and hashes, and figures out which hashes need to be uploaded
-func (transaction *Transaction) BuildRequiredHashesMapAndGetRequiredHashes(relativePathsWithHashes []*RelativePathWithHash) ([]Hash, error) {
+// ProcessUploadHashesAndGetRequiredHashes takes the list of relative paths and hashes, and figures out which hashes need to be uploaded
+// FIXME: better name
+func (transaction *Transaction) ProcessUploadHashesAndGetRequiredHashes(relativePathsWithHashes []*RelativePathWithHash) ([]Hash, error) {
+	if err := transaction.checkStage(TransactionStageAwaitingFileHashes); nil != err {
+		return nil, err
+	}
+
 	for _, relativePathWithHash := range relativePathsWithHashes {
 		fileInfo := transaction.fileInfosMissingHashes[relativePathWithHash.RelativePath]
 		if nil == fileInfo {
-			return nil, errors.New("file info not required for upload")
+			return nil, fmt.Errorf("file info not required for upload for '%s'", relativePathWithHash.RelativePath)
 		}
 
 		fileDescriptor := NewFileInVersion(
@@ -99,11 +145,17 @@ func (transaction *Transaction) BuildRequiredHashesMapAndGetRequiredHashes(relat
 		transaction.addDescriptorToTransaction(fileDescriptor)
 	}
 
+	transaction.stage = TransactionStageReadyToUploadFiles
+
 	return transaction.GetHashesForRequiredContent(), nil
 }
 
 // TODO: test for >4GB file
 func (transaction *Transaction) BackupFile(sourceFile io.Reader) error {
+	if err := transaction.checkStage(TransactionStageReadyToUploadFiles); nil != err {
+		return err
+	}
+
 	sourceAsBytes, err := ioutil.ReadAll(sourceFile)
 	if nil != err {
 		return err
@@ -198,6 +250,10 @@ func (transaction *Transaction) addDescriptorToTransaction(fileDescriptor *FileD
 
 // Commit closes the transaction and writes the revision data to disk
 func (transaction *Transaction) Commit() error {
+	if err := transaction.checkStage(TransactionStageReadyToUploadFiles); nil != err {
+		return err
+	}
+
 	amountOfFilesRemainingToUpload := len(transaction.isFileScheduledForUploadAlready)
 	if amountOfFilesRemainingToUpload > 0 {
 		log.Println("remaining files:")
@@ -230,6 +286,8 @@ func (transaction *Transaction) Commit() error {
 		return errors.Wrap(err, "couldn't sync the version contents file")
 	}
 
+	transaction.stage = TransactionStageCommitted
+
 	err = transaction.IntelligentStore.removeStoreLock()
 	if nil != err {
 		return errors.Wrap(err, "couldn't remove lock file")
@@ -239,6 +297,10 @@ func (transaction *Transaction) Commit() error {
 }
 
 func (transaction *Transaction) Rollback() error {
+	if err := transaction.checkStage(TransactionStageAwaitingFileHashes, TransactionStageReadyToUploadFiles); nil != err {
+		return err
+	}
+
 	err := transaction.IntelligentStore.removeStoreLock()
 	if nil != err {
 		return errors.Wrap(err, "couldn't remove lock file")

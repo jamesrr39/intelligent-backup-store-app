@@ -27,7 +27,7 @@ type Bucket struct {
 }
 
 // Begin creates a new Transaction to create a new revision of files in the Bucket.
-func (bucket *Bucket) Begin(fileDescriptors []*FileInfo) (*Transaction, error) {
+func (bucket *Bucket) Begin(fileInfos []*FileInfo) (*Transaction, error) {
 	versionTimestamp := bucket.nowProvider().Unix()
 
 	err := bucket.IntelligentStore.acquireStoreLock(fmt.Sprintf("bucket: %s", bucket.BucketName))
@@ -36,7 +36,7 @@ func (bucket *Bucket) Begin(fileDescriptors []*FileInfo) (*Transaction, error) {
 	}
 
 	revision := &Revision{bucket, RevisionVersion(versionTimestamp)}
-	tx, err := NewTransaction(revision, fileDescriptors)
+	tx, err := NewTransaction(revision, fileInfos)
 	if nil != err {
 		removeStockLockErr := bucket.IntelligentStore.removeStoreLock()
 		if nil != removeStockLockErr {

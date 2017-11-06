@@ -1,31 +1,32 @@
 syntax = "proto3";
 package protobufgenerated;
 
-message FileDescriptorProto {
-  string filename = 1;
-  uint64 modTime = 2;
-  uint64 size = 3;
+message FileInfoProto {
+  string relativePath = 1;
+  int64 modTime = 2;
+  int64 size = 3;
 }
 
-message FileNameAndHashProto {
-  string filename = 1;
+message RelativePathAndHashProto {
+  string relativePath = 1;
   string hash = 2;
 }
 
-message FileProto {
+message FileContentsProto {
   bytes contents = 1;
 }
 
 message OpenTxRequest {
-  repeated FileDescriptorProto fileDescriptors = 1;
+  repeated FileInfoProto fileInfos = 1;
 }
 
 message OpenTxResponse {
   int64 revisionID = 1;
+  repeated string requiredRelativePaths = 2;
 }
 
 message GetRequiredHashesRequest {
-  repeated FileNameAndHashProto = 1;
+  repeated RelativePathAndHashProto relativePathAndHash = 1; // FIXME pluralise name
 }
 
 message GetRequiredHashesResponse {

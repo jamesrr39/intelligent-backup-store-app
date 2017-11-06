@@ -166,6 +166,13 @@ func Test_GetObjectByHash(t *testing.T) {
 	tx, err := bucket.Begin(fileInfos)
 	require.Nil(t, err)
 
+	relativePathsWithHashes := []*RelativePathWithHash{
+		&RelativePathWithHash{descriptor.RelativePath, descriptor.Hash},
+	}
+
+	_, err = tx.ProcessUploadHashesAndGetRequiredHashes(relativePathsWithHashes)
+	require.Nil(t, err)
+
 	err = tx.BackupFile(bytes.NewBuffer([]byte(fileContents)))
 	require.Nil(t, err)
 
@@ -197,6 +204,9 @@ func Test_GetLockInformation(t *testing.T) {
 	require.Nil(t, err)
 	require.NotNil(t, lock)
 	assert.Equal(t, "bucket: docs", lock.Text)
+
+	_, err = tx.ProcessUploadHashesAndGetRequiredHashes(nil)
+	require.Nil(t, err)
 
 	err = tx.Commit()
 	require.Nil(t, err)

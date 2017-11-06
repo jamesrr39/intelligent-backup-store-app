@@ -36,6 +36,17 @@ func Test_BackupFile(t *testing.T) {
 	tx, err := bucket.Begin([]*FileInfo{goodADescriptor.FileInfo})
 	require.Nil(t, err)
 
+	err = tx.BackupFile(bytes.NewBuffer([]byte(aFileContents)))
+	require.NotNil(t, err)
+	assert.Equal(t, "expected transaction to be in stage 'Ready To Upload Files' but it was in stage 'Awaiting File Hashes'", err.Error())
+
+	relativePathsWithHashes := []*RelativePathWithHash{
+		&RelativePathWithHash{goodADescriptor.RelativePath, goodADescriptor.Hash},
+	}
+
+	_, err = tx.ProcessUploadHashesAndGetRequiredHashes(relativePathsWithHashes)
+	require.Nil(t, err)
+
 	err = tx.BackupFile(bytes.NewBuffer([]byte("bad contents - not in Begin() manifest")))
 	require.NotNil(t, err)
 
@@ -45,6 +56,57 @@ func Test_BackupFile(t *testing.T) {
 
 	assert.Len(t, tx.FilesInVersion, 1)
 
+}
+
+func Test_ProcessUploadHashesAndGetRequiredHashes(t *testing.T) {
+	aFileContents := "a text"
+	goodADescriptor, err := NewFileDescriptorFromReader(
+		"a.txt",
+		time.Unix(0, 0),
+		bytes.NewBuffer([]byte(aFileContents)),
+	)
+	require.Nil(t, err)
+
+	bFileContents := "b text"
+	goodBDescriptor, err := NewFileDescriptorFromReader(
+		"b.txt", time.Unix(0, 0),
+		bytes.NewBuffer([]byte(bFileContents)),
+	)
+	require.Nil(t, err)
+
+	mockStore := NewMockStore(t, mockNowProvider)
+	bucket, err := mockStore.CreateBucket("docs")
+	require.Nil(t, err)
+
+	fileInfos := []*FileInfo{
+		goodADescriptor.FileInfo,
+		goodBDescriptor.FileInfo,
+	}
+
+	tx, err := bucket.Begin(fileInfos)
+	require.Nil(t, err)
+
+	relativePathsWithHashes := []*RelativePathWithHash{
+		&RelativePathWithHash{goodADescriptor.RelativePath, goodADescriptor.Hash},
+		&RelativePathWithHash{goodBDescriptor.RelativePath, goodBDescriptor.Hash},
+	}
+	hashes, err := tx.ProcessUploadHashesAndGetRequiredHashes(relativePathsWithHashes)
+	require.Nil(t, err)
+	require.Len(t, hashes, 2)
+
+	err = tx.BackupFile(bytes.NewBuffer([]byte(aFileContents)))
+	require.Nil(t, err)
+
+	_, err = tx.ProcessUploadHashesAndGetRequiredHashes(relativePathsWithHashes)
+	require.NotNil(t, err)
+	assert.Equal(t, "expected transaction to be in stage 'Awaiting File Hashes' but it was in stage 'Ready To Upload Files'", err.Error())
+
+	err = tx.Commit()
+	require.NotNil(t, err)
+
+	_, err = tx.ProcessUploadHashesAndGetRequiredHashes(relativePathsWithHashes)
+	require.NotNil(t, err)
+	assert.Equal(t, "expected transaction to be in stage 'Awaiting File Hashes' but it was in stage 'Ready To Upload Files'", err.Error())
 }
 
 func Test_Commit(t *testing.T) {
@@ -67,9 +129,19 @@ func Test_Commit(t *testing.T) {
 	bucket, err := mockStore.CreateBucket("docs")
 	require.Nil(t, err)
 
-	fileInfos := []*FileInfo{goodADescriptor.FileInfo, goodBDescriptor.FileInfo}
+	fileInfos := []*FileInfo{
+		goodADescriptor.FileInfo,
+		goodBDescriptor.FileInfo,
+	}
 
 	tx, err := bucket.Begin(fileInfos)
+	require.Nil(t, err)
+
+	relativePathsWithHashes := []*RelativePathWithHash{
+		&RelativePathWithHash{goodADescriptor.RelativePath, goodADescriptor.Hash},
+		&RelativePathWithHash{goodBDescriptor.RelativePath, goodBDescriptor.Hash},
+	}
+	_, err = tx.ProcessUploadHashesAndGetRequiredHashes(relativePathsWithHashes)
 	require.Nil(t, err)
 
 	err = tx.BackupFile(bytes.NewBuffer([]byte(aFileContents)))

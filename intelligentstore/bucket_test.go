@@ -90,6 +90,13 @@ func Test_GetLatestRevision(t *testing.T) {
 	tx, err := bucket.Begin([]*FileInfo{descriptor.FileInfo})
 	require.Nil(t, err)
 
+	relativePathsWithHashes := []*RelativePathWithHash{
+		&RelativePathWithHash{descriptor.RelativePath, descriptor.Hash},
+	}
+	requiredHashes, err := tx.ProcessUploadHashesAndGetRequiredHashes(relativePathsWithHashes)
+	require.Nil(t, err)
+	require.Len(t, requiredHashes, 1)
+
 	err = tx.BackupFile(bytes.NewBuffer([]byte(file.Contents)))
 	require.Nil(t, err)
 
@@ -133,6 +140,12 @@ func Test_GetRevisions(t *testing.T) {
 	tx1, err := bucket.Begin([]*FileInfo{fileDescriptorA.FileInfo})
 	require.Nil(t, err)
 
+	relativePathsWithHashes := []*RelativePathWithHash{
+		&RelativePathWithHash{fileDescriptorA.RelativePath, fileDescriptorA.Hash},
+	}
+	_, err = tx1.ProcessUploadHashesAndGetRequiredHashes(relativePathsWithHashes)
+	require.Nil(t, err)
+
 	err = tx1.BackupFile(bytes.NewBuffer([]byte(aTxtFile.Contents)))
 	require.Nil(t, err)
 
@@ -159,6 +172,13 @@ func Test_GetRevisions(t *testing.T) {
 	}
 
 	tx2, err := bucket.Begin(fileInfos)
+	require.Nil(t, err)
+
+	relativePathsWithHashes2 := []*RelativePathWithHash{
+		&RelativePathWithHash{fileDescriptorB.RelativePath, fileDescriptorB.Hash},
+	}
+
+	_, err = tx2.ProcessUploadHashesAndGetRequiredHashes(relativePathsWithHashes2)
 	require.Nil(t, err)
 
 	err = tx2.BackupFile(bytes.NewBuffer([]byte(bTxtFile.Contents)))

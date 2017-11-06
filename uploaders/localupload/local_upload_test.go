@@ -12,12 +12,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func Test_fullPathToRelative(t *testing.T) {
-	assert.Equal(t, "abc/b.txt", string(fullPathToRelative("/ry", "/ry/abc/b.txt")))
-	assert.Equal(t, "b.txt", string(fullPathToRelative("/ry/", "/ry/b.txt")))
-	assert.Equal(t, "abc/b.txt", string(fullPathToRelative("/ry/", "/ry/abc/b.txt")))
-}
-
 type testfile struct {
 	path     intelligentstore.RelativePath
 	contents string
@@ -49,7 +43,7 @@ func Test_UploadToStore(t *testing.T) {
 		bytes.NewBuffer([]byte("\nexclude*\n")))
 	require.Nil(t, err)
 
-	store := intelligentstore.NewMockStore(t, mockTimeProvider, fs)
+	store := intelligentstore.NewMockStore(t, mockTimeProvider)
 
 	_, err = store.CreateBucket("docs")
 	require.Nil(t, err)
@@ -79,7 +73,7 @@ func Test_UploadToStore(t *testing.T) {
 
 	fileDescriptors, err := revision.GetFilesInRevision()
 	require.Nil(t, err)
-	assert.Len(t, fileDescriptors, 6)
+	assert.Len(t, fileDescriptors, 4)
 
 	fileDescriptorNameMap := make(map[intelligentstore.RelativePath]*intelligentstore.FileDescriptor)
 	for _, fileDescriptor := range fileDescriptors {

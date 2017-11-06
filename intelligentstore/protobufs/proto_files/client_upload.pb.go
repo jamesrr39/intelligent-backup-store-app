@@ -8,10 +8,13 @@ It is generated from these files:
 	proto_files/client_upload.proto
 
 It has these top-level messages:
-	FileDescriptorProto
-	FileProto
+	FileInfoProto
+	RelativePathAndHashProto
+	FileContentsProto
 	OpenTxRequest
 	OpenTxResponse
+	GetRequiredHashesRequest
+	GetRequiredHashesResponse
 */
 package protobufgenerated
 
@@ -30,48 +33,72 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
-type FileDescriptorProto struct {
-	Filename string `protobuf:"bytes,1,opt,name=filename" json:"filename,omitempty"`
-	ModTime  uint64 `protobuf:"varint,2,opt,name=modTime" json:"modTime,omitempty"`
-	Size     uint64 `protobuf:"varint,3,opt,name=size" json:"size,omitempty"`
+type FileInfoProto struct {
+	RelativePath string `protobuf:"bytes,1,opt,name=relativePath" json:"relativePath,omitempty"`
+	ModTime      int64  `protobuf:"varint,2,opt,name=modTime" json:"modTime,omitempty"`
+	Size         int64  `protobuf:"varint,3,opt,name=size" json:"size,omitempty"`
 }
 
-func (m *FileDescriptorProto) Reset()                    { *m = FileDescriptorProto{} }
-func (m *FileDescriptorProto) String() string            { return proto.CompactTextString(m) }
-func (*FileDescriptorProto) ProtoMessage()               {}
-func (*FileDescriptorProto) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
+func (m *FileInfoProto) Reset()                    { *m = FileInfoProto{} }
+func (m *FileInfoProto) String() string            { return proto.CompactTextString(m) }
+func (*FileInfoProto) ProtoMessage()               {}
+func (*FileInfoProto) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
 
-func (m *FileDescriptorProto) GetFilename() string {
+func (m *FileInfoProto) GetRelativePath() string {
 	if m != nil {
-		return m.Filename
+		return m.RelativePath
 	}
 	return ""
 }
 
-func (m *FileDescriptorProto) GetModTime() uint64 {
+func (m *FileInfoProto) GetModTime() int64 {
 	if m != nil {
 		return m.ModTime
 	}
 	return 0
 }
 
-func (m *FileDescriptorProto) GetSize() uint64 {
+func (m *FileInfoProto) GetSize() int64 {
 	if m != nil {
 		return m.Size
 	}
 	return 0
 }
 
-type FileProto struct {
+type RelativePathAndHashProto struct {
+	RelativePath string `protobuf:"bytes,1,opt,name=relativePath" json:"relativePath,omitempty"`
+	Hash         string `protobuf:"bytes,2,opt,name=hash" json:"hash,omitempty"`
+}
+
+func (m *RelativePathAndHashProto) Reset()                    { *m = RelativePathAndHashProto{} }
+func (m *RelativePathAndHashProto) String() string            { return proto.CompactTextString(m) }
+func (*RelativePathAndHashProto) ProtoMessage()               {}
+func (*RelativePathAndHashProto) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{1} }
+
+func (m *RelativePathAndHashProto) GetRelativePath() string {
+	if m != nil {
+		return m.RelativePath
+	}
+	return ""
+}
+
+func (m *RelativePathAndHashProto) GetHash() string {
+	if m != nil {
+		return m.Hash
+	}
+	return ""
+}
+
+type FileContentsProto struct {
 	Contents []byte `protobuf:"bytes,1,opt,name=contents,proto3" json:"contents,omitempty"`
 }
 
-func (m *FileProto) Reset()                    { *m = FileProto{} }
-func (m *FileProto) String() string            { return proto.CompactTextString(m) }
-func (*FileProto) ProtoMessage()               {}
-func (*FileProto) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{1} }
+func (m *FileContentsProto) Reset()                    { *m = FileContentsProto{} }
+func (m *FileContentsProto) String() string            { return proto.CompactTextString(m) }
+func (*FileContentsProto) ProtoMessage()               {}
+func (*FileContentsProto) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{2} }
 
-func (m *FileProto) GetContents() []byte {
+func (m *FileContentsProto) GetContents() []byte {
 	if m != nil {
 		return m.Contents
 	}
@@ -79,30 +106,30 @@ func (m *FileProto) GetContents() []byte {
 }
 
 type OpenTxRequest struct {
-	FileDescriptors []*FileDescriptorProto `protobuf:"bytes,1,rep,name=fileDescriptors" json:"fileDescriptors,omitempty"`
+	FileInfos []*FileInfoProto `protobuf:"bytes,1,rep,name=fileInfos" json:"fileInfos,omitempty"`
 }
 
 func (m *OpenTxRequest) Reset()                    { *m = OpenTxRequest{} }
 func (m *OpenTxRequest) String() string            { return proto.CompactTextString(m) }
 func (*OpenTxRequest) ProtoMessage()               {}
-func (*OpenTxRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{2} }
+func (*OpenTxRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{3} }
 
-func (m *OpenTxRequest) GetFileDescriptors() []*FileDescriptorProto {
+func (m *OpenTxRequest) GetFileInfos() []*FileInfoProto {
 	if m != nil {
-		return m.FileDescriptors
+		return m.FileInfos
 	}
 	return nil
 }
 
 type OpenTxResponse struct {
-	RevisionID int64    `protobuf:"varint,1,opt,name=revisionID" json:"revisionID,omitempty"`
-	Hashes     []string `protobuf:"bytes,2,rep,name=hashes" json:"hashes,omitempty"`
+	RevisionID            int64    `protobuf:"varint,1,opt,name=revisionID" json:"revisionID,omitempty"`
+	RequiredRelativePaths []string `protobuf:"bytes,2,rep,name=requiredRelativePaths" json:"requiredRelativePaths,omitempty"`
 }
 
 func (m *OpenTxResponse) Reset()                    { *m = OpenTxResponse{} }
 func (m *OpenTxResponse) String() string            { return proto.CompactTextString(m) }
 func (*OpenTxResponse) ProtoMessage()               {}
-func (*OpenTxResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{3} }
+func (*OpenTxResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{4} }
 
 func (m *OpenTxResponse) GetRevisionID() int64 {
 	if m != nil {
@@ -111,7 +138,39 @@ func (m *OpenTxResponse) GetRevisionID() int64 {
 	return 0
 }
 
-func (m *OpenTxResponse) GetHashes() []string {
+func (m *OpenTxResponse) GetRequiredRelativePaths() []string {
+	if m != nil {
+		return m.RequiredRelativePaths
+	}
+	return nil
+}
+
+type GetRequiredHashesRequest struct {
+	RelativePathAndHash []*RelativePathAndHashProto `protobuf:"bytes,1,rep,name=relativePathAndHash" json:"relativePathAndHash,omitempty"`
+}
+
+func (m *GetRequiredHashesRequest) Reset()                    { *m = GetRequiredHashesRequest{} }
+func (m *GetRequiredHashesRequest) String() string            { return proto.CompactTextString(m) }
+func (*GetRequiredHashesRequest) ProtoMessage()               {}
+func (*GetRequiredHashesRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{5} }
+
+func (m *GetRequiredHashesRequest) GetRelativePathAndHash() []*RelativePathAndHashProto {
+	if m != nil {
+		return m.RelativePathAndHash
+	}
+	return nil
+}
+
+type GetRequiredHashesResponse struct {
+	Hashes []string `protobuf:"bytes,1,rep,name=hashes" json:"hashes,omitempty"`
+}
+
+func (m *GetRequiredHashesResponse) Reset()                    { *m = GetRequiredHashesResponse{} }
+func (m *GetRequiredHashesResponse) String() string            { return proto.CompactTextString(m) }
+func (*GetRequiredHashesResponse) ProtoMessage()               {}
+func (*GetRequiredHashesResponse) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{6} }
+
+func (m *GetRequiredHashesResponse) GetHashes() []string {
 	if m != nil {
 		return m.Hashes
 	}
@@ -119,30 +178,38 @@ func (m *OpenTxResponse) GetHashes() []string {
 }
 
 func init() {
-	proto.RegisterType((*FileDescriptorProto)(nil), "protobufgenerated.FileDescriptorProto")
-	proto.RegisterType((*FileProto)(nil), "protobufgenerated.FileProto")
+	proto.RegisterType((*FileInfoProto)(nil), "protobufgenerated.FileInfoProto")
+	proto.RegisterType((*RelativePathAndHashProto)(nil), "protobufgenerated.RelativePathAndHashProto")
+	proto.RegisterType((*FileContentsProto)(nil), "protobufgenerated.FileContentsProto")
 	proto.RegisterType((*OpenTxRequest)(nil), "protobufgenerated.OpenTxRequest")
 	proto.RegisterType((*OpenTxResponse)(nil), "protobufgenerated.OpenTxResponse")
+	proto.RegisterType((*GetRequiredHashesRequest)(nil), "protobufgenerated.GetRequiredHashesRequest")
+	proto.RegisterType((*GetRequiredHashesResponse)(nil), "protobufgenerated.GetRequiredHashesResponse")
 }
 
 func init() { proto.RegisterFile("proto_files/client_upload.proto", fileDescriptor0) }
 
 var fileDescriptor0 = []byte{
-	// 249 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x6c, 0x8f, 0x4b, 0x4b, 0xc4, 0x30,
-	0x10, 0xc7, 0xe9, 0x76, 0x59, 0xed, 0xf8, 0xc2, 0x08, 0x12, 0x3c, 0x68, 0xe9, 0x41, 0x7b, 0xaa,
-	0xa0, 0x5f, 0x61, 0x11, 0x3d, 0xb9, 0x84, 0xbd, 0x97, 0x6c, 0x3b, 0x75, 0x03, 0x69, 0x12, 0x33,
-	0xa9, 0x88, 0x9f, 0x5e, 0x1a, 0xdc, 0xe2, 0xeb, 0x94, 0xfc, 0x26, 0x99, 0xff, 0x03, 0xae, 0x9c,
-	0xb7, 0xc1, 0xd6, 0x9d, 0xd2, 0x48, 0xb7, 0x8d, 0x56, 0x68, 0x42, 0x3d, 0x38, 0x6d, 0x65, 0x5b,
-	0xc5, 0x17, 0x76, 0x1a, 0x8f, 0xcd, 0xd0, 0xbd, 0xa0, 0x41, 0x2f, 0x03, 0xb6, 0x45, 0x0d, 0x67,
-	0x0f, 0x4a, 0xe3, 0x12, 0xa9, 0xf1, 0xca, 0x05, 0xeb, 0x57, 0xf1, 0xe7, 0x05, 0xec, 0x8f, 0x32,
-	0x46, 0xf6, 0xc8, 0x93, 0x3c, 0x29, 0x33, 0x31, 0x31, 0xe3, 0xb0, 0xd7, 0xdb, 0x76, 0xad, 0x7a,
-	0xe4, 0xb3, 0x3c, 0x29, 0xe7, 0x62, 0x87, 0x8c, 0xc1, 0x9c, 0xd4, 0x07, 0xf2, 0x34, 0x8e, 0xe3,
-	0xbd, 0xb8, 0x81, 0x6c, 0x34, 0x98, 0x64, 0x1b, 0x6b, 0x02, 0x9a, 0x40, 0x51, 0xf6, 0x50, 0x4c,
-	0x5c, 0x48, 0x38, 0x7a, 0x76, 0x68, 0xd6, 0xef, 0x02, 0x5f, 0x07, 0xa4, 0xc0, 0x56, 0x70, 0xd2,
-	0xfd, 0x88, 0x36, 0xee, 0xa4, 0xe5, 0xc1, 0xdd, 0x75, 0xf5, 0xa7, 0x47, 0xf5, 0x4f, 0x09, 0xf1,
-	0x7b, 0xbd, 0x78, 0x84, 0xe3, 0x9d, 0x05, 0x39, 0x6b, 0x08, 0xd9, 0x25, 0x80, 0xc7, 0x37, 0x45,
-	0xca, 0x9a, 0xa7, 0x65, 0x8c, 0x94, 0x8a, 0x6f, 0x13, 0x76, 0x0e, 0x8b, 0xad, 0xa4, 0x2d, 0x12,
-	0x9f, 0xe5, 0x69, 0x99, 0x89, 0x2f, 0xda, 0x2c, 0x62, 0x82, 0xfb, 0xcf, 0x00, 0x00, 0x00, 0xff,
-	0xff, 0xa3, 0xe1, 0x02, 0xec, 0x73, 0x01, 0x00, 0x00,
+	// 334 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x8c, 0x51, 0x51, 0x4b, 0xf3, 0x30,
+	0x14, 0x65, 0xeb, 0xd8, 0xf7, 0xf5, 0x7e, 0xdb, 0x07, 0x8b, 0x28, 0xd1, 0x07, 0x2d, 0x79, 0x2a,
+	0x08, 0x1b, 0x38, 0x9f, 0x05, 0x51, 0xd4, 0x3d, 0x6d, 0x84, 0xbd, 0xca, 0xc8, 0xd6, 0x5b, 0x1b,
+	0xe8, 0x92, 0x2e, 0x49, 0x87, 0xfa, 0xeb, 0x65, 0xb1, 0xd3, 0x8d, 0x55, 0xf0, 0xa9, 0xb9, 0xe7,
+	0xde, 0x7b, 0xce, 0x3d, 0xa7, 0x70, 0x51, 0x18, 0xed, 0xf4, 0x2c, 0x95, 0x39, 0xda, 0xc1, 0x22,
+	0x97, 0xa8, 0xdc, 0xac, 0x2c, 0x72, 0x2d, 0x92, 0xbe, 0xef, 0x90, 0x9e, 0xff, 0xcc, 0xcb, 0xf4,
+	0x05, 0x15, 0x1a, 0xe1, 0x30, 0x61, 0x02, 0xba, 0x0f, 0x32, 0xc7, 0x91, 0x4a, 0xf5, 0xc4, 0xcf,
+	0x30, 0xe8, 0x18, 0xcc, 0x85, 0x93, 0x6b, 0x9c, 0x08, 0x97, 0xd1, 0x46, 0xd4, 0x88, 0x43, 0xbe,
+	0x87, 0x11, 0x0a, 0x7f, 0x96, 0x3a, 0x99, 0xca, 0x25, 0xd2, 0x66, 0xd4, 0x88, 0x03, 0xbe, 0x2d,
+	0x09, 0x81, 0x96, 0x95, 0xef, 0x48, 0x03, 0x0f, 0xfb, 0x37, 0xe3, 0x40, 0xf9, 0xce, 0xf6, 0xad,
+	0x4a, 0x9e, 0x84, 0xcd, 0x7e, 0xaf, 0x46, 0xa0, 0x95, 0x09, 0x9b, 0x79, 0xa9, 0x90, 0xfb, 0x37,
+	0x1b, 0x40, 0x6f, 0x73, 0xf6, 0x9d, 0x56, 0x0e, 0x95, 0xb3, 0x9f, 0x64, 0x67, 0xf0, 0x77, 0x51,
+	0x01, 0x9e, 0xa8, 0xc3, 0xbf, 0x6a, 0x36, 0x86, 0xee, 0xb8, 0x40, 0x35, 0x7d, 0xe5, 0xb8, 0x2a,
+	0xd1, 0x3a, 0x72, 0x03, 0x61, 0x5a, 0x19, 0xdf, 0x4c, 0x07, 0xf1, 0xbf, 0xab, 0xa8, 0x7f, 0x90,
+	0x4f, 0x7f, 0x2f, 0x1c, 0xfe, 0xbd, 0xc2, 0x52, 0xf8, 0xbf, 0x25, 0xb4, 0x85, 0x56, 0x16, 0xc9,
+	0x39, 0x80, 0xc1, 0xb5, 0xb4, 0x52, 0xab, 0xd1, 0xbd, 0x3f, 0x20, 0xe0, 0x3b, 0x08, 0xb9, 0x86,
+	0x63, 0x83, 0xab, 0x52, 0x1a, 0x4c, 0x76, 0xf3, 0xb0, 0xb4, 0x19, 0x05, 0x71, 0xc8, 0xeb, 0x9b,
+	0xec, 0x0d, 0xe8, 0x23, 0x3a, 0x5e, 0xf5, 0x36, 0xc9, 0xa1, 0xdd, 0x7a, 0x78, 0x86, 0x23, 0x73,
+	0x98, 0x6c, 0xe5, 0xe6, 0xb2, 0xc6, 0xcd, 0x4f, 0xff, 0x81, 0xd7, 0xf1, 0xb0, 0x21, 0x9c, 0xd6,
+	0x48, 0x57, 0x6e, 0x4f, 0xa0, 0x9d, 0x79, 0xc4, 0xcb, 0x85, 0xbc, 0xaa, 0xe6, 0x6d, 0xaf, 0x3a,
+	0xfc, 0x08, 0x00, 0x00, 0xff, 0xff, 0x97, 0xf7, 0xa2, 0x96, 0x8d, 0x02, 0x00, 0x00,
 }

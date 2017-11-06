@@ -301,7 +301,8 @@ func (s *IntelligentStore) acquireStoreLock(text string) error {
 		return err
 	}
 
-	lockFile, err := s.fs.OpenFile(s.getLockFilePath(), os.O_CREATE, 0600)
+	//lockFile, err := s.fs.OpenFile(s.getLockFilePath(), os.O_CREATE, 0600)
+	lockFile, err := s.fs.OpenFile(s.getLockFilePath(), os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0600)
 	if nil != err {
 		return err
 	}

@@ -11,11 +11,11 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/gorilla/mux"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore"
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/protobufs"
 	protofiles "github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/protobufs/proto_files"
 )
 
@@ -49,6 +49,7 @@ func NewBucketService(store *intelligentstore.IntelligentStore) *BucketService {
 	router.HandleFunc("/{bucketName}", bucketService.handleGetBucket).Methods("GET")
 
 	router.HandleFunc("/{bucketName}/upload", bucketService.handleCreateRevision).Methods("POST")
+	router.HandleFunc("/{bucketName}/upload/{revisionTs}/hashes", bucketService.handleUploadHashes).Methods("POST")
 	router.HandleFunc("/{bucketName}/upload/{revisionTs}/file", bucketService.handleUploadFile).Methods("POST")
 	router.HandleFunc("/{bucketName}/upload/{revisionTs}/commit", bucketService.handleCommitTransaction).Methods("GET")
 
@@ -271,34 +272,40 @@ func (s *BucketService) handleCreateRevision(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if nil == openTxRequest.GetFileDescriptors() {
-		http.Error(w, "expected file descriptor list but couldn't find one", 400)
+	if nil == openTxRequest.GetFileInfos() {
+		http.Error(w, "expected file info list but couldn't find one", 400)
 		return
 	}
 
-	var descriptors []*intelligentstore.FileDescriptor
+	var fileInfos []*intelligentstore.FileInfo
 
-	for _, fileDescriptorProto := range openTxRequest.GetFileDescriptors() {
-		fileDescriptor := protobufs.FileDescriptorProtoToFileDescriptor(fileDescriptorProto)
+	for _, fileInfoProto := range openTxRequest.GetFileInfos() {
 
-		descriptors = append(descriptors, fileDescriptor)
+		fileInfos = append(
+			fileInfos,
+			intelligentstore.NewFileInfo(
+				intelligentstore.NewRelativePath(fileInfoProto.GetRelativePath()),
+				time.Unix(fileInfoProto.GetModTime(), 0), // FIXME is this right?
+				fileInfoProto.GetSize(),
+			),
+		)
 	}
 
-	transaction, err := bucket.Begin(descriptors)
+	transaction, err := bucket.Begin(fileInfos)
 	if nil != err {
 		http.Error(w, "couldn't start a transaction. Error: "+err.Error(), 500)
 		return
 	}
 	s.openTransactionsMap[bucket.BucketName+"__"+strconv.FormatInt(int64(transaction.VersionTimestamp), 10)] = transaction
 
-	var hashesStrings []string
-	for _, hash := range transaction.GetHashesForRequiredContent() {
-		hashesStrings = append(hashesStrings, string(hash))
+	var relativePaths []string
+	for _, relativePath := range transaction.GetRelativePathsRequired() {
+		relativePaths = append(relativePaths, string(relativePath))
 	}
 
 	openTxReponse := &protofiles.OpenTxResponse{
-		RevisionID: int64(transaction.VersionTimestamp),
-		Hashes:     hashesStrings,
+		RevisionID:            int64(transaction.VersionTimestamp),
+		RequiredRelativePaths: relativePaths,
 	}
 
 	responseBytes, err := proto.Marshal(openTxReponse)
@@ -346,7 +353,7 @@ func (s *BucketService) handleUploadFile(w http.ResponseWriter, r *http.Request)
 	}
 	defer r.Body.Close()
 
-	var uploadedFile protofiles.FileProto
+	var uploadedFile protofiles.FileContentsProto
 	err = proto.Unmarshal(bodyBytes, &uploadedFile)
 	if nil != err {
 		http.Error(w, fmt.Sprintf("couldn't unmarshal message. Error: '%s'", err), 400)
@@ -421,6 +428,76 @@ func (s *BucketService) handleGetFileContents(w http.ResponseWriter, r *http.Req
 	_, err = io.Copy(w, file)
 	if nil != err {
 		http.Error(w, fmt.Sprintf("couldn't copy file. Error: %s", err), 500)
+		return
+	}
+}
+
+func (s *BucketService) handleUploadHashes(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+
+	bucketName := vars["bucketName"]
+	revisionTsString := vars["revisionTs"]
+
+	bucket, err := s.store.GetBucketByName(bucketName)
+	if nil != err {
+		if intelligentstore.ErrBucketDoesNotExist == err {
+			http.Error(w, fmt.Sprintf("couldn't find bucket '%s'. Error: %s", bucketName, err), 404)
+			return
+		}
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	transaction := s.openTransactionsMap[bucketName+"__"+revisionTsString]
+	if nil == transaction {
+		http.Error(w, fmt.Sprintf("there is no open transaction for bucket %s and revisionTs %s", bucket.BucketName, revisionTsString), 400)
+		return
+	}
+
+	body, err := ioutil.ReadAll(r.Body)
+	if nil != err {
+		http.Error(w, fmt.Sprintf("couldn't read request body. Error: %s", err.Error()), 400)
+		return
+	}
+
+	var getRequiredHashesRequest protofiles.GetRequiredHashesRequest
+	err = proto.Unmarshal(body, &getRequiredHashesRequest)
+
+	var relativePathsWithHashes []*intelligentstore.RelativePathWithHash
+	for _, relativePathAndHashProto := range getRequiredHashesRequest.GetRelativePathAndHash() {
+		relativePathsWithHashes = append(relativePathsWithHashes, &intelligentstore.RelativePathWithHash{
+			RelativePath: intelligentstore.NewRelativePath(relativePathAndHashProto.GetRelativePath()),
+			Hash:         intelligentstore.Hash(relativePathAndHashProto.GetHash()),
+		})
+	}
+
+	hashes, err := transaction.ProcessUploadHashesAndGetRequiredHashes(relativePathsWithHashes)
+	if nil != err {
+		http.Error(w, fmt.Sprintf("couldn't process upload hashes and get required uploads. Error: %s", err.Error()), 500)
+		return
+	}
+
+	getRequiredHashesResponse := &protofiles.GetRequiredHashesResponse{
+		Hashes: nil,
+	}
+
+	for _, hash := range hashes {
+		getRequiredHashesResponse.Hashes = append(
+			getRequiredHashesResponse.Hashes,
+			string(hash),
+		)
+	}
+
+	responseBytes, err := proto.Marshal(getRequiredHashesResponse)
+	if nil != err {
+		http.Error(w, fmt.Sprintf("couldn't marshal get required uploads response. Error: %s", err.Error()), 500)
+		return
+	}
+
+	w.Header().Set("content-type", "application/octet-stream")
+	_, err = w.Write(responseBytes)
+	if nil != err {
+		http.Error(w, fmt.Sprintf("couldn't write get required uploads response. Error: %s", err.Error()), 500)
 		return
 	}
 }

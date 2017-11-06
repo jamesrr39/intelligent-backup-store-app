@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -15,7 +16,6 @@ import (
 	"github.com/golang/protobuf/proto"
 
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore"
-	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -27,7 +27,7 @@ func testNowProvider() time.Time {
 }
 
 func Test_handleGetAllBuckets(t *testing.T) {
-	mockStore := intelligentstore.NewMockStore(t, testNowProvider, afero.NewMemMapFs())
+	mockStore := intelligentstore.NewMockStore(t, testNowProvider)
 	bucketService := NewBucketService(mockStore.IntelligentStore)
 
 	requestURL := &url.URL{Path: "/"}
@@ -70,16 +70,32 @@ func Test_handleGetRevision(t *testing.T) {
 		&testfile{"folder-1/c.txt", "file 1/c"},
 	}
 
-	var descriptors []*intelligentstore.FileDescriptor
+	var fileInfos []*intelligentstore.FileInfo
 	for _, testFile := range testFiles {
-		descriptors = append(descriptors, testFile.toFileDescriptor(t))
+		fileInfos = append(fileInfos, testFile.toFileDescriptor(t).FileInfo)
 	}
 
-	store := intelligentstore.NewMockStore(t, testNowProvider, afero.NewMemMapFs())
+	store := intelligentstore.NewMockStore(t, testNowProvider)
 	bucket, err := store.CreateBucket("docs")
 	require.Nil(t, err)
 
-	tx1, err := bucket.Begin(descriptors)
+	tx1, err := bucket.Begin(fileInfos)
+	require.Nil(t, err)
+
+	var relativePathsWithHashes []*intelligentstore.RelativePathWithHash
+	for _, testFile := range testFiles {
+		hash, err := intelligentstore.NewHash(bytes.NewBuffer([]byte(testFile.contents)))
+		require.Nil(t, err)
+		relativePathsWithHashes = append(
+			relativePathsWithHashes,
+			&intelligentstore.RelativePathWithHash{
+				RelativePath: testFile.path,
+				Hash:         hash,
+			},
+		)
+	}
+
+	_, err = tx1.ProcessUploadHashesAndGetRequiredHashes(relativePathsWithHashes)
 	require.Nil(t, err)
 
 	for _, testFile := range testFiles {
@@ -134,48 +150,26 @@ func Test_handleGetRevision(t *testing.T) {
 	assert.Equal(t, testFiles[3].path, revInfoWithFiles2.Files[1].RelativePath)
 }
 
-func Test_CreateRevision(t *testing.T) {
-	aFileText := "my file a.txt"
-	hashAtxt, err := intelligentstore.NewHash(bytes.NewBuffer([]byte(aFileText)))
+func Test_handleCreateRevision(t *testing.T) {
+	store := intelligentstore.NewMockStore(t, testNowProvider)
+	_, err := store.CreateBucket("docs")
 	require.Nil(t, err)
 
-	// Create a bucket and fill it with some data
-	store := intelligentstore.NewMockStore(t, testNowProvider, afero.NewMemMapFs())
-	bucket, err := store.CreateBucket("docs")
-	require.Nil(t, err)
-
-	tx1Descriptor, err := intelligentstore.NewFileDescriptorFromReader(
-		"already-in_a.txt",
+	aFileText := "test file a"
+	aFileDescriptor, err := intelligentstore.NewFileDescriptorFromReader(
+		"a.txt",
+		time.Unix(0, 0),
 		bytes.NewBuffer([]byte(aFileText)))
 	require.Nil(t, err)
-
-	descriptors := []*intelligentstore.FileDescriptor{tx1Descriptor}
-
-	tx1, err := bucket.Begin(descriptors)
-	require.Nil(t, err)
-
-	err = tx1.BackupFile(bytes.NewBuffer([]byte(aFileText)))
-	require.Nil(t, err)
-
-	err = tx1.Commit()
-	require.Nil(t, err)
-	// end filling it with data
 
 	bucketService := NewBucketService(store.IntelligentStore)
 
 	openTxRequest := &protofiles.OpenTxRequest{
-		FileDescriptors: []*protofiles.FileDescriptorProto{
-			&protofiles.FileDescriptorProto{
-				Filename: "a.txt",
-				Hash:     string(hashAtxt),
-			},
-			&protofiles.FileDescriptorProto{
-				Filename: "mydir/b.txt",
-				Hash:     "ijklmn",
-			},
-			&protofiles.FileDescriptorProto{
-				Filename: "mydir/c.txt",
-				Hash:     "ijklmn",
+		FileInfos: []*protofiles.FileInfoProto{
+			&protofiles.FileInfoProto{
+				RelativePath: string(aFileDescriptor.RelativePath),
+				ModTime:      aFileDescriptor.ModTime.Unix(),
+				Size:         aFileDescriptor.Size,
 			},
 		},
 	}
@@ -199,30 +193,28 @@ func Test_CreateRevision(t *testing.T) {
 	require.Nil(t, err)
 
 	assert.Equal(t, int64(946782245), openTxResponse.GetRevisionID())
-
-	require.Len(t, openTxResponse.GetHashes(), 1) // shouldn't ask for a.txt, as that is already in the store
-	assert.Equal(t, "ijklmn", openTxResponse.GetHashes()[0])
+	require.Len(t, openTxResponse.GetRequiredRelativePaths(), 1)
 }
 
 func Test_handleUploadFile(t *testing.T) {
-	aFileText := "my file a.txt"
-	hashAtxt, err := intelligentstore.NewHash(bytes.NewBuffer([]byte(aFileText)))
+	store := intelligentstore.NewMockStore(t, testNowProvider)
+	_, err := store.CreateBucket("docs")
 	require.Nil(t, err)
 
-	store := intelligentstore.NewMockStore(t, testNowProvider, afero.NewMemMapFs())
-	_, err = store.CreateBucket("docs")
-	require.Nil(t, err)
+	aFileText := "my file a.txt"
+	descriptor, err := intelligentstore.NewFileDescriptorFromReader(
+		intelligentstore.NewRelativePath("a.txt"),
+		time.Unix(0, 0),
+		bytes.NewBuffer([]byte(aFileText)),
+	)
 
 	// create a Revision
 	openTxRequest := &protofiles.OpenTxRequest{
-		FileDescriptors: []*protofiles.FileDescriptorProto{
-			&protofiles.FileDescriptorProto{
-				Filename: "a.txt",
-				Hash:     string(hashAtxt),
-			},
-			&protofiles.FileDescriptorProto{
-				Filename: "b.txt",
-				Hash:     string(hashAtxt),
+		FileInfos: []*protofiles.FileInfoProto{
+			&protofiles.FileInfoProto{
+				RelativePath: string(descriptor.RelativePath),
+				ModTime:      descriptor.ModTime.Unix(),
+				Size:         descriptor.Size,
 			},
 		},
 	}
@@ -246,25 +238,46 @@ func Test_handleUploadFile(t *testing.T) {
 	err = proto.Unmarshal(openTxW.Body.Bytes(), &openTxResponse)
 	require.Nil(t, err)
 
-	uploadedFileProto := &protofiles.FileProto{
+	hashesRequestProto := &protofiles.GetRequiredHashesRequest{
+		RelativePathAndHash: []*protofiles.RelativePathAndHashProto{
+			&protofiles.RelativePathAndHashProto{
+				RelativePath: string(descriptor.RelativePath),
+				Hash:         string(descriptor.Hash),
+			},
+		},
+	}
+	hashesRequestBytes, err := proto.Marshal(hashesRequestProto)
+	require.Nil(t, err)
+
+	rHashes := &http.Request{
+		URL:    &url.URL{Path: fmt.Sprintf("/docs/upload/%d/hashes", openTxResponse.GetRevisionID())},
+		Method: "POST",
+		Body:   ioutil.NopCloser(bytes.NewBuffer(hashesRequestBytes)),
+	}
+	wHashes := httptest.NewRecorder()
+
+	bucketService.ServeHTTP(wHashes, rHashes)
+
+	uploadedFileProto := &protofiles.FileContentsProto{
 		Contents: []byte(aFileText),
 	}
 	uploadedFileProtoBytes, err := proto.Marshal(uploadedFileProto)
 	require.Nil(t, err)
 
 	r1 := &http.Request{
-		Body:   ioutil.NopCloser(bytes.NewBuffer(uploadedFileProtoBytes)),
 		URL:    &url.URL{Path: fmt.Sprintf("/docs/upload/%d/file", openTxResponse.GetRevisionID())},
 		Method: "POST",
+		Body:   ioutil.NopCloser(bytes.NewBuffer(uploadedFileProtoBytes)),
 	}
 	w1 := httptest.NewRecorder()
 
 	// upload wanted file
 	bucketService.ServeHTTP(w1, r1)
-	assert.Equal(t, 200, w1.Code)
+	log.Printf("%s\n", w1.Body.Bytes())
+	require.Equal(t, 200, w1.Code)
 
 	// upload unwanted file
-	unwantedUploadedFileProto := &protofiles.FileProto{
+	unwantedUploadedFileProto := &protofiles.FileContentsProto{
 		Contents: []byte("unwanted file"),
 	}
 	unwantedUploadedFileProtoBytes, err := proto.Marshal(unwantedUploadedFileProto)
@@ -304,32 +317,37 @@ func Test_handleUploadFile(t *testing.T) {
 }
 
 func Test_handleCommitTransaction(t *testing.T) {
-	aFileText := "my file a.txt"
-	hashAtxt, err := intelligentstore.NewHash(bytes.NewBuffer([]byte(aFileText)))
-	require.Nil(t, err)
-
-	store := intelligentstore.NewMockStore(t, testNowProvider, afero.NewMemMapFs())
+	store := intelligentstore.NewMockStore(t, testNowProvider)
 	bucket, err := store.CreateBucket("docs")
 	require.Nil(t, err)
+
+	bucketService := NewBucketService(store.IntelligentStore)
 
 	bucketRevisions, err := bucket.GetRevisions()
 	require.Nil(t, err)
 	require.Len(t, bucketRevisions, 0)
 
+	fileContents := "file contents of a öøæäå"
+	descriptor, err := intelligentstore.NewFileDescriptorFromReader(
+		intelligentstore.NewRelativePath("my/file a.txt"),
+		time.Unix(0, 0),
+		bytes.NewBuffer([]byte(fileContents)),
+	)
+	require.Nil(t, err)
+
 	// create a Revision
 	openTxRequest := &protofiles.OpenTxRequest{
-		FileDescriptors: []*protofiles.FileDescriptorProto{
-			&protofiles.FileDescriptorProto{
-				Filename: "a.txt",
-				Hash:     string(hashAtxt),
+		FileInfos: []*protofiles.FileInfoProto{
+			&protofiles.FileInfoProto{
+				RelativePath: string(descriptor.RelativePath),
+				ModTime:      descriptor.ModTime.Unix(),
+				Size:         descriptor.Size,
 			},
 		},
 	}
 
 	openTxRequestBytes, err := proto.Marshal(openTxRequest)
 	require.Nil(t, err)
-
-	bucketService := NewBucketService(store.IntelligentStore)
 
 	// open transaction
 	openTxW := httptest.NewRecorder()
@@ -345,12 +363,31 @@ func Test_handleCommitTransaction(t *testing.T) {
 	err = proto.Unmarshal(openTxW.Body.Bytes(), &openTxResponse)
 	require.Nil(t, err)
 
-	require.Len(t, openTxResponse.GetHashes(), 1)
-	require.Equal(t, openTxResponse.GetHashes()[0], string(hashAtxt))
+	require.Len(t, openTxResponse.GetRequiredRelativePaths(), 1)
+	require.Equal(t, string(descriptor.RelativePath), openTxResponse.GetRequiredRelativePaths()[0])
+
+	getRequiredHashesBytes, err := proto.Marshal(&protofiles.GetRequiredHashesRequest{
+		RelativePathAndHash: []*protofiles.RelativePathAndHashProto{
+			&protofiles.RelativePathAndHashProto{
+				RelativePath: string(descriptor.RelativePath),
+				Hash:         string(descriptor.Hash),
+			},
+		},
+	})
+	require.Nil(t, err)
+
+	rHashes := &http.Request{
+		URL:    &url.URL{Path: fmt.Sprintf("/docs/upload/%d/hashes", openTxResponse.GetRevisionID())},
+		Method: "POST",
+		Body:   ioutil.NopCloser(bytes.NewBuffer(getRequiredHashesBytes)),
+	}
+	wHashes := httptest.NewRecorder()
+
+	bucketService.ServeHTTP(wHashes, rHashes)
 
 	// upload file
-	uploadFileProto := &protofiles.FileProto{
-		Contents: []byte(aFileText),
+	uploadFileProto := &protofiles.FileContentsProto{
+		Contents: []byte(fileContents),
 	}
 
 	uploadFileProtoBytes, err := proto.Marshal(uploadFileProto)
@@ -377,7 +414,7 @@ func Test_handleCommitTransaction(t *testing.T) {
 	}
 
 	bucketService.ServeHTTP(commitTxW, commitTxR)
-	assert.Equal(t, 200, commitTxW.Code)
+	require.Equal(t, 200, commitTxW.Code)
 
 	bucketRevisions, err = bucket.GetRevisions()
 	require.Nil(t, err)
@@ -389,7 +426,7 @@ func Test_handleCommitTransaction(t *testing.T) {
 }
 
 func Test_handleGetFileContents(t *testing.T) {
-	mockStore := intelligentstore.NewMockStore(t, testNowProvider, afero.NewMemMapFs())
+	mockStore := intelligentstore.NewMockStore(t, testNowProvider)
 	bucket, err := mockStore.CreateBucket("docs")
 	require.Nil(t, err)
 
@@ -399,6 +436,7 @@ func Test_handleGetFileContents(t *testing.T) {
 	fileName := "folder1/file a.txt"
 	descriptor, err := intelligentstore.NewFileDescriptorFromReader(
 		intelligentstore.NewRelativePath(fileName),
+		time.Unix(0, 0),
 		bytes.NewBuffer([]byte(fileContents)))
 	require.Nil(t, err)
 
@@ -426,9 +464,19 @@ func Test_handleGetFileContents(t *testing.T) {
 	bucketService.ServeHTTP(wRevisionNotExist, rRevisionNotExist)
 	assert.Equal(t, 404, wRevisionNotExist.Code)
 
-	descriptors := []*intelligentstore.FileDescriptor{descriptor}
+	fileInfos := []*intelligentstore.FileInfo{descriptor.FileInfo}
 
-	tx, err := bucket.Begin(descriptors)
+	tx, err := bucket.Begin(fileInfos)
+	require.Nil(t, err)
+
+	relativePathsWithHashes := []*intelligentstore.RelativePathWithHash{
+		&intelligentstore.RelativePathWithHash{
+			RelativePath: descriptor.RelativePath,
+			Hash:         descriptor.Hash,
+		},
+	}
+
+	_, err = tx.ProcessUploadHashesAndGetRequiredHashes(relativePathsWithHashes)
 	require.Nil(t, err)
 
 	err = tx.BackupFile(bytes.NewBuffer([]byte(fileContents)))
@@ -473,7 +521,11 @@ type testfile struct {
 }
 
 func (testFile *testfile) toFileDescriptor(t *testing.T) *intelligentstore.FileDescriptor {
-	descriptor, err := intelligentstore.NewFileDescriptorFromReader(testFile.path, bytes.NewBuffer([]byte(testFile.contents)))
+	descriptor, err := intelligentstore.NewFileDescriptorFromReader(
+		testFile.path,
+		time.Unix(0, 0),
+		bytes.NewBuffer([]byte(testFile.contents)),
+	)
 	require.Nil(t, err)
 	return descriptor
 }

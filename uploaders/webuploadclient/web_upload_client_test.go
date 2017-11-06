@@ -20,7 +20,6 @@ type testfile struct {
 }
 
 func Test_UploadToStore(t *testing.T) {
-
 	// set up local files/FS
 	testFiles := []*testfile{
 		&testfile{"a.txt", "file a"},
@@ -48,10 +47,9 @@ func Test_UploadToStore(t *testing.T) {
 	require.Nil(t, err)
 
 	// set up remote store server
-	remoteFs := afero.NewMemMapFs()
-	remoteStore := intelligentstore.NewMockStore(t, mockTimeProvider, remoteFs)
+	remoteStore := intelligentstore.NewMockStore(t, mockTimeProvider)
 
-	_, err = remoteStore.CreateBucket("docs")
+	bucket, err := remoteStore.CreateBucket("docs")
 	require.Nil(t, err)
 
 	storeServer := httptest.NewServer(
@@ -73,9 +71,6 @@ func Test_UploadToStore(t *testing.T) {
 	require.Nil(t, err)
 
 	// assertions
-	bucket, err := remoteStore.GetBucketByName("docs")
-	require.Nil(t, err)
-
 	revisions, err := bucket.GetRevisions()
 	require.Nil(t, err)
 	assert.Len(t, revisions, 1)
