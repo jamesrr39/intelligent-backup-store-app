@@ -41,7 +41,7 @@ func BuildFileInfosMap(fs afero.Fs, backupFromLocation string, excludeMatcher *e
 		}
 
 		if !osFileInfo.Mode().IsRegular() {
-			log.Printf("WARNING: unsupported non-regular file skipped: '%s'\n", path)
+			log.Printf("WARNING: unsupported non-regular file skipped: '%s' %v\n", path, osFileInfo.Size())
 			return nil
 		}
 

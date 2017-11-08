@@ -156,7 +156,7 @@ func Test_handleCreateRevision(t *testing.T) {
 	require.Nil(t, err)
 
 	aFileText := "test file a"
-	aFileDescriptor, err := intelligentstore.NewFileDescriptorFromReader(
+	aFileDescriptor, err := intelligentstore.NewRegularFileDescriptorFromReader(
 		"a.txt",
 		time.Unix(0, 0),
 		bytes.NewBuffer([]byte(aFileText)))
@@ -202,7 +202,7 @@ func Test_handleUploadFile(t *testing.T) {
 	require.Nil(t, err)
 
 	aFileText := "my file a.txt"
-	descriptor, err := intelligentstore.NewFileDescriptorFromReader(
+	descriptor, err := intelligentstore.NewRegularFileDescriptorFromReader(
 		intelligentstore.NewRelativePath("a.txt"),
 		time.Unix(0, 0),
 		bytes.NewBuffer([]byte(aFileText)),
@@ -328,7 +328,7 @@ func Test_handleCommitTransaction(t *testing.T) {
 	require.Len(t, bucketRevisions, 0)
 
 	fileContents := "file contents of a öøæäå"
-	descriptor, err := intelligentstore.NewFileDescriptorFromReader(
+	descriptor, err := intelligentstore.NewRegularFileDescriptorFromReader(
 		intelligentstore.NewRelativePath("my/file a.txt"),
 		time.Unix(0, 0),
 		bytes.NewBuffer([]byte(fileContents)),
@@ -434,7 +434,7 @@ func Test_handleGetFileContents(t *testing.T) {
 
 	fileContents := "my file contents"
 	fileName := "folder1/file a.txt"
-	descriptor, err := intelligentstore.NewFileDescriptorFromReader(
+	descriptor, err := intelligentstore.NewRegularFileDescriptorFromReader(
 		intelligentstore.NewRelativePath(fileName),
 		time.Unix(0, 0),
 		bytes.NewBuffer([]byte(fileContents)))
@@ -520,8 +520,8 @@ type testfile struct {
 	contents string
 }
 
-func (testFile *testfile) toFileDescriptor(t *testing.T) *intelligentstore.FileDescriptor {
-	descriptor, err := intelligentstore.NewFileDescriptorFromReader(
+func (testFile *testfile) toFileDescriptor(t *testing.T) *intelligentstore.RegularFileDescriptor {
+	descriptor, err := intelligentstore.NewRegularFileDescriptorFromReader(
 		testFile.path,
 		time.Unix(0, 0),
 		bytes.NewBuffer([]byte(testFile.contents)),

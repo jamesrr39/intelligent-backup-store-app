@@ -7,18 +7,18 @@ import (
 	"time"
 )
 
-// FileDescriptor represents a file and it's storage location metadata.
-type FileDescriptor struct {
+// RegularFileDescriptor represents a file and it's storage location metadata.
+type RegularFileDescriptor struct {
 	*FileInfo
 	Hash Hash `json:"hash"`
 }
 
-// NewFileInVersion creates an instance of File.
-func NewFileInVersion(fileInfo *FileInfo, hash Hash) *FileDescriptor {
-	return &FileDescriptor{fileInfo, hash}
+// NewRegularFileDescriptor creates an instance of File.
+func NewRegularFileDescriptor(fileInfo *FileInfo, hash Hash) *RegularFileDescriptor {
+	return &RegularFileDescriptor{fileInfo, hash}
 }
 
-func NewFileDescriptorFromReader(relativePath RelativePath, modTime time.Time, file io.Reader) (*FileDescriptor, error) {
+func NewRegularFileDescriptorFromReader(relativePath RelativePath, modTime time.Time, file io.Reader) (*RegularFileDescriptor, error) {
 	hasher := newHasher()
 	size := int64(0)
 	readerSize := 4096
@@ -48,7 +48,7 @@ func NewFileDescriptorFromReader(relativePath RelativePath, modTime time.Time, f
 
 	hash := hasher.Sum(nil)
 
-	return NewFileInVersion(
+	return NewRegularFileDescriptor(
 		NewFileInfo(relativePath, modTime, size),
 		Hash(hex.EncodeToString(hash)),
 	), nil

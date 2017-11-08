@@ -14,7 +14,7 @@ func Test_BackupFile(t *testing.T) {
 	bucket, err := mockStore.CreateBucket("docs")
 	require.Nil(t, err)
 
-	descriptor, err := NewFileDescriptorFromReader(
+	descriptor, err := NewRegularFileDescriptorFromReader(
 		"../a.txt",
 		time.Unix(0, 0),
 		bytes.NewBuffer(nil),
@@ -27,7 +27,7 @@ func Test_BackupFile(t *testing.T) {
 	assert.Nil(t, tx1)
 
 	aFileContents := "a text"
-	goodADescriptor, err := NewFileDescriptorFromReader(
+	goodADescriptor, err := NewRegularFileDescriptorFromReader(
 		"a.txt", time.Unix(0, 0),
 		bytes.NewBuffer([]byte(aFileContents)),
 	)
@@ -60,7 +60,7 @@ func Test_BackupFile(t *testing.T) {
 
 func Test_ProcessUploadHashesAndGetRequiredHashes(t *testing.T) {
 	aFileContents := "a text"
-	goodADescriptor, err := NewFileDescriptorFromReader(
+	goodADescriptor, err := NewRegularFileDescriptorFromReader(
 		"a.txt",
 		time.Unix(0, 0),
 		bytes.NewBuffer([]byte(aFileContents)),
@@ -68,7 +68,7 @@ func Test_ProcessUploadHashesAndGetRequiredHashes(t *testing.T) {
 	require.Nil(t, err)
 
 	bFileContents := "b text"
-	goodBDescriptor, err := NewFileDescriptorFromReader(
+	goodBDescriptor, err := NewRegularFileDescriptorFromReader(
 		"b.txt", time.Unix(0, 0),
 		bytes.NewBuffer([]byte(bFileContents)),
 	)
@@ -111,7 +111,7 @@ func Test_ProcessUploadHashesAndGetRequiredHashes(t *testing.T) {
 
 func Test_Commit(t *testing.T) {
 	aFileContents := "a text"
-	goodADescriptor, err := NewFileDescriptorFromReader(
+	goodADescriptor, err := NewRegularFileDescriptorFromReader(
 		"a.txt",
 		time.Unix(0, 0),
 		bytes.NewBuffer([]byte(aFileContents)),
@@ -119,7 +119,7 @@ func Test_Commit(t *testing.T) {
 	require.Nil(t, err)
 
 	bFileContents := "b text"
-	goodBDescriptor, err := NewFileDescriptorFromReader(
+	goodBDescriptor, err := NewRegularFileDescriptorFromReader(
 		"b.txt", time.Unix(0, 0),
 		bytes.NewBuffer([]byte(bFileContents)),
 	)

@@ -80,7 +80,7 @@ func Test_GetLatestRevision(t *testing.T) {
 		Contents: "my text",
 	}
 
-	descriptor, err := NewFileDescriptorFromReader(
+	descriptor, err := NewRegularFileDescriptorFromReader(
 		NewRelativePath(file.Name),
 		time.Unix(0, 0),
 		bytes.NewBuffer([]byte(file.Contents)),
@@ -130,7 +130,7 @@ func Test_GetRevisions(t *testing.T) {
 		Name:     "a.txt",
 		Contents: "my text",
 	}
-	fileDescriptorA, err := NewFileDescriptorFromReader(
+	fileDescriptorA, err := NewRegularFileDescriptorFromReader(
 		NewRelativePath(aTxtFile.Name),
 		time.Unix(0, 0),
 		bytes.NewBuffer([]byte(aTxtFile.Contents)),
@@ -160,7 +160,7 @@ func Test_GetRevisions(t *testing.T) {
 		Contents: "my b text",
 	}
 
-	fileDescriptorB, err := NewFileDescriptorFromReader(
+	fileDescriptorB, err := NewRegularFileDescriptorFromReader(
 		NewRelativePath(bTxtFile.Name),
 		time.Unix(0, 0),
 		bytes.NewBuffer([]byte(bTxtFile.Contents)))

@@ -81,7 +81,7 @@ func Test_UploadToStore(t *testing.T) {
 	require.Nil(t, err)
 	assert.Len(t, fileDescriptors, 4)
 
-	fileDescriptorNameMap := make(map[intelligentstore.RelativePath]*intelligentstore.FileDescriptor)
+	fileDescriptorNameMap := make(map[intelligentstore.RelativePath]*intelligentstore.RegularFileDescriptor)
 	for _, fileDescriptor := range fileDescriptors {
 		fileDescriptorNameMap[fileDescriptor.RelativePath] = fileDescriptor
 	}

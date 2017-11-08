@@ -151,7 +151,7 @@ func Test_GetObjectByHash(t *testing.T) {
 	require.Nil(t, err)
 
 	fileContents := "my file contents"
-	descriptor, err := NewFileDescriptorFromReader(
+	descriptor, err := NewRegularFileDescriptorFromReader(
 		"a.txt",
 		time.Unix(0, 0),
 		bytes.NewBuffer([]byte(fileContents)),

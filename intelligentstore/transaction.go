@@ -61,7 +61,7 @@ var ErrFileNotRequiredForTransaction = errors.New("hash is not scheduled for upl
 
 type Transaction struct {
 	Revision                        *Revision
-	FilesInVersion                  []*FileDescriptor
+	FilesInVersion                  []*RegularFileDescriptor
 	fileInfosMissingHashes          map[RelativePath]*FileInfo
 	isFileScheduledForUploadAlready map[Hash]bool
 	mu                              *sync.RWMutex
@@ -71,21 +71,21 @@ type Transaction struct {
 func NewTransaction(revision *Revision, fileInfos []*FileInfo) (*Transaction, error) {
 	tx := &Transaction{
 		revision,
-		[]*FileDescriptor{},
+		[]*RegularFileDescriptor{},
 		make(map[RelativePath]*FileInfo),
 		make(map[Hash]bool),
 		&sync.RWMutex{},
 		TransactionStageAwaitingFileHashes,
 	}
 
-	var previousRevisionMap map[RelativePath]*FileDescriptor
+	var previousRevisionMap map[RelativePath]*RegularFileDescriptor
 
 	previousRevision, err := revision.bucket.GetLatestRevision()
 	if nil != err {
 		if err != ErrNoRevisionsForBucket {
 			return nil, err
 		}
-		previousRevisionMap = make(map[RelativePath]*FileDescriptor)
+		previousRevisionMap = make(map[RelativePath]*RegularFileDescriptor)
 	} else {
 		previousRevisionMap, err = previousRevision.ToFileDescriptorMapByName()
 		if nil != err {
@@ -134,7 +134,7 @@ func (transaction *Transaction) ProcessUploadHashesAndGetRequiredHashes(relative
 			return nil, fmt.Errorf("file info not required for upload for '%s'", relativePathWithHash.RelativePath)
 		}
 
-		fileDescriptor := NewFileInVersion(
+		fileDescriptor := NewRegularFileDescriptor(
 			NewFileInfo(
 				relativePathWithHash.RelativePath,
 				fileInfo.ModTime,
@@ -217,7 +217,7 @@ func (transaction *Transaction) BackupFile(sourceFile io.Reader) error {
 }
 
 // addDescriptorToTransaction adds a descriptor to the transaction
-func (transaction *Transaction) addDescriptorToTransaction(fileDescriptor *FileDescriptor) error {
+func (transaction *Transaction) addDescriptorToTransaction(fileDescriptor *RegularFileDescriptor) error {
 	isTryingToTraverse := dirtraversal.IsTryingToTraverseUp(string(fileDescriptor.Hash))
 	if isTryingToTraverse {
 		return fmt.Errorf("%s is attempting to traverse up the filesystem tree, which is not allowed (and this is not a hash)", fileDescriptor.Hash)
