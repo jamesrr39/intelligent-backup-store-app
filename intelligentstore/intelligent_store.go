@@ -92,6 +92,12 @@ func createIntelligentStoreAndNewConn(pathToBase string, nowFunc nowProvider, fs
 		return nil, fmt.Errorf("couldn't create data folder for backup objects at '%s'. Error: '%s'", objectsFolderPath, err)
 	}
 
+	locksFolderPath := filepath.Join(pathToBase, ".backup_data", "locks")
+	err = fs.MkdirAll(locksFolderPath, 0700)
+	if nil != err {
+		return nil, fmt.Errorf("couldn't create locks folder at '%s'. Error: '%s'", locksFolderPath, err)
+	}
+
 	return &IntelligentStore{pathToBase, nowFunc, fs}, nil
 }
 
