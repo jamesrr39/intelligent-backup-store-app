@@ -492,7 +492,7 @@ func Test_handleGetFileContents(t *testing.T) {
 	rRevisionExistsButFileDoesNotExist := &http.Request{
 		Method: "GET",
 		URL: &url.URL{
-			Path:     fmt.Sprintf("/docs/%d/file", tx.VersionTimestamp),
+			Path:     fmt.Sprintf("/docs/%d/file", tx.Revision.VersionTimestamp),
 			RawQuery: fmt.Sprintf("relativePath=notexist_%s", fileName),
 		},
 	}
@@ -504,7 +504,7 @@ func Test_handleGetFileContents(t *testing.T) {
 	rExists := &http.Request{
 		Method: "GET",
 		URL: &url.URL{
-			Path:     fmt.Sprintf("/docs/%d/file", tx.VersionTimestamp),
+			Path:     fmt.Sprintf("/docs/%d/file", tx.Revision.VersionTimestamp),
 			RawQuery: fmt.Sprintf("relativePath=%s", url.QueryEscape(fileName)),
 		},
 	}

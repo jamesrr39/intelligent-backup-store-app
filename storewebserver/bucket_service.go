@@ -100,7 +100,7 @@ func (s *BucketService) handleGetAllBuckets(w http.ResponseWriter, r *http.Reque
 			latestRevisionTs = &latestRevision.VersionTimestamp
 		}
 
-		bucketsSummaries = append(bucketsSummaries, &bucketSummary{bucket.BucketName, latestRevisionTs})
+		bucketsSummaries = append(bucketsSummaries, &bucketSummary{bucket.Name, latestRevisionTs})
 	}
 
 	err = json.NewEncoder(w).Encode(bucketsSummaries)
@@ -208,8 +208,6 @@ func (s *BucketService) handleGetRevision(w http.ResponseWriter, r *http.Request
 
 	files := []*intelligentstore.FileDescriptor{}
 
-	log.Printf("rootDir: '%s'\n", rootDir)
-
 	type subDirInfoMap map[string]int64 // map[name]nestedFileCount
 	dirnames := subDirInfoMap{}         // dirname[nested file count]
 	for _, file := range allFiles {
@@ -300,7 +298,7 @@ func (s *BucketService) handleCreateRevision(w http.ResponseWriter, r *http.Requ
 		http.Error(w, "couldn't start a transaction. Error: "+err.Error(), 500)
 		return
 	}
-	s.openTransactionsMap[bucket.BucketName+"__"+strconv.FormatInt(int64(transaction.VersionTimestamp), 10)] = transaction
+	s.openTransactionsMap[bucket.Name+"__"+strconv.FormatInt(int64(transaction.Revision.VersionTimestamp), 10)] = transaction
 
 	var relativePaths []string
 	for _, relativePath := range transaction.GetRelativePathsRequired() {
@@ -308,7 +306,7 @@ func (s *BucketService) handleCreateRevision(w http.ResponseWriter, r *http.Requ
 	}
 
 	openTxReponse := &protofiles.OpenTxResponse{
-		RevisionID:            int64(transaction.VersionTimestamp),
+		RevisionID:            int64(transaction.Revision.VersionTimestamp),
 		RequiredRelativePaths: relativePaths,
 	}
 
@@ -323,7 +321,7 @@ func (s *BucketService) handleCreateRevision(w http.ResponseWriter, r *http.Requ
 		log.Printf(
 			"failed to send a response back to the client for files required to open transaction. Bucket: '%s', Revision: '%d'. Error: %s\n",
 			bucketName,
-			transaction.VersionTimestamp,
+			transaction.Revision.VersionTimestamp,
 			err)
 	}
 }
@@ -344,9 +342,9 @@ func (s *BucketService) handleUploadFile(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	transaction := s.openTransactionsMap[bucket.BucketName+"__"+revisionTsString]
+	transaction := s.openTransactionsMap[bucket.Name+"__"+revisionTsString]
 	if nil == transaction {
-		http.Error(w, fmt.Sprintf("there is no open transaction for bucket %s and revisionTs %s", bucket.BucketName, revisionTsString), 400)
+		http.Error(w, fmt.Sprintf("there is no open transaction for bucket %s and revisionTs %s", bucket.Name, revisionTsString), 400)
 		return
 	}
 
@@ -361,6 +359,7 @@ func (s *BucketService) handleUploadFile(w http.ResponseWriter, r *http.Request)
 	err = proto.Unmarshal(bodyBytes, &uploadedFile)
 	if nil != err {
 		http.Error(w, fmt.Sprintf("couldn't unmarshal message. Error: '%s'", err), 400)
+		return
 	}
 
 	err = transaction.BackupFile(
@@ -393,7 +392,7 @@ func (s *BucketService) handleCommitTransaction(w http.ResponseWriter, r *http.R
 
 	transaction := s.openTransactionsMap[bucketName+"__"+revisionTsString]
 	if nil == transaction {
-		http.Error(w, fmt.Sprintf("there is no open transaction for bucket %s and revisionTs %s", bucket.BucketName, revisionTsString), 400)
+		http.Error(w, fmt.Sprintf("there is no open transaction for bucket %s and revisionTs %s", bucket.Name, revisionTsString), 400)
 		return
 	}
 
@@ -454,7 +453,7 @@ func (s *BucketService) handleUploadHashes(w http.ResponseWriter, r *http.Reques
 
 	transaction := s.openTransactionsMap[bucketName+"__"+revisionTsString]
 	if nil == transaction {
-		http.Error(w, fmt.Sprintf("there is no open transaction for bucket %s and revisionTs %s", bucket.BucketName, revisionTsString), 400)
+		http.Error(w, fmt.Sprintf("there is no open transaction for bucket %s and revisionTs %s", bucket.Name, revisionTsString), 400)
 		return
 	}
 

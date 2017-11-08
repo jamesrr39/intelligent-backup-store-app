@@ -19,8 +19,9 @@ import (
 
 type TransactionStage int
 
+// Represents different stages in the transaction
 const (
-	TransactionStageAwaitingFileHashes TransactionStage = iota + 1
+	TransactionStageAwaitingFileHashes TransactionStage = iota
 	TransactionStageReadyToUploadFiles
 	TransactionStageCommitted
 	TransactionStageAborted
@@ -41,7 +42,7 @@ func (transaction *Transaction) checkStage(expectedStages ...TransactionStage) e
 			return nil
 		}
 
-		expectedStageName := transactionStages[expectedStage-1]
+		expectedStageName := transactionStages[expectedStage]
 
 		if expectedStagesString == "" {
 			expectedStagesString = expectedStageName
@@ -52,14 +53,14 @@ func (transaction *Transaction) checkStage(expectedStages ...TransactionStage) e
 
 	return fmt.Errorf("expected transaction to be in stage '%s' but it was in stage '%s'",
 		expectedStagesString,
-		transactionStages[transaction.stage-1],
+		transactionStages[transaction.stage],
 	)
 }
 
 var ErrFileNotRequiredForTransaction = errors.New("hash is not scheduled for upload, or has already been uploaded")
 
 type Transaction struct {
-	*Revision
+	Revision                        *Revision
 	FilesInVersion                  []*FileDescriptor
 	fileInfosMissingHashes          map[RelativePath]*FileInfo
 	isFileScheduledForUploadAlready map[Hash]bool
@@ -79,7 +80,7 @@ func NewTransaction(revision *Revision, fileInfos []*FileInfo) (*Transaction, er
 
 	var previousRevisionMap map[RelativePath]*FileDescriptor
 
-	previousRevision, err := revision.Bucket.GetLatestRevision()
+	previousRevision, err := revision.bucket.GetLatestRevision()
 	if nil != err {
 		if err != ErrNoRevisionsForBucket {
 			return nil, err
@@ -156,6 +157,8 @@ func (transaction *Transaction) BackupFile(sourceFile io.Reader) error {
 		return err
 	}
 
+	fs := transaction.Revision.bucket.store.fs
+
 	sourceAsBytes, err := ioutil.ReadAll(sourceFile)
 	if nil != err {
 		return err
@@ -171,7 +174,7 @@ func (transaction *Transaction) BackupFile(sourceFile io.Reader) error {
 	}
 
 	filePath := filepath.Join(
-		transaction.StoreBasePath,
+		transaction.Revision.bucket.store.StoreBasePath,
 		".backup_data",
 		"objects",
 		hash.FirstChunk(),
@@ -179,7 +182,7 @@ func (transaction *Transaction) BackupFile(sourceFile io.Reader) error {
 
 	log.Printf("backing up %s into %s\n", hash, filePath)
 
-	_, err = transaction.fs.Stat(filePath)
+	_, err = fs.Stat(filePath)
 	if nil != err {
 		if !os.IsNotExist(err) {
 			// permissions issue or something.
@@ -187,19 +190,19 @@ func (transaction *Transaction) BackupFile(sourceFile io.Reader) error {
 		}
 		// file doesn't exist in store already. Write it to store.
 
-		err := transaction.fs.MkdirAll(filepath.Dir(filePath), 0700)
+		err := transaction.Revision.bucket.store.fs.MkdirAll(filepath.Dir(filePath), 0700)
 		if nil != err {
 			return err
 		}
 
 		log.Printf("writing %s to %s\n", hash, filePath)
-		err = afero.WriteFile(transaction.fs, filePath, sourceAsBytes, 0700)
+		err = afero.WriteFile(fs, filePath, sourceAsBytes, 0700)
 		if nil != err {
 			return err
 		}
 	} else {
 		// file already exists. Do a byte by byte comparision to make sure there isn't a collision
-		existingFile, err := transaction.fs.Open(filePath)
+		existingFile, err := fs.Open(filePath)
 		if nil != err {
 			return fmt.Errorf("couldn't open existing file in store at '%s'. Error: %s", filePath, err)
 		}
@@ -232,10 +235,10 @@ func (transaction *Transaction) addDescriptorToTransaction(fileDescriptor *FileD
 	}
 
 	// check if the file exists on disk
-	bucketsDirPath := filepath.Join(transaction.StoreBasePath, ".backup_data", "objects")
+	bucketsDirPath := filepath.Join(transaction.Revision.bucket.store.StoreBasePath, ".backup_data", "objects")
 
 	filePath := filepath.Join(bucketsDirPath, fileDescriptor.Hash.FirstChunk(), fileDescriptor.Hash.Remainder())
-	_, err := transaction.IntelligentStore.fs.Stat(filePath)
+	_, err := transaction.Revision.bucket.store.fs.Stat(filePath)
 	if nil != err {
 		if os.IsNotExist(err) {
 			transaction.isFileScheduledForUploadAlready[fileDescriptor.Hash] = true
@@ -266,11 +269,11 @@ func (transaction *Transaction) Commit() error {
 	}
 
 	filePath := filepath.Join(
-		transaction.Revision.Bucket.bucketPath(),
+		transaction.Revision.bucket.bucketPath(),
 		"versions",
-		strconv.FormatInt(int64(transaction.VersionTimestamp), 10))
+		strconv.FormatInt(int64(transaction.Revision.VersionTimestamp), 10))
 
-	versionContentsFile, err := transaction.fs.Create(filePath)
+	versionContentsFile, err := transaction.Revision.bucket.store.fs.Create(filePath)
 	if nil != err {
 		return fmt.Errorf("couldn't write version summary file at '%s'. Error: '%s'", filePath, err)
 	}
@@ -288,7 +291,7 @@ func (transaction *Transaction) Commit() error {
 
 	transaction.stage = TransactionStageCommitted
 
-	err = transaction.IntelligentStore.removeStoreLock()
+	err = transaction.Revision.bucket.store.removeStoreLock()
 	if nil != err {
 		return errors.Wrap(err, "couldn't remove lock file")
 	}
@@ -296,12 +299,15 @@ func (transaction *Transaction) Commit() error {
 	return nil
 }
 
+// Rollback aborts the current transaction and removes the lock.
+// It doesn't remove files inside the object store
 func (transaction *Transaction) Rollback() error {
-	if err := transaction.checkStage(TransactionStageAwaitingFileHashes, TransactionStageReadyToUploadFiles); nil != err {
+	err := transaction.checkStage(TransactionStageAwaitingFileHashes, TransactionStageReadyToUploadFiles)
+	if nil != err {
 		return err
 	}
 
-	err := transaction.IntelligentStore.removeStoreLock()
+	err = transaction.Revision.bucket.store.removeStoreLock()
 	if nil != err {
 		return errors.Wrap(err, "couldn't remove lock file")
 	}
@@ -309,6 +315,7 @@ func (transaction *Transaction) Rollback() error {
 	return nil
 }
 
+// GetHashesForRequiredContent calculates which pieces of content with these hashes are required for the transaction
 func (transaction *Transaction) GetHashesForRequiredContent() []Hash {
 	var hashes []Hash
 

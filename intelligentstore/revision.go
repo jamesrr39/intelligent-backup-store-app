@@ -20,14 +20,14 @@ func (r RevisionVersion) String() string {
 
 // Revision represents a revision of a set of files
 type Revision struct {
-	*Bucket          `json:"-"`
+	bucket           *Bucket
 	VersionTimestamp RevisionVersion `json:"versionTimestamp"`
 }
 
 // GetFilesInRevision gets a list of files in this revision
 func (r *Revision) GetFilesInRevision() ([]*FileDescriptor, error) {
-	filePath := filepath.Join(r.bucketPath(), "versions", strconv.FormatInt(int64(r.VersionTimestamp), 10))
-	revisionDataFile, err := r.fs.Open(filePath)
+	filePath := filepath.Join(r.bucket.bucketPath(), "versions", strconv.FormatInt(int64(r.VersionTimestamp), 10))
+	revisionDataFile, err := r.bucket.store.fs.Open(filePath)
 	if nil != err {
 		return nil, fmt.Errorf("couldn't open revision data file at '%s'. Error: '%s'", filePath, err)
 	}
@@ -50,7 +50,7 @@ func (r *Revision) GetFileContentsInRevision(relativePath RelativePath) (io.Read
 
 	for _, fileDescriptor := range fileDescriptors {
 		if fileDescriptor.RelativePath == relativePath {
-			return r.GetObjectByHash(fileDescriptor.Hash)
+			return r.bucket.store.GetObjectByHash(fileDescriptor.Hash)
 		}
 	}
 

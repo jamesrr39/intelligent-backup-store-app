@@ -25,7 +25,7 @@ func Test_Begin(t *testing.T) {
 	transaction, err := bucket.Begin(nil)
 	require.Nil(t, err)
 
-	assert.Equal(t, int64(946782245), int64(transaction.VersionTimestamp))
+	assert.Equal(t, int64(946782245), int64(transaction.Revision.VersionTimestamp))
 
 	year = 2001
 
@@ -40,7 +40,7 @@ func Test_Begin(t *testing.T) {
 	transaction2, err := bucket.Begin(nil)
 	require.Nil(t, err)
 
-	assert.NotEqual(t, transaction.VersionTimestamp, transaction2.VersionTimestamp)
+	assert.NotEqual(t, transaction.Revision.VersionTimestamp, transaction2.Revision.VersionTimestamp)
 }
 
 func Test_bucketPath(t *testing.T) {

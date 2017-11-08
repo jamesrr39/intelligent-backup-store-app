@@ -117,7 +117,7 @@ func (s *IntelligentStore) GetAllBuckets() ([]*Bucket, error) {
 	}
 
 	for _, bucket := range buckets {
-		bucket.IntelligentStore = s
+		bucket.store = s
 	}
 
 	return buckets, nil
@@ -133,8 +133,8 @@ func (s *IntelligentStore) GetBucketByName(bucketName string) (*Bucket, error) {
 	}
 
 	for _, bucket := range buckets {
-		if bucketName == bucket.BucketName {
-			bucket.IntelligentStore = s
+		if bucketName == bucket.Name {
+			bucket.store = s
 			return bucket, nil
 		}
 	}
@@ -152,7 +152,7 @@ func (s *IntelligentStore) CreateBucket(bucketName string) (*Bucket, error) {
 
 	highestID := int64(0)
 	for _, bucket := range buckets {
-		if bucketName == bucket.BucketName {
+		if bucketName == bucket.Name {
 			return nil, ErrBucketNameAlreadyTaken
 		}
 

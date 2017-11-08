@@ -63,12 +63,12 @@ func Test_GetBucketByName(t *testing.T) {
 	bucket, err := mockStore.IntelligentStore.CreateBucket("test bucket")
 	require.Nil(t, err)
 	assert.Equal(t, int64(1), bucket.ID)
-	assert.Equal(t, "test bucket", bucket.BucketName)
+	assert.Equal(t, "test bucket", bucket.Name)
 
 	fetchedBucket, err := mockStore.IntelligentStore.GetBucketByName("test bucket")
 	require.Nil(t, err)
 	assert.Equal(t, int64(1), fetchedBucket.ID)
-	assert.Equal(t, "test bucket", fetchedBucket.BucketName)
+	assert.Equal(t, "test bucket", fetchedBucket.Name)
 }
 
 func Test_CreateBucket(t *testing.T) {
@@ -77,12 +77,12 @@ func Test_CreateBucket(t *testing.T) {
 	bucket1, err := mockStore.IntelligentStore.CreateBucket("test bucket")
 	require.Nil(t, err)
 	assert.Equal(t, int64(1), bucket1.ID)
-	assert.Equal(t, "test bucket", bucket1.BucketName)
+	assert.Equal(t, "test bucket", bucket1.Name)
 
 	bucket2, err := mockStore.IntelligentStore.CreateBucket("test bucket 2")
 	require.Nil(t, err)
 	assert.Equal(t, int64(2), bucket2.ID)
-	assert.Equal(t, "test bucket 2", bucket2.BucketName)
+	assert.Equal(t, "test bucket 2", bucket2.Name)
 
 	bucket3, err := mockStore.IntelligentStore.CreateBucket("test bucket")
 	require.Nil(t, bucket3)

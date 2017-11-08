@@ -114,7 +114,7 @@ func main() {
 				latestRevDisplay = time.Unix(int64(latestRevision.VersionTimestamp), 0).Format(time.ANSIC)
 			}
 
-			fmt.Printf("%s | %s\n", bucket.BucketName, latestRevDisplay)
+			fmt.Printf("%s | %s\n", bucket.Name, latestRevDisplay)
 		}
 
 		return nil

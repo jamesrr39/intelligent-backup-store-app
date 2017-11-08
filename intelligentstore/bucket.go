@@ -21,16 +21,16 @@ var (
 
 // Bucket represents an organisational area of the Store.
 type Bucket struct {
-	*IntelligentStore `json:"-"`
-	ID                int64  `json:"id"`
-	BucketName        string `json:"name"`
+	store *IntelligentStore
+	ID    int64  `json:"id"`
+	Name  string `json:"name"`
 }
 
 // Begin creates a new Transaction to create a new revision of files in the Bucket.
 func (bucket *Bucket) Begin(fileInfos []*FileInfo) (*Transaction, error) {
-	versionTimestamp := bucket.nowProvider().Unix()
+	versionTimestamp := bucket.store.nowProvider().Unix()
 
-	err := bucket.IntelligentStore.acquireStoreLock(fmt.Sprintf("bucket: %s", bucket.BucketName))
+	err := bucket.store.acquireStoreLock(fmt.Sprintf("bucket: %s", bucket.Name))
 	if nil != err {
 		return nil, err
 	}
@@ -38,7 +38,7 @@ func (bucket *Bucket) Begin(fileInfos []*FileInfo) (*Transaction, error) {
 	revision := &Revision{bucket, RevisionVersion(versionTimestamp)}
 	tx, err := NewTransaction(revision, fileInfos)
 	if nil != err {
-		removeStockLockErr := bucket.IntelligentStore.removeStoreLock()
+		removeStockLockErr := bucket.store.removeStoreLock()
 		if nil != removeStockLockErr {
 			return nil, errors.Errorf("couldn't start a transaction and remove Stock lock. Start transaction error: '%s'. Remove Store lock error: '%s'", err, removeStockLockErr)
 		}
@@ -49,7 +49,7 @@ func (bucket *Bucket) Begin(fileInfos []*FileInfo) (*Transaction, error) {
 }
 
 func (bucket *Bucket) bucketPath() string {
-	return filepath.Join(bucket.StoreBasePath, ".backup_data", "buckets", strconv.FormatInt(bucket.ID, 10))
+	return filepath.Join(bucket.store.StoreBasePath, ".backup_data", "buckets", strconv.FormatInt(bucket.ID, 10))
 }
 
 func isValidBucketName(name string) error {
@@ -75,7 +75,7 @@ var ErrNoRevisionsForBucket = errors.New("no revisions for this bucket yet")
 func (bucket *Bucket) GetLatestRevision() (*Revision, error) {
 	versionsDirPath := filepath.Join(bucket.bucketPath(), "versions")
 	versionsFileInfos, err := afero.ReadDir(
-		bucket.IntelligentStore.fs,
+		bucket.store.fs,
 		versionsDirPath)
 	if nil != err {
 		return nil, err
@@ -89,7 +89,7 @@ func (bucket *Bucket) GetLatestRevision() (*Revision, error) {
 	for _, fileInfo := range versionsFileInfos {
 		ts, err := strconv.ParseInt(fileInfo.Name(), 10, 64)
 		if nil != err {
-			return nil, fmt.Errorf("couldn't understand revision '%s' of bucket '%s'. Error: '%s'", fileInfo.Name(), bucket.BucketName, err)
+			return nil, fmt.Errorf("couldn't understand revision '%s' of bucket '%s'. Error: '%s'", fileInfo.Name(), bucket.Name, err)
 		}
 
 		if ts > highestTs {
@@ -105,7 +105,7 @@ func (bucket *Bucket) GetLatestRevision() (*Revision, error) {
 func (bucket *Bucket) GetRevisions() ([]*Revision, error) {
 	versionsFolderPath := filepath.Join(bucket.bucketPath(), "versions")
 
-	versionsFileInfos, err := afero.ReadDir(bucket.fs, versionsFolderPath)
+	versionsFileInfos, err := afero.ReadDir(bucket.store.fs, versionsFolderPath)
 	if nil != err {
 		return nil, err
 	}
@@ -128,7 +128,7 @@ var ErrRevisionDoesNotExist = errors.New("revision doesn't exist")
 func (bucket *Bucket) GetRevision(revisionTimeStamp RevisionVersion) (*Revision, error) {
 	versionsFolderPath := filepath.Join(bucket.bucketPath(), "versions")
 
-	_, err := bucket.fs.Stat(filepath.Join(versionsFolderPath, revisionTimeStamp.String()))
+	_, err := bucket.store.fs.Stat(filepath.Join(versionsFolderPath, revisionTimeStamp.String()))
 	if nil != err {
 		if os.IsNotExist(err) {
 			return nil, ErrRevisionDoesNotExist
