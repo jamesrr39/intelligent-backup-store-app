@@ -87,12 +87,12 @@ func (c *WebUploadClient) UploadToStore() error {
 
 func (c *WebUploadClient) fetchRequiredHashes(revisionVersion intelligentstore.RevisionVersion, relativePathsWithHashes []*intelligentstore.RelativePathWithHash) ([]intelligentstore.Hash, error) {
 	fetchRequiredHashesRequestProto := &protofiles.GetRequiredHashesRequest{
-		RelativePathAndHash: nil,
+		RelativePathsAndHashes: nil,
 	}
 
 	for _, relativePathWithHash := range relativePathsWithHashes {
-		fetchRequiredHashesRequestProto.RelativePathAndHash = append(
-			fetchRequiredHashesRequestProto.RelativePathAndHash,
+		fetchRequiredHashesRequestProto.RelativePathsAndHashes = append(
+			fetchRequiredHashesRequestProto.RelativePathsAndHashes,
 			&protofiles.RelativePathAndHashProto{
 				RelativePath: string(relativePathWithHash.RelativePath),
 				Hash:         string(relativePathWithHash.Hash),

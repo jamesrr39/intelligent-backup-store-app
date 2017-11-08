@@ -26,7 +26,7 @@ message OpenTxResponse {
 }
 
 message GetRequiredHashesRequest {
-  repeated RelativePathAndHashProto relativePathAndHash = 1; // FIXME pluralise name
+  repeated RelativePathAndHashProto relativePathsAndHashes = 1;
 }
 
 message GetRequiredHashesResponse {

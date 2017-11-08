@@ -239,7 +239,7 @@ func Test_handleUploadFile(t *testing.T) {
 	require.Nil(t, err)
 
 	hashesRequestProto := &protofiles.GetRequiredHashesRequest{
-		RelativePathAndHash: []*protofiles.RelativePathAndHashProto{
+		RelativePathsAndHashes: []*protofiles.RelativePathAndHashProto{
 			&protofiles.RelativePathAndHashProto{
 				RelativePath: string(descriptor.RelativePath),
 				Hash:         string(descriptor.Hash),
@@ -367,7 +367,7 @@ func Test_handleCommitTransaction(t *testing.T) {
 	require.Equal(t, string(descriptor.RelativePath), openTxResponse.GetRequiredRelativePaths()[0])
 
 	getRequiredHashesBytes, err := proto.Marshal(&protofiles.GetRequiredHashesRequest{
-		RelativePathAndHash: []*protofiles.RelativePathAndHashProto{
+		RelativePathsAndHashes: []*protofiles.RelativePathAndHashProto{
 			&protofiles.RelativePathAndHashProto{
 				RelativePath: string(descriptor.RelativePath),
 				Hash:         string(descriptor.Hash),

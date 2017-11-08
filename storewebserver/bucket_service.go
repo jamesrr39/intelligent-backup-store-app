@@ -165,6 +165,9 @@ func (s *BucketService) getRevision(bucketName, revisionTsString string) (*intel
 	var revision *intelligentstore.Revision
 	if "latest" == revisionTsString {
 		revision, err = bucket.GetLatestRevision()
+		if intelligentstore.ErrNoRevisionsForBucket == err {
+			return nil, NewHTTPError(err, 404)
+		}
 	} else {
 		var revisionTimestamp int64
 		revisionTimestamp, err = strconv.ParseInt(revisionTsString, 10, 64)
@@ -177,6 +180,7 @@ func (s *BucketService) getRevision(bucketName, revisionTsString string) (*intel
 		if err == intelligentstore.ErrRevisionDoesNotExist {
 			return nil, NewHTTPError(err, 404)
 		}
+
 		return nil, NewHTTPError(err, 500)
 	}
 	return revision, nil
@@ -464,7 +468,7 @@ func (s *BucketService) handleUploadHashes(w http.ResponseWriter, r *http.Reques
 	err = proto.Unmarshal(body, &getRequiredHashesRequest)
 
 	var relativePathsWithHashes []*intelligentstore.RelativePathWithHash
-	for _, relativePathAndHashProto := range getRequiredHashesRequest.GetRelativePathAndHash() {
+	for _, relativePathAndHashProto := range getRequiredHashesRequest.GetRelativePathsAndHashes() {
 		relativePathsWithHashes = append(relativePathsWithHashes, &intelligentstore.RelativePathWithHash{
 			RelativePath: intelligentstore.NewRelativePath(relativePathAndHashProto.GetRelativePath()),
 			Hash:         intelligentstore.Hash(relativePathAndHashProto.GetHash()),
