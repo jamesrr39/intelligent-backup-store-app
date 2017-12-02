@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
 	"github.com/spf13/afero"
 )
 
@@ -16,16 +17,18 @@ type LocalExporter struct {
 	BucketName      string
 	RevisionVersion *intelligentstore.RevisionVersion // nil = latest version
 	ExportDir       string
+	Matcher         excludesmatcher.Matcher
 	fs              afero.Fs
 	symlinker       func(oldName, newName string) error
 }
 
-func NewLocalExporter(store *intelligentstore.IntelligentStore, bucketName string, exportDir string, revisionVersion *intelligentstore.RevisionVersion) *LocalExporter {
+func NewLocalExporter(store *intelligentstore.IntelligentStore, bucketName string, exportDir string, revisionVersion *intelligentstore.RevisionVersion, matcher excludesmatcher.Matcher) *LocalExporter {
 	return &LocalExporter{
 		Store:           store,
 		BucketName:      bucketName,
 		RevisionVersion: revisionVersion,
 		ExportDir:       exportDir,
+		Matcher:         matcher,
 		fs:              afero.NewOsFs(),
 		symlinker:       os.Symlink,
 	}
@@ -59,6 +62,10 @@ func (exporter *LocalExporter) Export() error {
 	}
 
 	for _, fileInRevision := range filesInRevision {
+		if nil != exporter.Matcher && !exporter.Matcher.IsIncluded(fileInRevision.GetFileInfo().RelativePath) {
+			continue
+		}
+
 		err = exporter.writeFileToFs(fileInRevision)
 		if nil != err {
 			return err

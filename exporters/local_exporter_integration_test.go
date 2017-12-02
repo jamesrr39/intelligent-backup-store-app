@@ -23,7 +23,7 @@ func Test_LocalExporterIntegration(t *testing.T) {
 	regularFile := intelligentstore.NewRegularFileDescriptorWithContents(t, "a.txt", time.Unix(0, 0), []byte("file a contents"))
 	storetest.CreateRevision(t, store.Store, bucket, []*intelligentstore.RegularFileDescriptorWithContents{regularFile})
 
-	exporter := NewLocalExporter(store.Store, bucket.Name, store.ExportDir, nil)
+	exporter := NewLocalExporter(store.Store, bucket.Name, store.ExportDir, nil, nil)
 
 	err := exporter.Export()
 	require.Nil(t, err)

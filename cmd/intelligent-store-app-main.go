@@ -122,8 +122,8 @@ func main() {
 	})
 
 	listBucketRevisionsCommand := kingpin.Command("list-revisions", "produce a listing of all the revisions in a bucket")
+	listBucketRevisionsStoreLocation := listBucketRevisionsCommand.Arg("store location", "location of the store").Required().String()
 	listBucketRevisionsBucketName := listBucketRevisionsCommand.Arg("bucket name", "name of the bucket to back up into").Required().String()
-	listBucketRevisionsStoreLocation := listBucketRevisionsCommand.Arg("store location", "location of the store").Default(".").String()
 	listBucketRevisionsCommand.Action(func(ctx *kingpin.ParseContext) error {
 		store, err := intelligentstore.NewIntelligentStoreConnToExisting(
 			*listBucketRevisionsStoreLocation)
@@ -151,13 +151,14 @@ func main() {
 	})
 
 	exportCommand := kingpin.Command("export", "export files from the store to the local file system")
-	exportCommandStoreLocation := exportCommand.Arg("store location", "location of the store").Default(".").String()
+	exportCommandStoreLocation := exportCommand.Arg("store location", "location of the store").Required().String()
 	exportCommandBucketName := exportCommand.Arg("bucket name", "name of the bucket to export from").Required().String()
 	exportCommandExportDir := exportCommand.Arg("export folder", "where to export files to").Required().String()
 	exportCommandRevisionVersion := exportCommand.Flag(
 		"revision-version",
 		"specify a revision version to export. If left blank, the latest revision is used. See the program's help command for information about listing revisions",
 	).Int64()
+	exportCommandFilePathPrefix := exportCommand.Flag("with-prefix", "prefix of files to be exported").String()
 	exportCommand.Action(func(ctx *kingpin.ParseContext) error {
 		store, err := intelligentstore.NewIntelligentStoreConnToExisting(
 			*exportCommandStoreLocation)
@@ -167,12 +168,17 @@ func main() {
 		}
 
 		var version *intelligentstore.RevisionVersion
-		if nil != exportCommandRevisionVersion {
+		if 0 != *exportCommandRevisionVersion {
 			r := intelligentstore.RevisionVersion(*exportCommandRevisionVersion)
 			version = &r
 		}
 
-		err = exporters.NewLocalExporter(store, *exportCommandBucketName, *exportCommandExportDir, version).Export()
+		var prefixMatcher excludesmatcher.Matcher
+		if "" == *exportCommandFilePathPrefix {
+			prefixMatcher = excludesmatcher.NewSimplePrefixMatcher(*exportCommandFilePathPrefix)
+		}
+		log.Printf("VERSION: %v\n", version)
+		err = exporters.NewLocalExporter(store, *exportCommandBucketName, *exportCommandExportDir, version, prefixMatcher).Export()
 		if nil != err {
 			return err
 		}
@@ -182,8 +188,8 @@ func main() {
 	})
 
 	startWebappCommand := kingpin.Command("start-webapp", "start a webapplication")
-	startWebappAddr := startWebappCommand.Flag("address", "custom address to expose the webapp to. Example: ':8081': expose to everyone on port 8081").Default("localhost:8080").String()
 	startWebappStoreLocation := startWebappCommand.Arg("store location", "location of the store").Default(".").String()
+	startWebappAddr := startWebappCommand.Flag("address", "custom address to expose the webapp to. Example: ':8081': expose to everyone on port 8081").Default("localhost:8080").String()
 	startWebappCommand.Action(func(ctx *kingpin.ParseContext) error {
 		store, err := intelligentstore.NewIntelligentStoreConnToExisting(
 			*startWebappStoreLocation)
