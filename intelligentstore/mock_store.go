@@ -38,7 +38,7 @@ func NewMockStore(t *testing.T, nowFunc nowProvider) *MockStore {
 	err := fs.Mkdir(path, 0700)
 	require.Nil(t, err)
 
-	store, err := createIntelligentStoreAndNewConn(path, nowFunc, fs)
+	store, err := CreateTestStoreAndNewConn(path, nowFunc, fs)
 	require.Nil(t, err)
 
 	return &MockStore{store, path, fs}

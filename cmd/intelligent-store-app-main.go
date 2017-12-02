@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jamesrr39/intelligent-backup-store-app/exporters"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
 	"github.com/jamesrr39/intelligent-backup-store-app/storewebserver"
@@ -143,6 +144,37 @@ func main() {
 
 		for _, revision := range revisions {
 			fmt.Println(time.Unix(int64(revision.VersionTimestamp), 0).Format(time.ANSIC))
+		}
+
+		return nil
+
+	})
+
+	exportCommand := kingpin.Command("export", "export files from the store to the local file system")
+	exportCommandStoreLocation := exportCommand.Arg("store location", "location of the store").Default(".").String()
+	exportCommandBucketName := exportCommand.Arg("bucket name", "name of the bucket to export from").Required().String()
+	exportCommandExportDir := exportCommand.Arg("export folder", "where to export files to").Required().String()
+	exportCommandRevisionVersion := exportCommand.Flag(
+		"revision-version",
+		"specify a revision version to export. If left blank, the latest revision is used. See the program's help command for information about listing revisions",
+	).Int64()
+	exportCommand.Action(func(ctx *kingpin.ParseContext) error {
+		store, err := intelligentstore.NewIntelligentStoreConnToExisting(
+			*exportCommandStoreLocation)
+
+		if nil != err {
+			return err
+		}
+
+		var version *intelligentstore.RevisionVersion
+		if nil != exportCommandRevisionVersion {
+			r := intelligentstore.RevisionVersion(*exportCommandRevisionVersion)
+			version = &r
+		}
+
+		err = exporters.NewLocalExporter(store, *exportCommandBucketName, *exportCommandExportDir, version).Export()
+		if nil != err {
+			return err
 		}
 
 		return nil

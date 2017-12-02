@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore"
+	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 )
 
@@ -15,6 +16,7 @@ type OsFsTestStore struct {
 	Store       *intelligentstore.IntelligentStore
 	BasePath    string
 	SourcesPath string
+	ExportDir   string
 }
 
 // TextFile is a simple convience regular file type
@@ -39,10 +41,10 @@ func CreateOsFsTestStore(t *testing.T) *OsFsTestStore {
 	err = os.MkdirAll(storePath, 0700)
 	require.Nil(t, err)
 
-	store, err := intelligentstore.CreateIntelligentStoreAndNewConn(storePath)
+	store, err := intelligentstore.CreateTestStoreAndNewConn(storePath, MockNowProvider, afero.NewOsFs())
 	require.Nil(t, err)
 
-	return &OsFsTestStore{store, tempdir, filepath.Join(tempdir, "sources")}
+	return &OsFsTestStore{store, tempdir, filepath.Join(tempdir, "sources"), filepath.Join(tempdir, "outDir")}
 }
 
 // Close cleans up an CreateOsFsTestStore after the tests have finished

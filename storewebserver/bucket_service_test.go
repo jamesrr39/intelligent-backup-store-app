@@ -142,6 +142,7 @@ func Test_handleCreateRevision(t *testing.T) {
 				RelativePath: string(aFileDescriptor.RelativePath),
 				ModTime:      aFileDescriptor.ModTime.Unix(),
 				Size:         aFileDescriptor.Size,
+				FileType:     protofiles.FileType(aFileDescriptor.Type),
 			},
 		},
 	}
@@ -186,6 +187,7 @@ func Test_handleUploadFile(t *testing.T) {
 				RelativePath: string(descriptor.RelativePath),
 				ModTime:      descriptor.ModTime.Unix(),
 				Size:         descriptor.Size,
+				FileType:     protofiles.FileType(descriptor.Type),
 			},
 		},
 	}
@@ -311,6 +313,7 @@ func Test_handleCommitTransaction(t *testing.T) {
 				RelativePath: string(descriptor.RelativePath),
 				ModTime:      descriptor.ModTime.Unix(),
 				Size:         descriptor.Size,
+				FileType:     protofiles.FileType(descriptor.Type),
 			},
 		},
 	}

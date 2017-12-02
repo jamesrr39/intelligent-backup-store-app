@@ -49,6 +49,10 @@ func CreateIntelligentStoreAndNewConn(pathToBase string) (*IntelligentStore, err
 	return createIntelligentStoreAndNewConn(pathToBase, prodNowProvider, afero.NewOsFs())
 }
 
+func CreateTestStoreAndNewConn(pathToBase string, nowFunc nowProvider, fs afero.Fs) (*IntelligentStore, error) {
+	return createIntelligentStoreAndNewConn(pathToBase, nowFunc, fs)
+}
+
 func createIntelligentStoreAndNewConn(pathToBase string, nowFunc nowProvider, fs afero.Fs) (*IntelligentStore, error) {
 	fileInfos, err := afero.ReadDir(fs, pathToBase)
 	if nil != err {

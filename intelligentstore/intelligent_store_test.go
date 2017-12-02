@@ -24,7 +24,7 @@ func Test_newIntelligentStoreConnToExisting(t *testing.T) {
 	_, err = newIntelligentStoreConnToExisting("/err", mockNowProvider, fs)
 	assert.Equal(t, ErrStoreNotInitedYet, err)
 
-	_, err = createIntelligentStoreAndNewConn("/ab", mockNowProvider, fs)
+	_, err = CreateTestStoreAndNewConn("/ab", mockNowProvider, fs)
 	require.Nil(t, err)
 
 	store, err := newIntelligentStoreConnToExisting("/ab", mockNowProvider, fs)
@@ -42,7 +42,7 @@ func Test_newIntelligentStoreConnToExisting(t *testing.T) {
 func Test_createIntelligentStoreAndNewConn(t *testing.T) {
 	fs := afero.NewMemMapFs()
 
-	store, err := createIntelligentStoreAndNewConn("/ab", mockNowProvider, fs)
+	store, err := CreateTestStoreAndNewConn("/ab", mockNowProvider, fs)
 	require.Nil(t, store)
 	assert.Equal(t, "couldn't get a file listing for '/ab'. Error: 'open /ab: file does not exist'", err.Error())
 
@@ -52,7 +52,7 @@ func Test_createIntelligentStoreAndNewConn(t *testing.T) {
 	err = afero.WriteFile(fs, "/ab/myfile.txt", []byte("test data"), 0600)
 	require.Nil(t, err)
 
-	store, err = createIntelligentStoreAndNewConn("/ab", mockNowProvider, fs)
+	store, err = CreateTestStoreAndNewConn("/ab", mockNowProvider, fs)
 	require.Nil(t, store)
 	assert.Equal(t, "'/ab' is not an empty folder. Creating a new store requires an empty folder. Please create a new folder and create the store in there", err.Error())
 }
