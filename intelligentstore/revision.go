@@ -25,7 +25,7 @@ type Revision struct {
 }
 
 // GetFilesInRevision gets a list of files in this revision
-func (r *Revision) GetFilesInRevision() ([]*RegularFileDescriptor, error) {
+func (r *Revision) GetFilesInRevision() ([]FileDescriptor, error) {
 	filePath := filepath.Join(r.bucket.bucketPath(), "versions", strconv.FormatInt(int64(r.VersionTimestamp), 10))
 	revisionDataFile, err := r.bucket.store.fs.Open(filePath)
 	if nil != err {
@@ -33,7 +33,7 @@ func (r *Revision) GetFilesInRevision() ([]*RegularFileDescriptor, error) {
 	}
 	defer revisionDataFile.Close()
 
-	var filesInVersion []*RegularFileDescriptor
+	var filesInVersion []FileDescriptor
 	err = gob.NewDecoder(revisionDataFile).Decode(&filesInVersion)
 	if nil != err {
 		return nil, err
@@ -49,16 +49,33 @@ func (r *Revision) GetFileContentsInRevision(relativePath RelativePath) (io.Read
 	}
 
 	for _, fileDescriptor := range fileDescriptors {
-		if fileDescriptor.RelativePath == relativePath {
-			return r.bucket.store.GetObjectByHash(fileDescriptor.Hash)
+		if fileDescriptor.GetFileInfo().RelativePath == relativePath {
+			fileType := fileDescriptor.GetFileInfo().Type
+
+			switch fileType {
+			case FileTypeRegular:
+				fd, ok := fileDescriptor.(*RegularFileDescriptor)
+				if !ok {
+					return nil, errors.New("bad type assertion (expected RegularFileDescriptor)")
+				}
+				return r.bucket.store.GetObjectByHash(fd.Hash)
+			case FileTypeSymlink:
+				fd, ok := fileDescriptor.(*SymlinkFileDescriptor)
+				if !ok {
+					return nil, errors.New("bad type assertion (expected SymlinkFileDescriptor)")
+				}
+				return r.GetFileContentsInRevision(NewRelativePath(fd.Dest))
+			default:
+				return nil, fmt.Errorf("get contents of file type %d (%s) unsupported", fileType, fileType)
+			}
 		}
 	}
 
 	return nil, ErrNoFileWithThisRelativePathInRevision
 }
 
-func (r *Revision) ToFileDescriptorMapByName() (map[RelativePath]*RegularFileDescriptor, error) {
-	m := make(map[RelativePath]*RegularFileDescriptor)
+func (r *Revision) ToFileDescriptorMapByName() (map[RelativePath]FileDescriptor, error) {
+	m := make(map[RelativePath]FileDescriptor)
 
 	filesInRevision, err := r.GetFilesInRevision()
 	if nil != err {
@@ -66,7 +83,7 @@ func (r *Revision) ToFileDescriptorMapByName() (map[RelativePath]*RegularFileDes
 	}
 
 	for _, fileInRevision := range filesInRevision {
-		m[fileInRevision.RelativePath] = fileInRevision
+		m[fileInRevision.GetFileInfo().RelativePath] = fileInRevision
 	}
 
 	return m, nil

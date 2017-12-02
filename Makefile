@@ -4,3 +4,5 @@ test:
 	go vet ./... && go test ./...
 generate_protobufs:
 	protoc --go_out=intelligentstore/protobufs proto_files/client_upload.proto
+integration_tests:
+	go test ./... -run Integration -tags=integration

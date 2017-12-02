@@ -19,6 +19,7 @@ type LocalUploader struct {
 	BackupFromLocation string
 	ExcludeMatcher     *excludesmatcher.ExcludesMatcher
 	Fs                 afero.Fs
+	linkReader         uploaders.LinkReader
 }
 
 // NewLocalUploader connects to the upload store and returns a LocalUploader
@@ -35,6 +36,7 @@ func NewLocalUploader(
 		backupFromLocation,
 		excludeMatcher,
 		afero.NewOsFs(),
+		uploaders.OsFsLinkReader,
 	}
 }
 
@@ -45,7 +47,7 @@ func (uploader *LocalUploader) UploadToStore() error {
 		// FIXME: handle abort tx on err
 	}()
 
-	fileInfosMap, err := uploaders.BuildFileInfosMap(uploader.Fs, uploader.BackupFromLocation, uploader.ExcludeMatcher)
+	fileInfosMap, err := uploaders.BuildFileInfosMap(uploader.Fs, uploader.linkReader, uploader.BackupFromLocation, uploader.ExcludeMatcher)
 	if nil != err {
 		return err
 	}
@@ -59,9 +61,39 @@ func (uploader *LocalUploader) UploadToStore() error {
 
 	requiredRelativePaths := tx.GetRelativePathsRequired()
 
-	log.Printf("%d paths required\n", len(requiredRelativePaths))
+	log.Printf("%d paths required: %s\n", len(requiredRelativePaths), requiredRelativePaths)
 
-	hashRelativePathMap, err := uploaders.BuildRelativePathsWithHashes(uploader.Fs, uploader.BackupFromLocation, requiredRelativePaths)
+	var requiredRelativePathsForHashes []intelligentstore.RelativePath
+	var symlinksWithRelativePath []*intelligentstore.SymlinkWithRelativePath
+
+	for _, requiredRelativePath := range requiredRelativePaths {
+		fileInfo := fileInfosMap[requiredRelativePath]
+
+		log.Printf("filename: %s, type: %v\n", fileInfo.RelativePath, fileInfo.Type)
+		switch fileInfo.Type {
+		case intelligentstore.FileTypeRegular:
+			requiredRelativePathsForHashes = append(requiredRelativePathsForHashes, requiredRelativePath)
+		case intelligentstore.FileTypeSymlink:
+			dest, err := uploader.linkReader(filepath.Join(uploader.BackupFromLocation, string(fileInfo.RelativePath)))
+			if nil != err {
+				return err
+			}
+			symlinksWithRelativePath = append(
+				symlinksWithRelativePath,
+				&intelligentstore.SymlinkWithRelativePath{
+					RelativePath: fileInfo.RelativePath,
+					Dest:         dest,
+				},
+			)
+		}
+	}
+
+	err = tx.ProcessSymlinks(symlinksWithRelativePath)
+	if nil != err {
+		return err
+	}
+
+	hashRelativePathMap, err := uploaders.BuildRelativePathsWithHashes(uploader.Fs, uploader.BackupFromLocation, requiredRelativePathsForHashes)
 	if nil != err {
 		return err
 	}
@@ -99,112 +131,6 @@ func (uploader *LocalUploader) begin(fileInfos []*intelligentstore.FileInfo) (*i
 
 	return bucket.Begin(fileInfos)
 }
-
-/*
-	bucket, err := uploader.BackupStore.GetBucketByName(
-		uploader.BackupBucketName)
-	if nil != err {
-		return err
-	}
-
-
-	absBackupFromLocation, err := filepath.Abs(
-		uploader.BackupFromLocation)
-	if nil != err {
-		return errors.Wrapf(err, "couldn't get the absolute filepath of '%s'", uploader.BackupFromLocation)
-	}
-
-	var fileInfos []*intelligentstore.FileInfo
-	relativePathMap := make(map[intelligentstore.RelativePath]*intelligentstore.FileInfo)
-
-	err = afero.Walk(uploader.Fs, absBackupFromLocation, func(path string, fileInfo os.FileInfo, err error) error {
-		if nil != err {
-			return err
-		}
-
-		if !fileInfo.Mode().IsRegular() {
-			// skip symlinks
-			// FIXME: support symlinks
-			return nil
-		}
-
-		relativePath := fullPathToRelative(absBackupFromLocation, path)
-		log.Printf("relativePath: '%s'\n", relativePath)
-		if uploader.ExcludeMatcher.Matches(relativePath) {
-			log.Printf("ignoring '%s' (excluded by matcher)\n", relativePath)
-			return nil
-		}
-
-		storeFileInfo := intelligentstore.NewFileInfo(
-			relativePath,
-			fileInfo.ModTime(),
-			fileInfo.Size(),
-		)
-
-		fileInfos = append(fileInfos, storeFileInfo)
-		relativePathMap[relativePath] = storeFileInfo
-
-		return nil
-	})
-	if nil != err {
-		return err
-	}
-
-	var errs []error
-	filesToUploadCount := 0
-
-	backupTx, err := bucket.Begin(fileInfos)
-	if nil != err {
-		return err
-	}
-
-	requiredRelativePaths := backupTx.GetRelativePathsRequired()
-
-	//	TODO: build relative path/hashes map here
-
-	log.Println("asked for hashes:")
-	for _, hash := range requiredHashes {
-		log.Println(hash)
-	}
-	log.Println("---")
-
-	for _, hash := range requiredHashes {
-		fileAbsolutePath := hashLocationMap[hash]
-		log.Printf("uploading %s from '%s'\n", hash, fileAbsolutePath)
-		uploadFileErr := uploader.uploadFile(backupTx, fileAbsolutePath)
-		if nil != uploadFileErr {
-			log.Printf("couldn't upload file hash %s from '%s'. Error: %s",
-				hash, fileAbsolutePath, uploadFileErr)
-			errs = append(errs, uploadFileErr)
-		}
-		filesToUploadCount++
-	}
-
-	err = backupTx.Commit()
-	if nil != err {
-		return err
-	}
-
-	if 0 != len(errs) {
-		errMessage := fmt.Sprintf("backup finished, but there were %d errors:\n", len(errs))
-
-		for _, err := range errs {
-			errMessage += err.Error() + "\n"
-		}
-
-		return errors.New(errMessage)
-	}
-
-	log.Printf("backed up %d files in %f seconds (%d were already in the store)\n",
-		len(fileDescriptors),
-		time.Now().Sub(startTime).Seconds(),
-		len(fileDescriptors)-len(requiredHashes),
-	)
-
-	return nil
-
-}
-*/
 
 func (uploader *LocalUploader) uploadFile(backupTx *intelligentstore.Transaction, relativePath intelligentstore.RelativePath) error {
 	fileAbsolutePath := filepath.Join(uploader.BackupFromLocation, string(relativePath))

@@ -2,6 +2,7 @@ package localupload
 
 import (
 	"bytes"
+	"errors"
 	"testing"
 	"time"
 
@@ -45,24 +46,28 @@ func Test_UploadToStore(t *testing.T) {
 
 	store := intelligentstore.NewMockStore(t, mockTimeProvider)
 
-	_, err = store.CreateBucket("docs")
-	require.Nil(t, err)
+	store.CreateBucket(t, "docs")
+
+	mockLinkReader := func(path string) (string, error) {
+		return "", errors.New("not implemented")
+	}
 
 	uploader := &LocalUploader{
-		store.IntelligentStore,
+		store.Store,
 		"docs",
 		"/docs",
 		excludeMatcher,
 		fs,
+		mockLinkReader,
 	}
 
 	err = uploader.UploadToStore()
 	require.Nil(t, err)
 
-	_, err = store.GetBucketByName("not existing bucket")
+	_, err = store.Store.GetBucketByName("not existing bucket")
 	assert.NotNil(t, err)
 
-	bucket, err := store.GetBucketByName("docs")
+	bucket, err := store.Store.GetBucketByName("docs")
 	require.Nil(t, err)
 
 	revisions, err := bucket.GetRevisions()
@@ -75,9 +80,9 @@ func Test_UploadToStore(t *testing.T) {
 	require.Nil(t, err)
 	assert.Len(t, fileDescriptors, 4)
 
-	fileDescriptorNameMap := make(map[intelligentstore.RelativePath]*intelligentstore.RegularFileDescriptor)
+	fileDescriptorNameMap := make(map[intelligentstore.RelativePath]intelligentstore.FileDescriptor)
 	for _, fileDescriptor := range fileDescriptors {
-		fileDescriptorNameMap[fileDescriptor.RelativePath] = fileDescriptor
+		fileDescriptorNameMap[fileDescriptor.GetFileInfo().RelativePath] = fileDescriptor
 	}
 
 	for _, testFile := range testFiles {
@@ -85,8 +90,9 @@ func Test_UploadToStore(t *testing.T) {
 			bytes.NewBuffer([]byte(testFile.contents)))
 		require.Nil(t, err)
 
-		assert.Equal(t, testFile.path, fileDescriptorNameMap[testFile.path].RelativePath)
-		assert.Equal(t, hash, fileDescriptorNameMap[testFile.path].Hash)
+		assert.Equal(t, testFile.path, fileDescriptorNameMap[testFile.path].GetFileInfo().RelativePath)
+		fileDescriptor := (fileDescriptorNameMap[testFile.path]).(*intelligentstore.RegularFileDescriptor)
+		assert.Equal(t, hash, fileDescriptor.Hash)
 	}
 
 }

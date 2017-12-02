@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -17,75 +16,38 @@ import (
 	"github.com/spf13/afero"
 )
 
-type TransactionStage int
-
-// Represents different stages in the transaction
-const (
-	TransactionStageAwaitingFileHashes TransactionStage = iota
-	TransactionStageReadyToUploadFiles
-	TransactionStageCommitted
-	TransactionStageAborted
-)
-
-var transactionStages = [...]string{
-	"Awaiting File Hashes",
-	"Ready To Upload Files",
-	"Committed",
-	"Aborted",
-}
-
-func (transaction *Transaction) checkStage(expectedStages ...TransactionStage) error {
-	var expectedStagesString string
-
-	for _, expectedStage := range expectedStages {
-		if transaction.stage == expectedStage {
-			return nil
-		}
-
-		expectedStageName := transactionStages[expectedStage]
-
-		if expectedStagesString == "" {
-			expectedStagesString = expectedStageName
-		} else {
-			expectedStagesString += (" OR " + expectedStageName)
-		}
-	}
-
-	return fmt.Errorf("expected transaction to be in stage '%s' but it was in stage '%s'",
-		expectedStagesString,
-		transactionStages[transaction.stage],
-	)
-}
-
 var ErrFileNotRequiredForTransaction = errors.New("hash is not scheduled for upload, or has already been uploaded")
 
 type Transaction struct {
 	Revision                        *Revision
-	FilesInVersion                  []*RegularFileDescriptor
+	FilesInVersion                  []FileDescriptor
 	fileInfosMissingHashes          map[RelativePath]*FileInfo
+	fileInfosMissingSymlinks        map[RelativePath]*FileInfo
 	isFileScheduledForUploadAlready map[Hash]bool
 	mu                              *sync.RWMutex
 	stage                           TransactionStage
 }
 
+// NewTransaction creates a new Transaction
 func NewTransaction(revision *Revision, fileInfos []*FileInfo) (*Transaction, error) {
 	tx := &Transaction{
 		revision,
-		[]*RegularFileDescriptor{},
+		nil,
+		make(map[RelativePath]*FileInfo),
 		make(map[RelativePath]*FileInfo),
 		make(map[Hash]bool),
 		&sync.RWMutex{},
 		TransactionStageAwaitingFileHashes,
 	}
 
-	var previousRevisionMap map[RelativePath]*RegularFileDescriptor
+	var previousRevisionMap map[RelativePath]FileDescriptor
 
 	previousRevision, err := revision.bucket.GetLatestRevision()
 	if nil != err {
 		if err != ErrNoRevisionsForBucket {
 			return nil, err
 		}
-		previousRevisionMap = make(map[RelativePath]*RegularFileDescriptor)
+		previousRevisionMap = make(map[RelativePath]FileDescriptor)
 	} else {
 		previousRevisionMap, err = previousRevision.ToFileDescriptorMapByName()
 		if nil != err {
@@ -100,16 +62,25 @@ func NewTransaction(revision *Revision, fileInfos []*FileInfo) (*Transaction, er
 
 		descriptorFromPreviousRevision := previousRevisionMap[fileInfo.RelativePath]
 		fileAlreadyExistsInStore := (nil != descriptorFromPreviousRevision &&
-			descriptorFromPreviousRevision.ModTime.Equal(fileInfo.ModTime) &&
-			descriptorFromPreviousRevision.Size == fileInfo.Size)
+			descriptorFromPreviousRevision.GetFileInfo().Type == fileInfo.Type &&
+			descriptorFromPreviousRevision.GetFileInfo().ModTime.Equal(fileInfo.ModTime) &&
+			descriptorFromPreviousRevision.GetFileInfo().Size == fileInfo.Size)
 		if fileAlreadyExistsInStore {
 			// same as previous version, so just use that
 			tx.FilesInVersion = append(tx.FilesInVersion, descriptorFromPreviousRevision)
 		} else {
 			// file not in previous version, so mark for hash calculation
-			tx.fileInfosMissingHashes[fileInfo.RelativePath] = fileInfo
+			switch fileInfo.Type {
+			case FileTypeSymlink:
+				tx.fileInfosMissingSymlinks[fileInfo.RelativePath] = fileInfo
+			case FileTypeRegular:
+				tx.fileInfosMissingHashes[fileInfo.RelativePath] = fileInfo
+			default:
+				return nil, fmt.Errorf("unknown file type: %d (%s)\n", fileInfo.Type, fileInfo.Type)
+			}
 		}
 	}
+
 	return tx, nil
 }
 
@@ -118,7 +89,39 @@ func (transaction *Transaction) GetRelativePathsRequired() []RelativePath {
 	for _, fileInfo := range transaction.fileInfosMissingHashes {
 		relativePaths = append(relativePaths, fileInfo.RelativePath)
 	}
+
+	for _, fileInfo := range transaction.fileInfosMissingSymlinks {
+		relativePaths = append(relativePaths, fileInfo.RelativePath)
+	}
 	return relativePaths
+}
+
+type SymlinkWithRelativePath struct {
+	RelativePath
+	Dest string
+}
+
+func (transaction *Transaction) ProcessSymlinks(symlinksWithRelativePaths []*SymlinkWithRelativePath) error {
+	transaction.mu.Lock() // FIXME separate locks for files & symlinks
+	defer transaction.mu.Unlock()
+	for _, symlinkWithRelativePath := range symlinksWithRelativePaths {
+		fileInfo := transaction.fileInfosMissingSymlinks[symlinkWithRelativePath.RelativePath]
+		if nil == fileInfo {
+			return fmt.Errorf("file info for '%s' not found as a symlink in the upload manifest", symlinkWithRelativePath.RelativePath)
+		}
+
+		transaction.FilesInVersion = append(
+			transaction.FilesInVersion,
+			NewSymlinkFileDescriptor(
+				fileInfo,
+				symlinkWithRelativePath.Dest,
+			),
+		)
+
+		delete(transaction.fileInfosMissingSymlinks, symlinkWithRelativePath.RelativePath)
+	}
+
+	return nil
 }
 
 // ProcessUploadHashesAndGetRequiredHashes takes the list of relative paths and hashes, and figures out which hashes need to be uploaded
@@ -136,6 +139,7 @@ func (transaction *Transaction) ProcessUploadHashesAndGetRequiredHashes(relative
 
 		fileDescriptor := NewRegularFileDescriptor(
 			NewFileInfo(
+				FileTypeRegular,
 				relativePathWithHash.RelativePath,
 				fileInfo.ModTime,
 				fileInfo.Size,
@@ -180,8 +184,6 @@ func (transaction *Transaction) BackupFile(sourceFile io.Reader) error {
 		hash.FirstChunk(),
 		hash.Remainder())
 
-	log.Printf("backing up %s into %s\n", hash, filePath)
-
 	_, err = fs.Stat(filePath)
 	if nil != err {
 		if !os.IsNotExist(err) {
@@ -195,7 +197,6 @@ func (transaction *Transaction) BackupFile(sourceFile io.Reader) error {
 			return err
 		}
 
-		log.Printf("writing %s to %s\n", hash, filePath)
 		err = afero.WriteFile(fs, filePath, sourceAsBytes, 0700)
 		if nil != err {
 			return err
@@ -257,12 +258,14 @@ func (transaction *Transaction) Commit() error {
 		return err
 	}
 
+	if 0 != len(transaction.fileInfosMissingSymlinks) {
+		return fmt.Errorf(
+			"tried to commit the transaction but there are %d symlinks left to upload",
+			len(transaction.fileInfosMissingSymlinks))
+	}
+
 	amountOfFilesRemainingToUpload := len(transaction.isFileScheduledForUploadAlready)
 	if amountOfFilesRemainingToUpload > 0 {
-		log.Println("remaining files:")
-		for hash, isScheduledForUpload := range transaction.isFileScheduledForUploadAlready {
-			log.Printf("hash: %s, %v\n", hash, isScheduledForUpload)
-		}
 		return fmt.Errorf(
 			"tried to commit the transaction but there are %d files left to upload",
 			amountOfFilesRemainingToUpload)
@@ -326,4 +329,27 @@ func (transaction *Transaction) GetHashesForRequiredContent() []Hash {
 	}
 
 	return hashes
+}
+
+func (transaction *Transaction) checkStage(expectedStages ...TransactionStage) error {
+	var expectedStagesString string
+
+	for _, expectedStage := range expectedStages {
+		if transaction.stage == expectedStage {
+			return nil
+		}
+
+		expectedStageName := transactionStages[expectedStage]
+
+		if expectedStagesString == "" {
+			expectedStagesString = expectedStageName
+		} else {
+			expectedStagesString += (" OR " + expectedStageName)
+		}
+	}
+
+	return fmt.Errorf("expected transaction to be in stage '%s' but it was in stage '%s'",
+		expectedStagesString,
+		transactionStages[transaction.stage],
+	)
 }

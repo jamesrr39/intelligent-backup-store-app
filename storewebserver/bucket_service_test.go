@@ -28,7 +28,7 @@ func testNowProvider() time.Time {
 
 func Test_handleGetAllBuckets(t *testing.T) {
 	mockStore := intelligentstore.NewMockStore(t, testNowProvider)
-	bucketService := NewBucketService(mockStore.IntelligentStore)
+	bucketService := NewBucketService(mockStore.Store)
 
 	requestURL := &url.URL{Path: "/"}
 	r1 := &http.Request{Method: "GET", URL: requestURL}
@@ -63,49 +63,19 @@ func Test_handleGetAllBuckets(t *testing.T) {
 
 func Test_handleGetRevision(t *testing.T) {
 	// create the fs, and put some test data in it
-	testFiles := []*testfile{
-		&testfile{"a.txt", "file a"},
-		&testfile{"b.txt", "file b"},
-		&testfile{"folder-1/a.txt", "file 1/a"},
-		&testfile{"folder-1/c.txt", "file 1/c"},
-	}
-
-	var fileInfos []*intelligentstore.FileInfo
-	for _, testFile := range testFiles {
-		fileInfos = append(fileInfos, testFile.toFileDescriptor(t).FileInfo)
+	testFiles := []*intelligentstore.RegularFileDescriptorWithContents{
+		intelligentstore.NewRegularFileDescriptorWithContents(t, "a.txt", time.Unix(0, 0), []byte("file a")),
+		intelligentstore.NewRegularFileDescriptorWithContents(t, "b.txt", time.Unix(0, 0), []byte("file b")),
+		intelligentstore.NewRegularFileDescriptorWithContents(t, "folder-1/a.txt", time.Unix(0, 0), []byte("file 1/a")),
+		intelligentstore.NewRegularFileDescriptorWithContents(t, "folder-1/c.txt", time.Unix(0, 0), []byte("file 1/c")),
 	}
 
 	store := intelligentstore.NewMockStore(t, testNowProvider)
-	bucket, err := store.CreateBucket("docs")
-	require.Nil(t, err)
+	bucket := store.CreateBucket(t, "docs")
 
-	tx1, err := bucket.Begin(fileInfos)
-	require.Nil(t, err)
+	store.CreateRevision(t, bucket, testFiles)
 
-	var relativePathsWithHashes []*intelligentstore.RelativePathWithHash
-	for _, testFile := range testFiles {
-		hash, err := intelligentstore.NewHash(bytes.NewBuffer([]byte(testFile.contents)))
-		require.Nil(t, err)
-		relativePathsWithHashes = append(
-			relativePathsWithHashes,
-			&intelligentstore.RelativePathWithHash{
-				RelativePath: testFile.path,
-				Hash:         hash,
-			},
-		)
-	}
-
-	_, err = tx1.ProcessUploadHashesAndGetRequiredHashes(relativePathsWithHashes)
-	require.Nil(t, err)
-
-	for _, testFile := range testFiles {
-		backupErr := tx1.BackupFile(bytes.NewBuffer([]byte(testFile.contents)))
-		require.Nil(t, backupErr)
-	}
-	err = tx1.Commit()
-	require.Nil(t, err)
-
-	bucketService := NewBucketService(store.IntelligentStore)
+	bucketService := NewBucketService(store.Store)
 
 	requestURL := &url.URL{Path: "/docs/latest"}
 	r1 := &http.Request{Method: "GET", URL: requestURL}
@@ -113,21 +83,20 @@ func Test_handleGetRevision(t *testing.T) {
 
 	bucketService.ServeHTTP(w1, r1)
 
+	log.Printf("rev info bytes: %s\n", w1.Body.Bytes())
 	var revInfoWithFiles *revisionInfoWithFiles
-
-	err = json.NewDecoder(w1.Body).Decode(&revInfoWithFiles)
+	err := json.NewDecoder(w1.Body).Decode(&revInfoWithFiles)
 	require.Nil(t, err)
-
-	assert.Equal(t, 200, w1.Code)
-	assert.Len(t, revInfoWithFiles.Files, 2)
-	assert.Len(t, revInfoWithFiles.Dirs, 1)
+	require.Equal(t, 200, w1.Code)
+	require.Len(t, revInfoWithFiles.Files, 2)
+	require.Len(t, revInfoWithFiles.Dirs, 1)
 
 	assert.Equal(t, "folder-1", revInfoWithFiles.Dirs[0].Name)
 	assert.Equal(t, int64(2), revInfoWithFiles.Dirs[0].NestedFileCount)
 
 	index := 0
 	for _, fileDescriptor := range revInfoWithFiles.Files {
-		assert.Equal(t, testFiles[index].path, fileDescriptor.RelativePath)
+		assert.Equal(t, testFiles[index].Descriptor.RelativePath, fileDescriptor.GetFileInfo().RelativePath)
 		index++
 	}
 
@@ -143,17 +112,20 @@ func Test_handleGetRevision(t *testing.T) {
 	require.Nil(t, err)
 
 	assert.Equal(t, 200, w2.Code)
-	assert.Len(t, revInfoWithFiles2.Files, 2)
-	assert.Len(t, revInfoWithFiles2.Dirs, 0)
+	require.Len(t, revInfoWithFiles2.Files, 2)
+	require.Len(t, revInfoWithFiles2.Dirs, 0)
 
-	assert.Equal(t, testFiles[2].path, revInfoWithFiles2.Files[0].RelativePath)
-	assert.Equal(t, testFiles[3].path, revInfoWithFiles2.Files[1].RelativePath)
+	receivedRelativePath0 := revInfoWithFiles2.Files[0].GetFileInfo().RelativePath
+	receivedRelativePath1 := revInfoWithFiles2.Files[1].GetFileInfo().RelativePath
+
+	relativePathsAreRecieved := testFiles[2].Descriptor.RelativePath == receivedRelativePath0 && testFiles[3].Descriptor.RelativePath == receivedRelativePath1 ||
+		testFiles[2].Descriptor.RelativePath == receivedRelativePath1 && testFiles[3].Descriptor.RelativePath == receivedRelativePath0
+	assert.True(t, relativePathsAreRecieved)
 }
 
 func Test_handleCreateRevision(t *testing.T) {
 	store := intelligentstore.NewMockStore(t, testNowProvider)
-	_, err := store.CreateBucket("docs")
-	require.Nil(t, err)
+	store.CreateBucket(t, "docs")
 
 	aFileText := "test file a"
 	aFileDescriptor, err := intelligentstore.NewRegularFileDescriptorFromReader(
@@ -162,7 +134,7 @@ func Test_handleCreateRevision(t *testing.T) {
 		bytes.NewBuffer([]byte(aFileText)))
 	require.Nil(t, err)
 
-	bucketService := NewBucketService(store.IntelligentStore)
+	bucketService := NewBucketService(store.Store)
 
 	openTxRequest := &protofiles.OpenTxRequest{
 		FileInfos: []*protofiles.FileInfoProto{
@@ -198,8 +170,7 @@ func Test_handleCreateRevision(t *testing.T) {
 
 func Test_handleUploadFile(t *testing.T) {
 	store := intelligentstore.NewMockStore(t, testNowProvider)
-	_, err := store.CreateBucket("docs")
-	require.Nil(t, err)
+	store.CreateBucket(t, "docs")
 
 	aFileText := "my file a.txt"
 	descriptor, err := intelligentstore.NewRegularFileDescriptorFromReader(
@@ -222,7 +193,7 @@ func Test_handleUploadFile(t *testing.T) {
 	openTxRequestBytes, err := proto.Marshal(openTxRequest)
 	require.Nil(t, err)
 
-	bucketService := NewBucketService(store.IntelligentStore)
+	bucketService := NewBucketService(store.Store)
 
 	openTxW := httptest.NewRecorder()
 	openTxR := &http.Request{
@@ -273,7 +244,6 @@ func Test_handleUploadFile(t *testing.T) {
 
 	// upload wanted file
 	bucketService.ServeHTTP(w1, r1)
-	log.Printf("%s\n", w1.Body.Bytes())
 	require.Equal(t, 200, w1.Code)
 
 	// upload unwanted file
@@ -318,10 +288,9 @@ func Test_handleUploadFile(t *testing.T) {
 
 func Test_handleCommitTransaction(t *testing.T) {
 	store := intelligentstore.NewMockStore(t, testNowProvider)
-	bucket, err := store.CreateBucket("docs")
-	require.Nil(t, err)
+	bucket := store.CreateBucket(t, "docs")
 
-	bucketService := NewBucketService(store.IntelligentStore)
+	bucketService := NewBucketService(store.Store)
 
 	bucketRevisions, err := bucket.GetRevisions()
 	require.Nil(t, err)
@@ -427,10 +396,9 @@ func Test_handleCommitTransaction(t *testing.T) {
 
 func Test_handleGetFileContents(t *testing.T) {
 	mockStore := intelligentstore.NewMockStore(t, testNowProvider)
-	bucket, err := mockStore.CreateBucket("docs")
-	require.Nil(t, err)
+	bucket := mockStore.CreateBucket(t, "docs")
 
-	bucketService := NewBucketService(mockStore.IntelligentStore)
+	bucketService := NewBucketService(mockStore.Store)
 
 	fileContents := "my file contents"
 	fileName := "folder1/file a.txt"
@@ -485,7 +453,7 @@ func Test_handleGetFileContents(t *testing.T) {
 	err = tx.Commit()
 	require.Nil(t, err)
 
-	file, err := mockStore.GetObjectByHash(descriptor.Hash)
+	file, err := mockStore.Store.GetObjectByHash(descriptor.Hash)
 	require.Nil(t, err)
 	defer file.Close()
 
@@ -515,17 +483,17 @@ func Test_handleGetFileContents(t *testing.T) {
 	require.Equal(t, fileContents, string(wExists.Body.Bytes()))
 }
 
-type testfile struct {
-	path     intelligentstore.RelativePath
-	contents string
-}
-
-func (testFile *testfile) toFileDescriptor(t *testing.T) *intelligentstore.RegularFileDescriptor {
-	descriptor, err := intelligentstore.NewRegularFileDescriptorFromReader(
-		testFile.path,
-		time.Unix(0, 0),
-		bytes.NewBuffer([]byte(testFile.contents)),
-	)
-	require.Nil(t, err)
-	return descriptor
-}
+// type testfile struct {
+// 	path     intelligentstore.RelativePath
+// 	contents string
+// }
+//
+// func (testFile *testfile) toFileDescriptor(t *testing.T) *intelligentstore.RegularFileDescriptor {
+// 	descriptor, err := intelligentstore.NewRegularFileDescriptorFromReader(
+// 		testFile.path,
+// 		time.Unix(0, 0),
+// 		bytes.NewBuffer([]byte(testFile.contents)),
+// 	)
+// 	require.Nil(t, err)
+// 	return descriptor
+// }

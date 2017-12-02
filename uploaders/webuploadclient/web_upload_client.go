@@ -25,11 +25,14 @@ type WebUploadClient struct {
 	folderPath     string
 	excludeMatcher *excludesmatcher.ExcludesMatcher
 	fs             afero.Fs
+	linkReader     uploaders.LinkReader
 }
 
 // NewWebUploadClient creates a new WebUploadClient
 func NewWebUploadClient(
-	storeURL, bucketName, folderPath string,
+	storeURL,
+	bucketName,
+	folderPath string,
 	excludeMatcher *excludesmatcher.ExcludesMatcher,
 ) *WebUploadClient {
 
@@ -39,6 +42,7 @@ func NewWebUploadClient(
 		folderPath,
 		excludeMatcher,
 		afero.NewOsFs(),
+		uploaders.OsFsLinkReader,
 	}
 }
 
@@ -46,7 +50,7 @@ func NewWebUploadClient(
 func (c *WebUploadClient) UploadToStore() error {
 	// FIXME abort if error
 
-	fileInfosMap, err := uploaders.BuildFileInfosMap(c.fs, c.folderPath, c.excludeMatcher)
+	fileInfosMap, err := uploaders.BuildFileInfosMap(c.fs, c.linkReader, c.folderPath, c.excludeMatcher)
 	if nil != err {
 		return err
 	}
@@ -56,18 +60,37 @@ func (c *WebUploadClient) UploadToStore() error {
 		return err
 	}
 
-	hashRelativePathMap, err := uploaders.BuildRelativePathsWithHashes(c.fs, c.folderPath, requiredRelativePaths)
+	log.Printf("== requiredRelativePaths: %s\n", requiredRelativePaths)
+
+	var requiredRegularFileRelativePaths []intelligentstore.RelativePath
+	var requiredSymlinkRelativePaths []intelligentstore.RelativePath
+
+	for _, requiredRelativePath := range requiredRelativePaths {
+		fileInfo := fileInfosMap[requiredRelativePath]
+		switch fileInfo.Type {
+		case intelligentstore.FileTypeRegular:
+			requiredRegularFileRelativePaths = append(requiredRegularFileRelativePaths, requiredRelativePath)
+		case intelligentstore.FileTypeSymlink:
+			requiredSymlinkRelativePaths = append(requiredSymlinkRelativePaths, requiredRelativePath)
+		default:
+			return fmt.Errorf("unsupported file type: '%d' for fileInfo: '%v'", fileInfo.Type, fileInfo)
+		}
+	}
+
+	err = c.uploadSymlinks(revisionVersion, fileInfosMap, requiredSymlinkRelativePaths)
 	if nil != err {
 		return err
 	}
 
-	log.Printf("paths:%v\n", hashRelativePathMap.ToSlice())
+	hashRelativePathMap, err := uploaders.BuildRelativePathsWithHashes(c.fs, c.folderPath, requiredRegularFileRelativePaths)
+	if nil != err {
+		return err
+	}
 
 	requiredHashes, err := c.fetchRequiredHashes(revisionVersion, hashRelativePathMap.ToSlice())
 	if nil != err {
 		return err
 	}
-	log.Printf("hashes left: %v\n", requiredHashes)
 
 	for _, requiredHash := range requiredHashes {
 		relativePath := hashRelativePathMap[requiredHash][0]
@@ -80,6 +103,54 @@ func (c *WebUploadClient) UploadToStore() error {
 	err = c.commitTx(revisionVersion)
 	if nil != err {
 		return err
+	}
+
+	return nil
+}
+
+func (c *WebUploadClient) uploadSymlinks(revisionVersion intelligentstore.RevisionVersion, fileInfosMap uploaders.FileInfoMap, requiredRelativePaths []intelligentstore.RelativePath) error {
+	uploadSymlinksRequest := &protofiles.UploadSymlinksRequest{}
+	for _, requiredRelativePath := range requiredRelativePaths {
+		fileInfo := fileInfosMap[requiredRelativePath]
+
+		filePath := filepath.Join(c.folderPath, string(fileInfo.RelativePath))
+
+		dest, err := c.linkReader(filePath)
+		if nil != err {
+			return fmt.Errorf("couldn't read link for %s. Error: %s", filePath, err)
+		}
+
+		uploadSymlinksRequest.SymlinksWithRelativePaths = append(
+			uploadSymlinksRequest.SymlinksWithRelativePaths,
+			&protofiles.SymlinkWithRelativePath{
+				RelativePath: string(fileInfo.RelativePath),
+				Dest:         dest,
+			},
+		)
+	}
+
+	uploadSymlinksRequestBytes, err := proto.Marshal(uploadSymlinksRequest)
+	if nil != err {
+		return err
+	}
+
+	url := fmt.Sprintf("%s/api/buckets/%s/upload/%d/symlinks", c.storeURL, c.bucketName, revisionVersion)
+	client := http.Client{Timeout: time.Minute}
+	resp, err := client.Post(
+		url,
+		"application/octet-stream",
+		bytes.NewBuffer(uploadSymlinksRequestBytes))
+	if nil != err {
+		return fmt.Errorf("couln't POST to %s. Error: %s", url, err)
+	}
+	defer resp.Body.Close()
+
+	if 200 != resp.StatusCode {
+		errMessageBytes, err := ioutil.ReadAll(resp.Body)
+		if nil != err {
+			errMessageBytes = []byte(fmt.Sprintf("couldn't read response body. Error: %v", err))
+		}
+		return fmt.Errorf("expected 200 response code but got %d. Response body: '%s'", resp.StatusCode, errMessageBytes)
 	}
 
 	return nil
@@ -105,7 +176,7 @@ func (c *WebUploadClient) fetchRequiredHashes(revisionVersion intelligentstore.R
 		return nil, err
 	}
 
-	fetchRequiredHashesRequest := http.Client{Timeout: time.Second * 20}
+	fetchRequiredHashesRequest := http.Client{Timeout: time.Minute}
 
 	url := fmt.Sprintf("%s/api/buckets/%s/upload/%d/hashes", c.storeURL, c.bucketName, revisionVersion)
 	resp, err := fetchRequiredHashesRequest.Post(
@@ -133,7 +204,6 @@ func (c *WebUploadClient) fetchRequiredHashes(revisionVersion intelligentstore.R
 		return nil, fmt.Errorf("couldn't unmarshal hashes upload response body. Error: %s", err)
 	}
 
-	log.Printf("h proto: %v\n", getRequiredHashesResponse.GetHashes())
 	var hashes []intelligentstore.Hash
 	for _, hash := range getRequiredHashesResponse.GetHashes() {
 		hashes = append(hashes, intelligentstore.Hash(hash))
@@ -142,53 +212,12 @@ func (c *WebUploadClient) fetchRequiredHashes(revisionVersion intelligentstore.R
 	return hashes, nil
 }
 
-/*
-	// open transaction
-	revisionID, wantedHashes, err := c.openTx(fileList)
-	if nil != err {
-		return err
-	}
-	log.Printf("opened Tx. Rev: %d\n", revisionID)
-
-	var filesSuccessfullyBackedUpCount int64
-	var filesFailedToBackup []*intelligentstore.FileDescriptor
-	amountOfFilesToSend := len(wantedHashes)
-	filesAlreadyOnServerCount := totalFilesToUpload - int64(amountOfFilesToSend)
-
-	for _, wantedHash := range wantedHashes {
-		fileDescriptor := hashDescriptorMap[wantedHash][0]
-		err = c.backupFile(revisionID, fileDescriptor)
-		if nil != err {
-			filesFailedToBackup = append(filesFailedToBackup, fileDescriptor)
-			log.Printf("failed to backup %s. Error: %s\n", fileDescriptor, err)
-		} else {
-			filesSuccessfullyBackedUpCount++
-		}
-
-		filesProcessedSoFar := filesSuccessfullyBackedUpCount + int64(len(filesFailedToBackup))
-		if (filesProcessedSoFar % 10) == 0 {
-			log.Printf("%d of %d files processed (%f%% complete) (%d were already on the server)\n",
-				filesProcessedSoFar,
-				amountOfFilesToSend,
-				100*float64(filesProcessedSoFar)/float64(amountOfFilesToSend),
-				filesAlreadyOnServerCount)
-		}
-	}
-
-	log.Println("commiting Tx")
-	err = c.commitTx(revisionID)
-	if nil != err {
-		return err
-	}
-
-	return nil
-}
-*/
 // openTx opens a transaction with the server and sends a list of files it wants to back up
 func (c *WebUploadClient) openTx(fileInfos []*intelligentstore.FileInfo) (intelligentstore.RevisionVersion, []intelligentstore.RelativePath, error) {
 	openTxRequest := &protofiles.OpenTxRequest{
 		FileInfos: nil,
 	}
+
 	for _, fileInfo := range fileInfos {
 		openTxRequest.FileInfos = append(
 			openTxRequest.FileInfos,
@@ -196,6 +225,7 @@ func (c *WebUploadClient) openTx(fileInfos []*intelligentstore.FileInfo) (intell
 				RelativePath: string(fileInfo.RelativePath),
 				ModTime:      fileInfo.ModTime.Unix(),
 				Size:         fileInfo.Size,
+				FileType:     protofiles.FileType(fileInfo.Type),
 			},
 		)
 	}

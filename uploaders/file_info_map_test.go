@@ -2,6 +2,7 @@ package uploaders
 
 import (
 	"bytes"
+	"errors"
 	"testing"
 	"time"
 
@@ -34,15 +35,19 @@ func Test_BuildFileInfosMap(t *testing.T) {
 	osFileInfo, err := fs.Stat("/test/" + string(fileRelativePath))
 	require.Nil(t, err)
 
-	fileInfo := intelligentstore.NewFileInfo(fileRelativePath, osFileInfo.ModTime(), osFileInfo.Size())
+	fileInfo := intelligentstore.NewFileInfo(intelligentstore.FileTypeRegular, fileRelativePath, osFileInfo.ModTime(), osFileInfo.Size())
 
 	err = afero.WriteFile(fs, "/test/exclude-me.txt", fileContents, 0600)
 	require.Nil(t, err)
 
-	_, err = BuildFileInfosMap(fs, "/bad_path", excludes)
+	mockLinkReader := func(path string) (string, error) {
+		return "", errors.New("not implemented")
+	}
+
+	_, err = BuildFileInfosMap(fs, mockLinkReader, "/bad_path", excludes)
 	require.NotNil(t, err)
 
-	fileInfosMap, err := BuildFileInfosMap(fs, "/test", excludes)
+	fileInfosMap, err := BuildFileInfosMap(fs, mockLinkReader, "/test", excludes)
 	require.Nil(t, err)
 
 	require.Len(t, fileInfosMap, 1)
@@ -51,7 +56,7 @@ func Test_BuildFileInfosMap(t *testing.T) {
 
 func Test_ToSlice(t *testing.T) {
 	relativePath := intelligentstore.NewRelativePath("a.txt")
-	fileInfo := intelligentstore.NewFileInfo(relativePath, time.Unix(0, 0), 0)
+	fileInfo := intelligentstore.NewFileInfo(intelligentstore.FileTypeRegular, relativePath, time.Unix(0, 0), 0)
 
 	f := FileInfoMap{}
 	f[relativePath] = fileInfo

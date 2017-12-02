@@ -20,7 +20,7 @@ func (m FileInfoMap) ToSlice() []*intelligentstore.FileInfo {
 	return fileInfos
 }
 
-func BuildFileInfosMap(fs afero.Fs, backupFromLocation string, excludeMatcher *excludesmatcher.ExcludesMatcher) (FileInfoMap, error) {
+func BuildFileInfosMap(fs afero.Fs, linkReader LinkReader, backupFromLocation string, excludeMatcher *excludesmatcher.ExcludesMatcher) (FileInfoMap, error) {
 	fileInfosMap := make(FileInfoMap)
 
 	err := afero.Walk(fs, backupFromLocation, func(path string, osFileInfo os.FileInfo, err error) error {
@@ -40,12 +40,17 @@ func BuildFileInfosMap(fs afero.Fs, backupFromLocation string, excludeMatcher *e
 			return nil
 		}
 
+		fileType := intelligentstore.FileTypeRegular
+
 		if !osFileInfo.Mode().IsRegular() {
-			log.Printf("WARNING: unsupported non-regular file skipped: '%s' %v\n", path, osFileInfo.Size())
-			return nil
+			if osFileInfo.Mode()&os.ModeSymlink != os.ModeSymlink {
+				log.Printf("WARNING: Unknown file mode: '%s' at '%s'\n", osFileInfo.Mode(), relativePath)
+				return nil
+			}
+			fileType = intelligentstore.FileTypeSymlink
 		}
 
-		fileInfo := intelligentstore.NewFileInfo(relativePath, osFileInfo.ModTime(), osFileInfo.Size())
+		fileInfo := intelligentstore.NewFileInfo(fileType, relativePath, osFileInfo.ModTime(), osFileInfo.Size())
 
 		fileInfosMap[relativePath] = fileInfo
 		return nil

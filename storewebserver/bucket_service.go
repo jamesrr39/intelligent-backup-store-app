@@ -3,6 +3,7 @@ package storewebserver
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -49,6 +50,7 @@ func NewBucketService(store *intelligentstore.IntelligentStore) *BucketService {
 	router.HandleFunc("/{bucketName}", bucketService.handleGetBucket).Methods("GET")
 
 	router.HandleFunc("/{bucketName}/upload", bucketService.handleCreateRevision).Methods("POST")
+	router.HandleFunc("/{bucketName}/upload/{revisionTs}/symlinks", bucketService.handleUploadSymlinks).Methods("POST")
 	router.HandleFunc("/{bucketName}/upload/{revisionTs}/hashes", bucketService.handleUploadHashes).Methods("POST")
 	router.HandleFunc("/{bucketName}/upload/{revisionTs}/file", bucketService.handleUploadFile).Methods("POST")
 	router.HandleFunc("/{bucketName}/upload/{revisionTs}/commit", bucketService.handleCommitTransaction).Methods("GET")
@@ -61,12 +63,6 @@ func NewBucketService(store *intelligentstore.IntelligentStore) *BucketService {
 type bucketSummary struct {
 	Name           string                            `json:"name"`
 	LastRevisionTs *intelligentstore.RevisionVersion `json:"lastRevisionTs"`
-}
-
-type revisionInfoWithFiles struct {
-	LastRevisionTs intelligentstore.RevisionVersion          `json:"revisionTs"`
-	Files          []*intelligentstore.RegularFileDescriptor `json:"files"`
-	Dirs           []*subDirInfo                             `json:"dirs"`
 }
 
 // @Title Get Latest Buckets Information
@@ -206,19 +202,19 @@ func (s *BucketService) handleGetRevision(w http.ResponseWriter, r *http.Request
 
 	rootDir := r.URL.Query().Get("rootDir")
 
-	files := []*intelligentstore.RegularFileDescriptor{}
+	var files []intelligentstore.FileDescriptor
 
 	type subDirInfoMap map[string]int64 // map[name]nestedFileCount
 	dirnames := subDirInfoMap{}         // dirname[nested file count]
 	for _, file := range allFiles {
-		if !strings.HasPrefix(string(file.RelativePath), rootDir) {
+		if !strings.HasPrefix(string(file.GetFileInfo().RelativePath), rootDir) {
 			// not in this root dir
 			continue
 		}
 
 		relativeFilePath := intelligentstore.NewRelativePath(
 			strings.TrimPrefix(
-				string(file.RelativePath),
+				string(file.GetFileInfo().RelativePath),
 				rootDir))
 
 		indexOfSlash := strings.Index(string(relativeFilePath), "/")
@@ -283,9 +279,22 @@ func (s *BucketService) handleCreateRevision(w http.ResponseWriter, r *http.Requ
 
 	for _, fileInfoProto := range openTxRequest.GetFileInfos() {
 
+		fileType, err := fileTypeProtoToFileType(fileInfoProto.GetFileType())
+		if nil != err {
+			http.Error(
+				w,
+				fmt.Sprintf(
+					"couldn't parse file type '%s' for file info for '%s'",
+					fileInfoProto.GetFileType().String(),
+					fileInfoProto.GetRelativePath()),
+				400)
+			return
+		}
+
 		fileInfos = append(
 			fileInfos,
 			intelligentstore.NewFileInfo(
+				fileType,
 				intelligentstore.NewRelativePath(fileInfoProto.GetRelativePath()),
 				time.Unix(fileInfoProto.GetModTime(), 0), // FIXME is this right?
 				fileInfoProto.GetSize(),
@@ -323,6 +332,17 @@ func (s *BucketService) handleCreateRevision(w http.ResponseWriter, r *http.Requ
 			bucketName,
 			transaction.Revision.VersionTimestamp,
 			err)
+	}
+}
+
+func fileTypeProtoToFileType(protoFileType protofiles.FileType) (intelligentstore.FileType, error) {
+	switch protoFileType {
+	case protofiles.FileType_REGULAR:
+		return intelligentstore.FileTypeRegular, nil
+	case protofiles.FileType_SYMLINK:
+		return intelligentstore.FileTypeSymlink, nil
+	default:
+		return intelligentstore.FileTypeUnknown, errors.New("didn't recognise proto file type: " + protoFileType.String())
 	}
 }
 
@@ -465,6 +485,10 @@ func (s *BucketService) handleUploadHashes(w http.ResponseWriter, r *http.Reques
 
 	var getRequiredHashesRequest protofiles.GetRequiredHashesRequest
 	err = proto.Unmarshal(body, &getRequiredHashesRequest)
+	if nil != err {
+		http.Error(w, fmt.Sprintf("couldn't unmarshall proto upload hashes. Error: %s", err.Error()), 500)
+		return
+	}
 
 	var relativePathsWithHashes []*intelligentstore.RelativePathWithHash
 	for _, relativePathAndHashProto := range getRequiredHashesRequest.GetRelativePathsAndHashes() {
@@ -501,6 +525,59 @@ func (s *BucketService) handleUploadHashes(w http.ResponseWriter, r *http.Reques
 	_, err = w.Write(responseBytes)
 	if nil != err {
 		http.Error(w, fmt.Sprintf("couldn't write get required uploads response. Error: %s", err.Error()), 500)
+		return
+	}
+}
+
+func (s *BucketService) handleUploadSymlinks(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+
+	bucketName := vars["bucketName"]
+	revisionTsString := vars["revisionTs"]
+
+	bucket, err := s.store.GetBucketByName(bucketName)
+	if nil != err {
+		if intelligentstore.ErrBucketDoesNotExist == err {
+			http.Error(w, fmt.Sprintf("couldn't find bucket '%s'. Error: %s", bucketName, err), 404)
+			return
+		}
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	transaction := s.openTransactionsMap[bucketName+"__"+revisionTsString]
+	if nil == transaction {
+		http.Error(w, fmt.Sprintf("there is no open transaction for bucket %s and revisionTs %s", bucket.Name, revisionTsString), 400)
+		return
+	}
+
+	body, err := ioutil.ReadAll(r.Body)
+	if nil != err {
+		http.Error(w, fmt.Sprintf("couldn't read request body. Error: %s", err.Error()), 400)
+		return
+	}
+
+	var uploadSymlinksRequest protofiles.UploadSymlinksRequest
+	err = proto.Unmarshal(body, &uploadSymlinksRequest)
+	if nil != err {
+		http.Error(w, fmt.Sprintf("couldn't unmarshal proto upload symlinks. Error: %s", err.Error()), 500)
+		return
+	}
+
+	var symlinksWithRelativePaths []*intelligentstore.SymlinkWithRelativePath
+	for _, symlinkWithRelativePath := range uploadSymlinksRequest.SymlinksWithRelativePaths {
+		symlinksWithRelativePaths = append(
+			symlinksWithRelativePaths,
+			&intelligentstore.SymlinkWithRelativePath{
+				RelativePath: intelligentstore.NewRelativePath(symlinkWithRelativePath.GetRelativePath()),
+				Dest:         symlinkWithRelativePath.GetDest(),
+			},
+		)
+	}
+
+	err = transaction.ProcessSymlinks(symlinksWithRelativePaths)
+	if nil != err {
+		http.Error(w, fmt.Sprintf("couldn't process upload symlinks. Error: %s", err.Error()), 500)
 		return
 	}
 }

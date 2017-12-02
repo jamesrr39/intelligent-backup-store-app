@@ -2,8 +2,9 @@ define([
   "jquery",
   "handlebars",
   "./ErrorView",
-  "./FileIcons"
-], function($, Handlebars, ErrorView, FileIcons){
+  "./FileIcons",
+  "./Filetype"
+], function($, Handlebars, ErrorView, FileIcons, Filetype){
 
   var template = Handlebars.compile([
     "<div>",
@@ -49,6 +50,8 @@ define([
                 "<a href='{{fileURL}}' target='_blank'>",
                 "{{name}}",
                 "</a>",
+                "<br/>",
+                "{{description}}",
               "</div>",
             "</div>",
           "{{/files}}",
@@ -64,6 +67,16 @@ define([
       $container.html(new ErrorView("Error fetching revisions data: " + xhr.responseText).render());
     });
   };
+
+  function getExtension(fileName) {
+    var extension = fileName;
+    var lastIndexOfDot = fileName.lastIndexOf(".");
+    if (lastIndexOfDot > -1) {
+      extension = fileName.substring(lastIndexOfDot);
+    }
+
+    return extension;
+  }
 
   return function(bucketName, revisionStr, rootDir) {
     var _$container;
@@ -112,11 +125,29 @@ define([
 
               var fileName = (lastSlashIndex === -1) ? file.path : file.path.substring(lastSlashIndex+1);
 
+              var iconClass;
+              switch (file.type) {
+                case Filetype.SYMLINK:
+                  iconClass = "share";
+                  break;
+                default:
+                  iconClass = FileIcons.classNameFromFileName(fileName);
+                  break;
+              }
+
+              var description;
+              switch (file.type) {
+                case Filetype.SYMLINK:
+                  description = "symlink to " + file.dest;
+                  break;
+              }
+
               return {
                 fileURL: "/api/buckets/"+encodeURIComponent(bucketName) +"/"+encodeURIComponent(revisionStr)+"/file?relativePath=" + encodeURIComponent(file.path),
                 name: fileName,
-                iconClass: FileIcons.classNameFromFileName(fileName)
-              }
+                description: description,
+                iconClass: iconClass
+              };
             }),
             dirs: data.dirs.sort(function(a, b){
               return a.name.toUpperCase() > b.name.toUpperCase();

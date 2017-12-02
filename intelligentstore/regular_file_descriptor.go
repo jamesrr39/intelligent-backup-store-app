@@ -2,6 +2,7 @@ package intelligentstore
 
 import (
 	"bufio"
+	"encoding/gob"
 	"encoding/hex"
 	"io"
 	"time"
@@ -11,6 +12,10 @@ import (
 type RegularFileDescriptor struct {
 	*FileInfo
 	Hash Hash `json:"hash"`
+}
+
+func init() {
+	gob.Register(&RegularFileDescriptor{})
 }
 
 // NewRegularFileDescriptor creates an instance of File.
@@ -49,7 +54,11 @@ func NewRegularFileDescriptorFromReader(relativePath RelativePath, modTime time.
 	hash := hasher.Sum(nil)
 
 	return NewRegularFileDescriptor(
-		NewFileInfo(relativePath, modTime, size),
+		NewFileInfo(FileTypeRegular, relativePath, modTime, size),
 		Hash(hex.EncodeToString(hash)),
 	), nil
+}
+
+func (d *RegularFileDescriptor) GetFileInfo() *FileInfo {
+	return d.FileInfo
 }

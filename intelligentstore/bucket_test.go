@@ -19,8 +19,7 @@ func Test_Begin(t *testing.T) {
 	}
 
 	store := NewMockStore(t, testNowProvider)
-	bucket, err := store.CreateBucket("test bucket")
-	require.Nil(t, err)
+	bucket := store.CreateBucket(t, "test bucket")
 
 	transaction, err := bucket.Begin(nil)
 	require.Nil(t, err)
@@ -72,8 +71,7 @@ func Test_isValidBucketName(t *testing.T) {
 func Test_GetLatestRevision(t *testing.T) {
 	store := NewMockStore(t, mockNowProvider)
 
-	bucket, err := store.CreateBucket("docs")
-	require.Nil(t, err)
+	bucket := store.CreateBucket(t, "docs")
 
 	file := &testFile{
 		Name:     "a.txt",
@@ -112,7 +110,7 @@ func Test_GetLatestRevision(t *testing.T) {
 	require.Nil(t, err)
 
 	assert.Len(t, files, 1)
-	assert.Equal(t, RelativePath("a.txt"), files[0].RelativePath)
+	assert.Equal(t, RelativePath("a.txt"), files[0].GetFileInfo().RelativePath)
 }
 
 func Test_GetRevisions(t *testing.T) {
@@ -123,8 +121,7 @@ func Test_GetRevisions(t *testing.T) {
 
 	store := NewMockStore(t, mockNowProvider)
 
-	bucket, err := store.CreateBucket("docs")
-	require.Nil(t, err)
+	bucket := store.CreateBucket(t, "docs")
 
 	aTxtFile := &testFile{
 		Name:     "a.txt",

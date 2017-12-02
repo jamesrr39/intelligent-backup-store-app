@@ -2,6 +2,7 @@ package webuploadclient
 
 import (
 	"bytes"
+	"errors"
 	"net/http/httptest"
 	"testing"
 	"time"
@@ -49,14 +50,17 @@ func Test_UploadToStore(t *testing.T) {
 	// set up remote store server
 	remoteStore := intelligentstore.NewMockStore(t, mockTimeProvider)
 
-	bucket, err := remoteStore.CreateBucket("docs")
-	require.Nil(t, err)
+	bucket := remoteStore.CreateBucket(t, "docs")
 
 	storeServer := httptest.NewServer(
-		storewebserver.NewStoreWebServer(remoteStore.IntelligentStore))
+		storewebserver.NewStoreWebServer(remoteStore.Store))
 	defer storeServer.Close()
 
 	t.Logf("store URL: %s\n", storeServer.URL)
+
+	mockLinkReader := func(path string) (string, error) {
+		return "", errors.New("not implemented")
+	}
 
 	// create client and upload
 	uploadClient := WebUploadClient{
@@ -65,6 +69,7 @@ func Test_UploadToStore(t *testing.T) {
 		"/docs",
 		excludeMatcher,
 		fs,
+		mockLinkReader,
 	}
 
 	err = uploadClient.UploadToStore()
@@ -81,9 +86,9 @@ func Test_UploadToStore(t *testing.T) {
 	require.Nil(t, err)
 	assert.Len(t, fileDescriptors, 4)
 
-	fileDescriptorNameMap := make(map[intelligentstore.RelativePath]*intelligentstore.RegularFileDescriptor)
+	fileDescriptorNameMap := make(map[intelligentstore.RelativePath]intelligentstore.FileDescriptor)
 	for _, fileDescriptor := range fileDescriptors {
-		fileDescriptorNameMap[fileDescriptor.RelativePath] = fileDescriptor
+		fileDescriptorNameMap[fileDescriptor.GetFileInfo().RelativePath] = fileDescriptor
 	}
 
 	for _, testFile := range testFiles {
@@ -91,8 +96,9 @@ func Test_UploadToStore(t *testing.T) {
 			bytes.NewBuffer([]byte(testFile.contents)))
 		require.Nil(t, err)
 
-		assert.Equal(t, testFile.path, fileDescriptorNameMap[testFile.path].RelativePath)
-		assert.Equal(t, hash, fileDescriptorNameMap[testFile.path].Hash)
+		assert.Equal(t, testFile.path, fileDescriptorNameMap[testFile.path].GetFileInfo().RelativePath)
+		fileDescriptor := (fileDescriptorNameMap[testFile.path]).(*intelligentstore.RegularFileDescriptor)
+		assert.Equal(t, hash, fileDescriptor.Hash)
 	}
 }
 

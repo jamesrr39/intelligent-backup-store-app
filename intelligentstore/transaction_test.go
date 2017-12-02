@@ -11,8 +11,7 @@ import (
 
 func Test_BackupFile(t *testing.T) {
 	mockStore := NewMockStore(t, mockNowProvider)
-	bucket, err := mockStore.CreateBucket("docs")
-	require.Nil(t, err)
+	bucket := mockStore.CreateBucket(t, "docs")
 
 	descriptor, err := NewRegularFileDescriptorFromReader(
 		"../a.txt",
@@ -75,8 +74,7 @@ func Test_ProcessUploadHashesAndGetRequiredHashes(t *testing.T) {
 	require.Nil(t, err)
 
 	mockStore := NewMockStore(t, mockNowProvider)
-	bucket, err := mockStore.CreateBucket("docs")
-	require.Nil(t, err)
+	bucket := mockStore.CreateBucket(t, "docs")
 
 	fileInfos := []*FileInfo{
 		goodADescriptor.FileInfo,
@@ -126,8 +124,7 @@ func Test_Commit(t *testing.T) {
 	require.Nil(t, err)
 
 	mockStore := NewMockStore(t, mockNowProvider)
-	bucket, err := mockStore.CreateBucket("docs")
-	require.Nil(t, err)
+	bucket := mockStore.CreateBucket(t, "docs")
 
 	fileInfos := []*FileInfo{
 		goodADescriptor.FileInfo,
@@ -151,6 +148,53 @@ func Test_Commit(t *testing.T) {
 	require.NotNil(t, err) // should error because not all files have been uploaded
 
 	err = tx.BackupFile(bytes.NewBuffer([]byte(bFileContents)))
+	require.Nil(t, err)
+
+	err = tx.Commit()
+	require.Nil(t, err)
+}
+
+func Test_ProcessSymlinks(t *testing.T) {
+	aFileContents := "a text"
+	goodADescriptor, err := NewRegularFileDescriptorFromReader(
+		"a.txt",
+		time.Unix(0, 0),
+		bytes.NewBuffer([]byte(aFileContents)),
+	)
+	require.Nil(t, err)
+
+	symlinkDescriptor := NewSymlinkFileDescriptor(NewFileInfo(FileTypeSymlink, "b", time.Unix(0, 0), 1), "a.txt")
+
+	mockStore := NewMockStore(t, mockNowProvider)
+	bucket := mockStore.CreateBucket(t, "docs")
+
+	fileInfos := []*FileInfo{
+		goodADescriptor.FileInfo,
+		symlinkDescriptor.FileInfo,
+	}
+
+	tx, err := bucket.Begin(fileInfos)
+	require.Nil(t, err)
+
+	relativePathsWithHashes := []*RelativePathWithHash{
+		&RelativePathWithHash{goodADescriptor.RelativePath, goodADescriptor.Hash},
+	}
+	_, err = tx.ProcessUploadHashesAndGetRequiredHashes(relativePathsWithHashes)
+	require.Nil(t, err)
+
+	err = tx.BackupFile(bytes.NewBuffer([]byte(aFileContents)))
+	require.Nil(t, err)
+
+	err = tx.Commit()
+	require.NotNil(t, err) // should error because not all files have been uploaded
+	assert.Equal(t, "tried to commit the transaction but there are 1 symlinks left to upload", err.Error())
+
+	err = tx.ProcessSymlinks([]*SymlinkWithRelativePath{
+		&SymlinkWithRelativePath{
+			RelativePath: symlinkDescriptor.RelativePath,
+			Dest:         symlinkDescriptor.Dest,
+		},
+	})
 	require.Nil(t, err)
 
 	err = tx.Commit()

@@ -60,12 +60,12 @@ func Test_createIntelligentStoreAndNewConn(t *testing.T) {
 func Test_GetBucketByName(t *testing.T) {
 	mockStore := NewMockStore(t, mockNowProvider)
 
-	bucket, err := mockStore.IntelligentStore.CreateBucket("test bucket")
+	bucket, err := mockStore.Store.CreateBucket("test bucket")
 	require.Nil(t, err)
 	assert.Equal(t, int64(1), bucket.ID)
 	assert.Equal(t, "test bucket", bucket.Name)
 
-	fetchedBucket, err := mockStore.IntelligentStore.GetBucketByName("test bucket")
+	fetchedBucket, err := mockStore.Store.GetBucketByName("test bucket")
 	require.Nil(t, err)
 	assert.Equal(t, int64(1), fetchedBucket.ID)
 	assert.Equal(t, "test bucket", fetchedBucket.Name)
@@ -74,17 +74,17 @@ func Test_GetBucketByName(t *testing.T) {
 func Test_CreateBucket(t *testing.T) {
 	mockStore := NewMockStore(t, mockNowProvider)
 
-	bucket1, err := mockStore.IntelligentStore.CreateBucket("test bucket")
+	bucket1, err := mockStore.Store.CreateBucket("test bucket")
 	require.Nil(t, err)
 	assert.Equal(t, int64(1), bucket1.ID)
 	assert.Equal(t, "test bucket", bucket1.Name)
 
-	bucket2, err := mockStore.IntelligentStore.CreateBucket("test bucket 2")
+	bucket2, err := mockStore.Store.CreateBucket("test bucket 2")
 	require.Nil(t, err)
 	assert.Equal(t, int64(2), bucket2.ID)
 	assert.Equal(t, "test bucket 2", bucket2.Name)
 
-	bucket3, err := mockStore.IntelligentStore.CreateBucket("test bucket")
+	bucket3, err := mockStore.Store.CreateBucket("test bucket")
 	require.Nil(t, bucket3)
 	assert.Equal(t, ErrBucketNameAlreadyTaken, err)
 }
@@ -92,11 +92,11 @@ func Test_CreateBucket(t *testing.T) {
 func Test_CreateUser(t *testing.T) {
 	mockStore := NewMockStore(t, mockNowProvider)
 
-	_, err := mockStore.CreateUser(NewUser(1, "test öäø user", "me@example.test"))
+	_, err := mockStore.Store.CreateUser(NewUser(1, "test öäø user", "me@example.test"))
 	assert.Equal(t, "tried to create a user with ID 1 (expected 0)", err.Error())
 
 	u := NewUser(0, "test öäø user", "me@example.test")
-	newUser, err := mockStore.CreateUser(u)
+	newUser, err := mockStore.Store.CreateUser(u)
 	require.Nil(t, err)
 	assert.Equal(t, int64(0), u.ID, "a new object should be returned")
 	assert.Equal(t, int64(1), newUser.ID)
@@ -106,14 +106,14 @@ func Test_GetAllUsers(t *testing.T) {
 	mockStore := NewMockStore(t, mockNowProvider)
 
 	u1 := NewUser(0, "test öäø user", "me@example.test")
-	_, err := mockStore.CreateUser(u1)
+	_, err := mockStore.Store.CreateUser(u1)
 	require.Nil(t, err)
 
 	u2 := NewUser(0, "test 2 öäø user", "me2@example.test")
-	_, err = mockStore.CreateUser(u2)
+	_, err = mockStore.Store.CreateUser(u2)
 	require.Nil(t, err)
 
-	users, err := mockStore.GetAllUsers()
+	users, err := mockStore.Store.GetAllUsers()
 	require.Nil(t, err)
 
 	assert.Len(t, users, 2)
@@ -123,10 +123,10 @@ func Test_GetUserByUsername(t *testing.T) {
 	mockStore := NewMockStore(t, mockNowProvider)
 
 	u1 := NewUser(0, "test öäø user", "me@example.test")
-	_, err := mockStore.CreateUser(u1)
+	_, err := mockStore.Store.CreateUser(u1)
 	require.Nil(t, err)
 
-	user1, err := mockStore.GetUserByUsername("me@example.test")
+	user1, err := mockStore.Store.GetUserByUsername("me@example.test")
 	require.Nil(t, err)
 
 	assert.Equal(t, "test öäø user", user1.Name)
@@ -134,10 +134,10 @@ func Test_GetUserByUsername(t *testing.T) {
 	assert.NotEqual(t, 0, user1.ID)
 
 	u2 := NewUser(0, "test 2 öäø user", "me2@example.test")
-	_, err = mockStore.CreateUser(u2)
+	_, err = mockStore.Store.CreateUser(u2)
 	require.Nil(t, err)
 
-	user2, err := mockStore.GetUserByUsername("me2@example.test")
+	user2, err := mockStore.Store.GetUserByUsername("me2@example.test")
 	require.Nil(t, err)
 
 	assert.Equal(t, "test 2 öäø user", user2.Name)
@@ -147,7 +147,7 @@ func Test_GetUserByUsername(t *testing.T) {
 
 func Test_GetObjectByHash(t *testing.T) {
 	mockStore := NewMockStore(t, mockNowProvider)
-	bucket, err := mockStore.CreateBucket("docs")
+	bucket, err := mockStore.Store.CreateBucket("docs")
 	require.Nil(t, err)
 
 	fileContents := "my file contents"
@@ -158,7 +158,7 @@ func Test_GetObjectByHash(t *testing.T) {
 	)
 	require.Nil(t, err)
 
-	_, err = mockStore.GetObjectByHash(descriptor.Hash)
+	_, err = mockStore.Store.GetObjectByHash(descriptor.Hash)
 	require.NotNil(t, err)
 
 	fileInfos := []*FileInfo{descriptor.FileInfo}
@@ -179,7 +179,7 @@ func Test_GetObjectByHash(t *testing.T) {
 	err = tx.Commit()
 	require.Nil(t, err)
 
-	file, err := mockStore.GetObjectByHash(descriptor.Hash)
+	file, err := mockStore.Store.GetObjectByHash(descriptor.Hash)
 	require.Nil(t, err)
 	defer file.Close()
 
@@ -190,17 +190,16 @@ func Test_GetObjectByHash(t *testing.T) {
 
 func Test_GetLockInformation(t *testing.T) {
 	mockStore := NewMockStore(t, mockNowProvider)
-	bucket, err := mockStore.CreateBucket("docs")
-	require.Nil(t, err)
+	bucket := mockStore.CreateBucket(t, "docs")
 
-	lock, err := mockStore.GetLockInformation()
+	lock, err := mockStore.Store.GetLockInformation()
 	require.Nil(t, err)
 	require.Nil(t, lock)
 
 	tx, err := bucket.Begin(nil)
 	require.Nil(t, err)
 
-	lock, err = mockStore.GetLockInformation()
+	lock, err = mockStore.Store.GetLockInformation()
 	require.Nil(t, err)
 	require.NotNil(t, lock)
 	assert.Equal(t, "bucket: docs", lock.Text)
@@ -211,7 +210,7 @@ func Test_GetLockInformation(t *testing.T) {
 	err = tx.Commit()
 	require.Nil(t, err)
 
-	lock, err = mockStore.GetLockInformation()
+	lock, err = mockStore.Store.GetLockInformation()
 	require.Nil(t, err)
 	require.Nil(t, lock)
 }

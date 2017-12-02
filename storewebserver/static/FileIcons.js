@@ -12,7 +12,7 @@ define(function() {
       var extension = fileName;
       var lastIndexOfDot = fileName.lastIndexOf(".");
       if (lastIndexOfDot > -1) {
-        var extension = fileName.substring(lastIndexOfDot);
+        extension = fileName.substring(lastIndexOfDot);
       }
 
       switch (extension) {

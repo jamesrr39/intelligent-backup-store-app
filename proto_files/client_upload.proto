@@ -1,7 +1,14 @@
 syntax = "proto3";
 package protobufgenerated;
 
+enum FileType {
+  UNKNOWN = 0;
+  REGULAR = 1;
+  SYMLINK = 2;
+}
+
 message FileInfoProto {
+  FileType fileType = 4;
   string relativePath = 1;
   int64 modTime = 2;
   int64 size = 3;
@@ -31,4 +38,13 @@ message GetRequiredHashesRequest {
 
 message GetRequiredHashesResponse {
   repeated string hashes = 1;
+}
+
+message SymlinkWithRelativePath {
+  string relativePath = 1;
+  string dest = 2;
+}
+
+message UploadSymlinksRequest {
+  repeated SymlinkWithRelativePath symlinksWithRelativePaths = 1;
 }
