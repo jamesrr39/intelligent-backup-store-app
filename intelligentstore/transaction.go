@@ -76,7 +76,7 @@ func NewTransaction(revision *Revision, fileInfos []*FileInfo) (*Transaction, er
 			case FileTypeRegular:
 				tx.fileInfosMissingHashes[fileInfo.RelativePath] = fileInfo
 			default:
-				return nil, fmt.Errorf("unknown file type: %d (%s)\n", fileInfo.Type, fileInfo.Type)
+				return nil, fmt.Errorf("unknown file type: %d (%s)", fileInfo.Type, fileInfo.Type)
 			}
 		}
 	}
