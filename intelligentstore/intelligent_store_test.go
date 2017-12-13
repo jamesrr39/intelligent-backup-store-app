@@ -214,3 +214,19 @@ func Test_GetLockInformation(t *testing.T) {
 	require.Nil(t, err)
 	require.Nil(t, lock)
 }
+
+func Test_Search(t *testing.T) {
+	store := NewMockStore(t, mockNowProvider)
+	bucket := store.CreateBucket(t, "docs")
+	revision := store.CreateRevision(t, bucket, []*RegularFileDescriptorWithContents{
+		NewRegularFileDescriptorWithContents(t, NewRelativePath("a/contract.txt"), time.Unix(0, 0), []byte("")),
+		NewRegularFileDescriptorWithContents(t, NewRelativePath("a/something else.txt"), time.Unix(0, 0), []byte("")),
+	})
+
+	searchResults, err := store.Store.Search("contract")
+	require.Nil(t, err)
+	require.Len(t, searchResults, 1)
+	assert.Equal(t, NewRelativePath("a/contract.txt"), searchResults[0].RelativePath)
+	assert.Equal(t, bucket.Name, searchResults[0].Bucket.Name)
+	assert.Equal(t, revision.VersionTimestamp, searchResults[0].Revision.VersionTimestamp)
+}

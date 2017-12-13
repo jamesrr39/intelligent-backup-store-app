@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/pkg/errors"
 	"github.com/spf13/afero"
@@ -337,4 +338,38 @@ func (s *IntelligentStore) getLockFilePath() string {
 type StoreLock struct {
 	Pid  int    `json:"pid"`
 	Text string `json:"text"`
+}
+
+// Search looks for the searchTerm in any of the file paths in the store
+func (s *IntelligentStore) Search(searchTerm string) ([]*SearchResult, error) {
+	buckets, err := s.GetAllBuckets()
+	if nil != err {
+		return nil, err
+	}
+
+	var searchResults []*SearchResult
+	for _, bucket := range buckets {
+		revisions, err := bucket.GetRevisions()
+		if nil != err {
+			return nil, err
+		}
+		for _, revision := range revisions {
+			fileDescriptors, err := revision.GetFilesInRevision()
+			if nil != err {
+				return nil, err
+			}
+
+			for _, fileDescriptor := range fileDescriptors {
+				relativePath := fileDescriptor.GetFileInfo().RelativePath
+				if strings.Contains(string(relativePath), searchTerm) {
+					searchResults = append(searchResults, &SearchResult{
+						relativePath,
+						bucket,
+						revision,
+					})
+				}
+			}
+		}
+	}
+	return searchResults, nil
 }
