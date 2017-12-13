@@ -202,7 +202,7 @@ func (s *BucketService) handleGetRevision(w http.ResponseWriter, r *http.Request
 
 	rootDir := r.URL.Query().Get("rootDir")
 
-	var files []intelligentstore.FileDescriptor
+	files := []intelligentstore.FileDescriptor{}
 
 	type subDirInfoMap map[string]int64 // map[name]nestedFileCount
 	dirnames := subDirInfoMap{}         // dirname[nested file count]
