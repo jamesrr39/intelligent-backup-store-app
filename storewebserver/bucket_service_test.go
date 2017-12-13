@@ -94,11 +94,10 @@ func Test_handleGetRevision(t *testing.T) {
 	assert.Equal(t, "folder-1", revInfoWithFiles.Dirs[0].Name)
 	assert.Equal(t, int64(2), revInfoWithFiles.Dirs[0].NestedFileCount)
 
-	index := 0
-	for _, fileDescriptor := range revInfoWithFiles.Files {
-		assert.Equal(t, testFiles[index].Descriptor.RelativePath, fileDescriptor.GetFileInfo().RelativePath)
-		index++
-	}
+	require.Len(t, revInfoWithFiles.Files, 2)
+
+	assert.True(t, ((revInfoWithFiles.Files[0].GetFileInfo().RelativePath == testFiles[0].Descriptor.RelativePath && revInfoWithFiles.Files[1].GetFileInfo().RelativePath == testFiles[1].Descriptor.RelativePath) ||
+		(revInfoWithFiles.Files[0].GetFileInfo().RelativePath == testFiles[1].Descriptor.RelativePath && revInfoWithFiles.Files[1].GetFileInfo().RelativePath == testFiles[0].Descriptor.RelativePath)))
 
 	// request 2; testing with a rootDir
 	r2 := &http.Request{Method: "GET", URL: &url.URL{Path: "/docs/latest", RawQuery: "rootDir=folder-1"}}
