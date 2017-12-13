@@ -174,10 +174,10 @@ func main() {
 		}
 
 		var prefixMatcher excludesmatcher.Matcher
-		if "" == *exportCommandFilePathPrefix {
+		if "" != *exportCommandFilePathPrefix {
 			prefixMatcher = excludesmatcher.NewSimplePrefixMatcher(*exportCommandFilePathPrefix)
 		}
-		log.Printf("VERSION: %v\n", version)
+
 		err = exporters.NewLocalExporter(store, *exportCommandBucketName, *exportCommandExportDir, version, prefixMatcher).Export()
 		if nil != err {
 			return err
