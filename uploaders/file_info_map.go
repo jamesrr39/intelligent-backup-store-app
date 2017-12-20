@@ -28,6 +28,8 @@ func BuildFileInfosMap(fs afero.Fs, linkReader LinkReader, backupFromLocation st
 			return err
 		}
 
+		log.Printf("%s: %b\n", path, osFileInfo.Mode()&os.ModeSymlink)
+
 		if osFileInfo.IsDir() {
 			return nil
 		}
@@ -50,7 +52,9 @@ func BuildFileInfosMap(fs afero.Fs, linkReader LinkReader, backupFromLocation st
 			fileType = intelligentstore.FileTypeSymlink
 		}
 
-		fileInfo := intelligentstore.NewFileInfo(fileType, relativePath, osFileInfo.ModTime(), osFileInfo.Size())
+		log.Printf("mode: %b\n", osFileInfo.Mode())
+
+		fileInfo := intelligentstore.NewFileInfo(fileType, relativePath, osFileInfo.ModTime(), osFileInfo.Size(), osFileInfo.Mode())
 
 		fileInfosMap[relativePath] = fileInfo
 		return nil

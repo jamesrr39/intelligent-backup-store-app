@@ -35,7 +35,7 @@ func Test_BuildFileInfosMap(t *testing.T) {
 	osFileInfo, err := fs.Stat("/test/" + string(fileRelativePath))
 	require.Nil(t, err)
 
-	fileInfo := intelligentstore.NewFileInfo(intelligentstore.FileTypeRegular, fileRelativePath, osFileInfo.ModTime(), osFileInfo.Size())
+	fileInfo := intelligentstore.NewFileInfo(intelligentstore.FileTypeRegular, fileRelativePath, osFileInfo.ModTime(), osFileInfo.Size(), osFileInfo.Mode())
 
 	err = afero.WriteFile(fs, "/test/exclude-me.txt", fileContents, 0600)
 	require.Nil(t, err)
@@ -56,7 +56,7 @@ func Test_BuildFileInfosMap(t *testing.T) {
 
 func Test_ToSlice(t *testing.T) {
 	relativePath := intelligentstore.NewRelativePath("a.txt")
-	fileInfo := intelligentstore.NewFileInfo(intelligentstore.FileTypeRegular, relativePath, time.Unix(0, 0), 0)
+	fileInfo := intelligentstore.NewFileInfo(intelligentstore.FileTypeRegular, relativePath, time.Unix(0, 0), 0, intelligentstore.FileMode600)
 
 	f := FileInfoMap{}
 	f[relativePath] = fileInfo

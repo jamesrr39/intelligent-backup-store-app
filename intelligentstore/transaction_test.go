@@ -16,6 +16,7 @@ func Test_BackupFile(t *testing.T) {
 	descriptor, err := NewRegularFileDescriptorFromReader(
 		"../a.txt",
 		time.Unix(0, 0),
+		FileMode600,
 		bytes.NewBuffer(nil),
 	)
 	require.Nil(t, err)
@@ -27,7 +28,9 @@ func Test_BackupFile(t *testing.T) {
 
 	aFileContents := "a text"
 	goodADescriptor, err := NewRegularFileDescriptorFromReader(
-		"a.txt", time.Unix(0, 0),
+		"a.txt",
+		time.Unix(0, 0),
+		FileMode600,
 		bytes.NewBuffer([]byte(aFileContents)),
 	)
 	require.Nil(t, err)
@@ -62,13 +65,16 @@ func Test_ProcessUploadHashesAndGetRequiredHashes(t *testing.T) {
 	goodADescriptor, err := NewRegularFileDescriptorFromReader(
 		"a.txt",
 		time.Unix(0, 0),
+		FileMode600,
 		bytes.NewBuffer([]byte(aFileContents)),
 	)
 	require.Nil(t, err)
 
 	bFileContents := "b text"
 	goodBDescriptor, err := NewRegularFileDescriptorFromReader(
-		"b.txt", time.Unix(0, 0),
+		"b.txt",
+		time.Unix(0, 0),
+		FileMode600,
 		bytes.NewBuffer([]byte(bFileContents)),
 	)
 	require.Nil(t, err)
@@ -112,13 +118,16 @@ func Test_Commit(t *testing.T) {
 	goodADescriptor, err := NewRegularFileDescriptorFromReader(
 		"a.txt",
 		time.Unix(0, 0),
+		FileMode600, // FIXME should have the symlink bit set
 		bytes.NewBuffer([]byte(aFileContents)),
 	)
 	require.Nil(t, err)
 
 	bFileContents := "b text"
 	goodBDescriptor, err := NewRegularFileDescriptorFromReader(
-		"b.txt", time.Unix(0, 0),
+		"b.txt",
+		time.Unix(0, 0),
+		FileMode600, // FIXME should have the symlink bit set
 		bytes.NewBuffer([]byte(bFileContents)),
 	)
 	require.Nil(t, err)
@@ -159,11 +168,20 @@ func Test_ProcessSymlinks(t *testing.T) {
 	goodADescriptor, err := NewRegularFileDescriptorFromReader(
 		"a.txt",
 		time.Unix(0, 0),
+		FileMode600,
 		bytes.NewBuffer([]byte(aFileContents)),
 	)
 	require.Nil(t, err)
 
-	symlinkDescriptor := NewSymlinkFileDescriptor(NewFileInfo(FileTypeSymlink, "b", time.Unix(0, 0), 1), "a.txt")
+	symlinkDescriptor := NewSymlinkFileDescriptor(
+		NewFileInfo(
+			FileTypeSymlink,
+			"b",
+			time.Unix(0, 0),
+			1,
+			FileMode600, // FIXME should have the symlink bit set
+		),
+		"a.txt")
 
 	mockStore := NewMockStore(t, mockNowProvider)
 	bucket := mockStore.CreateBucket(t, "docs")

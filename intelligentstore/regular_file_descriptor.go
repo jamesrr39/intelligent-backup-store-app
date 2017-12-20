@@ -5,6 +5,7 @@ import (
 	"encoding/gob"
 	"encoding/hex"
 	"io"
+	"os"
 	"time"
 )
 
@@ -23,7 +24,7 @@ func NewRegularFileDescriptor(fileInfo *FileInfo, hash Hash) *RegularFileDescrip
 	return &RegularFileDescriptor{fileInfo, hash}
 }
 
-func NewRegularFileDescriptorFromReader(relativePath RelativePath, modTime time.Time, file io.Reader) (*RegularFileDescriptor, error) {
+func NewRegularFileDescriptorFromReader(relativePath RelativePath, modTime time.Time, fileMode os.FileMode, file io.Reader) (*RegularFileDescriptor, error) {
 	hasher := newHasher()
 	size := int64(0)
 	readerSize := 4096
@@ -54,7 +55,7 @@ func NewRegularFileDescriptorFromReader(relativePath RelativePath, modTime time.
 	hash := hasher.Sum(nil)
 
 	return NewRegularFileDescriptor(
-		NewFileInfo(FileTypeRegular, relativePath, modTime, size),
+		NewFileInfo(FileTypeRegular, relativePath, modTime, size, fileMode),
 		Hash(hex.EncodeToString(hash)),
 	), nil
 }

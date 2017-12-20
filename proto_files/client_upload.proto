@@ -12,6 +12,7 @@ message FileInfoProto {
   string relativePath = 1;
   int64 modTime = 2;
   int64 size = 3;
+  uint32 mode = 5; // maps to Go os.FileMode
 }
 
 message RelativePathAndHashProto {

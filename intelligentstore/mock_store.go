@@ -2,12 +2,15 @@ package intelligentstore
 
 import (
 	"bytes"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 )
+
+const FileMode600 os.FileMode = (1 << 8) + (1 << 7)
 
 // TODO: test build only
 
@@ -22,8 +25,8 @@ type RegularFileDescriptorWithContents struct {
 	Contents   []byte
 }
 
-func NewRegularFileDescriptorWithContents(t *testing.T, relativePath RelativePath, modTime time.Time, contents []byte) *RegularFileDescriptorWithContents {
-	descriptor, err := NewRegularFileDescriptorFromReader(relativePath, modTime, bytes.NewBuffer(contents))
+func NewRegularFileDescriptorWithContents(t *testing.T, relativePath RelativePath, modTime time.Time, fileMode os.FileMode, contents []byte) *RegularFileDescriptorWithContents {
+	descriptor, err := NewRegularFileDescriptorFromReader(relativePath, modTime, fileMode, bytes.NewBuffer(contents))
 	require.Nil(t, err)
 
 	return &RegularFileDescriptorWithContents{descriptor, contents}

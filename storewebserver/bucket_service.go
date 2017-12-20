@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -298,6 +299,7 @@ func (s *BucketService) handleCreateRevision(w http.ResponseWriter, r *http.Requ
 				intelligentstore.NewRelativePath(fileInfoProto.GetRelativePath()),
 				time.Unix(fileInfoProto.GetModTime(), 0), // FIXME is this right?
 				fileInfoProto.GetSize(),
+				os.FileMode(fileInfoProto.GetMode()),
 			),
 		)
 	}

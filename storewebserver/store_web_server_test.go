@@ -19,8 +19,8 @@ func Test_handleSearch(t *testing.T) {
 	bucket := storetest.CreateBucket(t, store.Store, "docs")
 
 	revision := storetest.CreateRevision(t, store.Store, bucket, []*intelligentstore.RegularFileDescriptorWithContents{
-		intelligentstore.NewRegularFileDescriptorWithContents(t, intelligentstore.NewRelativePath("a/contract.txt"), time.Unix(0, 0), []byte("")),
-		intelligentstore.NewRegularFileDescriptorWithContents(t, intelligentstore.NewRelativePath("a/something else.txt"), time.Unix(0, 0), []byte("")),
+		intelligentstore.NewRegularFileDescriptorWithContents(t, intelligentstore.NewRelativePath("a/contract.txt"), time.Unix(0, 0), intelligentstore.FileMode600, []byte("")),
+		intelligentstore.NewRegularFileDescriptorWithContents(t, intelligentstore.NewRelativePath("a/something else.txt"), time.Unix(0, 0), intelligentstore.FileMode600, []byte("")),
 	})
 
 	storeHandler := NewStoreWebServer(store.Store)

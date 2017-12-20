@@ -24,8 +24,8 @@ func Test_Export(t *testing.T) {
 
 	bucket := storetest.CreateBucket(t, testStore.Store, "docs")
 
-	regularFile1 := intelligentstore.NewRegularFileDescriptorWithContents(t, "a.txt", time.Unix(0, 0), []byte("file a contents"))
-	regularFile2 := intelligentstore.NewRegularFileDescriptorWithContents(t, "folder-1/a.txt", time.Unix(0, 0), []byte("file a contents"))
+	regularFile1 := intelligentstore.NewRegularFileDescriptorWithContents(t, "a.txt", time.Unix(0, 0), intelligentstore.FileMode600, []byte("file a contents"))
+	regularFile2 := intelligentstore.NewRegularFileDescriptorWithContents(t, "folder-1/a.txt", time.Unix(0, 0), intelligentstore.FileMode600, []byte("file a contents"))
 	fileDescriptors := []*intelligentstore.RegularFileDescriptorWithContents{
 		regularFile1,
 		regularFile2,
@@ -95,7 +95,7 @@ func Test_writeFileToFs(t *testing.T) {
 
 	bucket := storetest.CreateBucket(t, testStore.Store, "docs")
 
-	regularFile := intelligentstore.NewRegularFileDescriptorWithContents(t, "a.txt", time.Unix(0, 0), []byte("file a contents"))
+	regularFile := intelligentstore.NewRegularFileDescriptorWithContents(t, "a.txt", time.Unix(0, 0), intelligentstore.FileMode600, []byte("file a contents"))
 	storetest.CreateRevision(t, testStore.Store, bucket, []*intelligentstore.RegularFileDescriptorWithContents{
 		regularFile,
 	})
@@ -103,7 +103,8 @@ func Test_writeFileToFs(t *testing.T) {
 	err := exporter.writeFileToFs(regularFile.Descriptor)
 	require.Nil(t, err)
 
-	contents, err := afero.ReadFile(testStore.Fs, filepath.Join(exporter.ExportDir, FilesExportSubDir, "a.txt"))
+	filePath := filepath.Join(exporter.ExportDir, FilesExportSubDir, "a.txt")
+	contents, err := afero.ReadFile(testStore.Fs, filePath)
 	require.Nil(t, err)
 
 	assert.Equal(t, regularFile.Contents, contents)
