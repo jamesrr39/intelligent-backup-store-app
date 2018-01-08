@@ -2,6 +2,7 @@ package exporters
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -85,7 +86,8 @@ func (exporter *LocalExporter) writeFileToFs(fileDescriptor intelligentstore.Fil
 	switch fileDescriptor.GetFileInfo().Type {
 	case intelligentstore.FileTypeRegular:
 		regularFileDescriptor := fileDescriptor.(*intelligentstore.RegularFileDescriptor)
-		reader, err := exporter.Store.GetObjectByHash(regularFileDescriptor.Hash)
+		var reader io.ReadCloser
+		reader, err = exporter.Store.GetObjectByHash(regularFileDescriptor.Hash)
 		if nil != err {
 			return fmt.Errorf("couldn't get the file at '%s'. Error: %s", regularFileDescriptor.RelativePath, err)
 		}
