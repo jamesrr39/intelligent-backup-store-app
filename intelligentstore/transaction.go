@@ -64,7 +64,9 @@ func NewTransaction(revision *Revision, fileInfos []*FileInfo) (*Transaction, er
 		fileAlreadyExistsInStore := (nil != descriptorFromPreviousRevision &&
 			descriptorFromPreviousRevision.GetFileInfo().Type == fileInfo.Type &&
 			descriptorFromPreviousRevision.GetFileInfo().ModTime.Equal(fileInfo.ModTime) &&
-			descriptorFromPreviousRevision.GetFileInfo().Size == fileInfo.Size)
+			descriptorFromPreviousRevision.GetFileInfo().Size == fileInfo.Size &&
+			descriptorFromPreviousRevision.GetFileInfo().FileMode == fileInfo.FileMode)
+
 		if fileAlreadyExistsInStore {
 			// same as previous version, so just use that
 			tx.FilesInVersion = append(tx.FilesInVersion, descriptorFromPreviousRevision)
@@ -143,6 +145,7 @@ func (transaction *Transaction) ProcessUploadHashesAndGetRequiredHashes(relative
 				relativePathWithHash.RelativePath,
 				fileInfo.ModTime,
 				fileInfo.Size,
+				fileInfo.FileMode,
 			),
 			relativePathWithHash.Hash,
 		)

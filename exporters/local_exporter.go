@@ -2,6 +2,7 @@ package exporters
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -77,34 +78,41 @@ func (exporter *LocalExporter) Export() error {
 
 func (exporter *LocalExporter) writeFileToFs(fileDescriptor intelligentstore.FileDescriptor) error {
 	filePath := filepath.Join(exporter.ExportDir, FilesExportSubDir, string(fileDescriptor.GetFileInfo().RelativePath))
-	err := exporter.fs.MkdirAll(filepath.Dir(filePath), 0700)
+	dirPath := filepath.Dir(filePath)
+	err := exporter.fs.MkdirAll(dirPath, 0700)
 	if nil != err {
-		return err
+		return fmt.Errorf("couldn't make the directory for '%s'. Error: %s", dirPath, err)
 	}
 	switch fileDescriptor.GetFileInfo().Type {
 	case intelligentstore.FileTypeRegular:
 		regularFileDescriptor := fileDescriptor.(*intelligentstore.RegularFileDescriptor)
-		reader, err := exporter.Store.GetObjectByHash(regularFileDescriptor.Hash)
+		var reader io.ReadCloser
+		reader, err = exporter.Store.GetObjectByHash(regularFileDescriptor.Hash)
 		if nil != err {
-			return err
+			return fmt.Errorf("couldn't get the file at '%s'. Error: %s", regularFileDescriptor.RelativePath, err)
 		}
 		defer reader.Close()
 
 		err = afero.WriteReader(exporter.fs, filePath, reader)
 		if nil != err {
-			return err
+			return fmt.Errorf("couldn't write the export file to '%s'. Error: %s", filePath, err)
 		}
 	case intelligentstore.FileTypeSymlink:
 		symlinkFileDescriptor := fileDescriptor.(*intelligentstore.SymlinkFileDescriptor)
-		err = exporter.symlinker(filePath, symlinkFileDescriptor.Dest)
+		err = exporter.symlinker(symlinkFileDescriptor.Dest, filePath)
 		if nil != err {
-			return err
+			return fmt.Errorf("couldn't create the symlink at '%s'. Error: %s", filePath, err)
 		}
 	default:
 		return fmt.Errorf("file type %d (%s) unsupported when writing file to disk. File descriptor: '%v'",
 			fileDescriptor.GetFileInfo().Type,
 			fileDescriptor.GetFileInfo().Type,
 			fileDescriptor)
+	}
+
+	err = exporter.fs.Chmod(filePath, fileDescriptor.GetFileInfo().FileMode.Perm())
+	if nil != err {
+		return fmt.Errorf("couldn't chmod exported file at '%s'. Error: %s", filePath, err)
 	}
 	return nil
 }

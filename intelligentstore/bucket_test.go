@@ -81,6 +81,7 @@ func Test_GetLatestRevision(t *testing.T) {
 	descriptor, err := NewRegularFileDescriptorFromReader(
 		NewRelativePath(file.Name),
 		time.Unix(0, 0),
+		FileMode600,
 		bytes.NewBuffer([]byte(file.Contents)),
 	)
 	require.Nil(t, err)
@@ -130,6 +131,7 @@ func Test_GetRevisions(t *testing.T) {
 	fileDescriptorA, err := NewRegularFileDescriptorFromReader(
 		NewRelativePath(aTxtFile.Name),
 		time.Unix(0, 0),
+		FileMode600,
 		bytes.NewBuffer([]byte(aTxtFile.Contents)),
 	)
 	require.Nil(t, err)
@@ -160,6 +162,7 @@ func Test_GetRevisions(t *testing.T) {
 	fileDescriptorB, err := NewRegularFileDescriptorFromReader(
 		NewRelativePath(bTxtFile.Name),
 		time.Unix(0, 0),
+		FileMode600,
 		bytes.NewBuffer([]byte(bTxtFile.Contents)))
 	require.Nil(t, err)
 

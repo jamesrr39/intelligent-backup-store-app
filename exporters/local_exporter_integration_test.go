@@ -20,7 +20,7 @@ func Test_LocalExporterIntegration(t *testing.T) {
 
 	bucket := storetest.CreateBucket(t, store.Store, "docs")
 
-	regularFile := intelligentstore.NewRegularFileDescriptorWithContents(t, "a.txt", time.Unix(0, 0), []byte("file a contents"))
+	regularFile := intelligentstore.NewRegularFileDescriptorWithContents(t, "a.txt", time.Unix(0, 0), 0700, []byte("file a contents"))
 	storetest.CreateRevision(t, store.Store, bucket, []*intelligentstore.RegularFileDescriptorWithContents{regularFile})
 
 	exporter := NewLocalExporter(store.Store, bucket.Name, store.ExportDir, nil, nil)

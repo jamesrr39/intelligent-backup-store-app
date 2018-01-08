@@ -24,8 +24,8 @@ func Test_Export(t *testing.T) {
 
 	bucket := storetest.CreateBucket(t, testStore.Store, "docs")
 
-	regularFile1 := intelligentstore.NewRegularFileDescriptorWithContents(t, "a.txt", time.Unix(0, 0), []byte("file a contents"))
-	regularFile2 := intelligentstore.NewRegularFileDescriptorWithContents(t, "folder-1/a.txt", time.Unix(0, 0), []byte("file a contents"))
+	regularFile1 := intelligentstore.NewRegularFileDescriptorWithContents(t, "a.txt", time.Unix(0, 0), intelligentstore.FileMode600, []byte("file a contents"))
+	regularFile2 := intelligentstore.NewRegularFileDescriptorWithContents(t, "folder-1/a.txt", time.Unix(0, 0), intelligentstore.FileMode600, []byte("file a contents"))
 	fileDescriptors := []*intelligentstore.RegularFileDescriptorWithContents{
 		regularFile1,
 		regularFile2,
@@ -95,18 +95,35 @@ func Test_writeFileToFs(t *testing.T) {
 
 	bucket := storetest.CreateBucket(t, testStore.Store, "docs")
 
-	regularFile := intelligentstore.NewRegularFileDescriptorWithContents(t, "a.txt", time.Unix(0, 0), []byte("file a contents"))
+	regularFile := intelligentstore.NewRegularFileDescriptorWithContents(t, "a.txt", time.Unix(0, 0), intelligentstore.FileMode600, []byte("file a contents"))
+	secondRegularFile := intelligentstore.NewRegularFileDescriptorWithContents(t, "b.txt", time.Unix(0, 0), intelligentstore.FileMode755, []byte("file b contents"))
 	storetest.CreateRevision(t, testStore.Store, bucket, []*intelligentstore.RegularFileDescriptorWithContents{
 		regularFile,
+		secondRegularFile,
 	})
 
 	err := exporter.writeFileToFs(regularFile.Descriptor)
 	require.Nil(t, err)
 
-	contents, err := afero.ReadFile(testStore.Fs, filepath.Join(exporter.ExportDir, FilesExportSubDir, "a.txt"))
+	filePath := filepath.Join(exporter.ExportDir, FilesExportSubDir, string(regularFile.Descriptor.RelativePath))
+	file1contents, err := afero.ReadFile(testStore.Fs, filePath)
 	require.Nil(t, err)
 
-	assert.Equal(t, regularFile.Contents, contents)
+	file1Info, err := exporter.fs.Stat(filePath)
+	require.Nil(t, err)
+
+	assert.Equal(t, intelligentstore.FileMode600, file1Info.Mode().Perm())
+	assert.Equal(t, regularFile.Contents, file1contents)
+
+	// file 2
+	err = exporter.writeFileToFs(secondRegularFile.Descriptor)
+	require.Nil(t, err)
+
+	file2Path := filepath.Join(exporter.ExportDir, FilesExportSubDir, string(secondRegularFile.Descriptor.RelativePath))
+	file2Info, err := exporter.fs.Stat(file2Path)
+	require.Nil(t, err)
+
+	assert.Equal(t, intelligentstore.FileMode755, file2Info.Mode().Perm())
 }
 
 func Test_writeFileToFs_UnknownFile(t *testing.T) {

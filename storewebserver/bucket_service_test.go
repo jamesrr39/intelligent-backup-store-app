@@ -64,10 +64,10 @@ func Test_handleGetAllBuckets(t *testing.T) {
 func Test_handleGetRevision(t *testing.T) {
 	// create the fs, and put some test data in it
 	testFiles := []*intelligentstore.RegularFileDescriptorWithContents{
-		intelligentstore.NewRegularFileDescriptorWithContents(t, "a.txt", time.Unix(0, 0), []byte("file a")),
-		intelligentstore.NewRegularFileDescriptorWithContents(t, "b.txt", time.Unix(0, 0), []byte("file b")),
-		intelligentstore.NewRegularFileDescriptorWithContents(t, "folder-1/a.txt", time.Unix(0, 0), []byte("file 1/a")),
-		intelligentstore.NewRegularFileDescriptorWithContents(t, "folder-1/c.txt", time.Unix(0, 0), []byte("file 1/c")),
+		intelligentstore.NewRegularFileDescriptorWithContents(t, "a.txt", time.Unix(0, 0), intelligentstore.FileMode600, []byte("file a")),
+		intelligentstore.NewRegularFileDescriptorWithContents(t, "b.txt", time.Unix(0, 0), intelligentstore.FileMode600, []byte("file b")),
+		intelligentstore.NewRegularFileDescriptorWithContents(t, "folder-1/a.txt", time.Unix(0, 0), intelligentstore.FileMode600, []byte("file 1/a")),
+		intelligentstore.NewRegularFileDescriptorWithContents(t, "folder-1/c.txt", time.Unix(0, 0), intelligentstore.FileMode600, []byte("file 1/c")),
 	}
 
 	store := intelligentstore.NewMockStore(t, testNowProvider)
@@ -130,6 +130,7 @@ func Test_handleCreateRevision(t *testing.T) {
 	aFileDescriptor, err := intelligentstore.NewRegularFileDescriptorFromReader(
 		"a.txt",
 		time.Unix(0, 0),
+		intelligentstore.FileMode600,
 		bytes.NewBuffer([]byte(aFileText)))
 	require.Nil(t, err)
 
@@ -176,6 +177,7 @@ func Test_handleUploadFile(t *testing.T) {
 	descriptor, err := intelligentstore.NewRegularFileDescriptorFromReader(
 		intelligentstore.NewRelativePath("a.txt"),
 		time.Unix(0, 0),
+		intelligentstore.FileMode600,
 		bytes.NewBuffer([]byte(aFileText)),
 	)
 
@@ -301,6 +303,7 @@ func Test_handleCommitTransaction(t *testing.T) {
 	descriptor, err := intelligentstore.NewRegularFileDescriptorFromReader(
 		intelligentstore.NewRelativePath("my/file a.txt"),
 		time.Unix(0, 0),
+		intelligentstore.FileMode600,
 		bytes.NewBuffer([]byte(fileContents)),
 	)
 	require.Nil(t, err)
@@ -407,6 +410,7 @@ func Test_handleGetFileContents(t *testing.T) {
 	descriptor, err := intelligentstore.NewRegularFileDescriptorFromReader(
 		intelligentstore.NewRelativePath(fileName),
 		time.Unix(0, 0),
+		intelligentstore.FileMode600,
 		bytes.NewBuffer([]byte(fileContents)))
 	require.Nil(t, err)
 

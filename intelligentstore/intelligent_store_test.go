@@ -154,6 +154,7 @@ func Test_GetObjectByHash(t *testing.T) {
 	descriptor, err := NewRegularFileDescriptorFromReader(
 		"a.txt",
 		time.Unix(0, 0),
+		FileMode600,
 		bytes.NewBuffer([]byte(fileContents)),
 	)
 	require.Nil(t, err)
@@ -219,8 +220,8 @@ func Test_Search(t *testing.T) {
 	store := NewMockStore(t, mockNowProvider)
 	bucket := store.CreateBucket(t, "docs")
 	revision := store.CreateRevision(t, bucket, []*RegularFileDescriptorWithContents{
-		NewRegularFileDescriptorWithContents(t, NewRelativePath("a/contract.txt"), time.Unix(0, 0), []byte("")),
-		NewRegularFileDescriptorWithContents(t, NewRelativePath("a/something else.txt"), time.Unix(0, 0), []byte("")),
+		NewRegularFileDescriptorWithContents(t, NewRelativePath("a/contract.txt"), time.Unix(0, 0), FileMode600, []byte("")),
+		NewRegularFileDescriptorWithContents(t, NewRelativePath("a/something else.txt"), time.Unix(0, 0), FileMode600, []byte("")),
 	})
 
 	searchResults, err := store.Store.Search("contract")
