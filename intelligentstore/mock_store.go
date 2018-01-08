@@ -11,6 +11,7 @@ import (
 )
 
 const FileMode600 os.FileMode = (1 << 8) + (1 << 7)
+const FileMode755 os.FileMode = (1 << 8) + (1 << 7) + (1 << 6) + (1 << 5) + (1 << 3) + (1 << 2) + (1 << 0)
 
 // TODO: test build only
 
