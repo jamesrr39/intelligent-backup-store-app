@@ -17,14 +17,14 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/gorilla/mux"
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
 	protofiles "github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/protobufs/proto_files"
 )
 
 // BucketService handles HTTP requests to get bucket information.
 type BucketService struct {
-	store *intelligentstore.IntelligentStoreDAL
+	store *dal.IntelligentStoreDAL
 	http.Handler
 	openTransactionsMap
 }
@@ -37,7 +37,7 @@ type subDirInfo struct {
 }
 
 // NewBucketService creates a new BucketService and a router for handling requests.
-func NewBucketService(store *intelligentstore.IntelligentStoreDAL) *BucketService {
+func NewBucketService(store *dal.IntelligentStoreDAL) *BucketService {
 	router := mux.NewRouter()
 	bucketService := &BucketService{store, router, make(openTransactionsMap)}
 
@@ -96,7 +96,7 @@ func (s *BucketService) handleGetAllBuckets(w http.ResponseWriter, r *http.Reque
 	for _, bucket := range buckets {
 		latestRevision, err = s.store.RevisionDAL.GetLatestRevision(bucket)
 		if nil != err {
-			if intelligentstore.ErrNoRevisionsForBucket != err {
+			if dal.ErrNoRevisionsForBucket != err {
 				http.Error(w, err.Error(), 500)
 				return
 			}
@@ -123,7 +123,7 @@ func (s *BucketService) handleGetBucket(w http.ResponseWriter, r *http.Request) 
 
 	bucket, err := s.store.GetBucketByName(bucketName)
 	if nil != err {
-		if intelligentstore.ErrBucketDoesNotExist == err {
+		if dal.ErrBucketDoesNotExist == err {
 			http.Error(w, err.Error(), 404)
 			return
 		}
@@ -160,7 +160,7 @@ func (s *BucketService) handleGetBucket(w http.ResponseWriter, r *http.Request) 
 func (s *BucketService) getRevision(bucketName, revisionTsString string) (*domain.Revision, *HTTPError) {
 	bucket, err := s.store.GetBucketByName(bucketName)
 	if nil != err {
-		if intelligentstore.ErrBucketDoesNotExist == err {
+		if dal.ErrBucketDoesNotExist == err {
 			return nil, NewHTTPError(fmt.Errorf("couldn't find bucket '%s'. Error: %s", bucketName, err), 404)
 		}
 		return nil, NewHTTPError(err, 500)
@@ -169,7 +169,7 @@ func (s *BucketService) getRevision(bucketName, revisionTsString string) (*domai
 	var revision *domain.Revision
 	if "latest" == revisionTsString {
 		revision, err = s.store.RevisionDAL.GetLatestRevision(bucket)
-		if intelligentstore.ErrNoRevisionsForBucket == err {
+		if dal.ErrNoRevisionsForBucket == err {
 			return nil, NewHTTPError(err, 404)
 		}
 	} else {
@@ -181,7 +181,7 @@ func (s *BucketService) getRevision(bucketName, revisionTsString string) (*domai
 		revision, err = s.store.RevisionDAL.GetRevision(bucket, domain.RevisionVersion(revisionTimestamp))
 	}
 	if nil != err {
-		if err == intelligentstore.ErrRevisionDoesNotExist {
+		if err == dal.ErrRevisionDoesNotExist {
 			return nil, NewHTTPError(err, 404)
 		}
 
@@ -257,7 +257,7 @@ func (s *BucketService) handleCreateRevision(w http.ResponseWriter, r *http.Requ
 
 	bucket, err := s.store.GetBucketByName(bucketName)
 	if nil != err {
-		if intelligentstore.ErrBucketDoesNotExist == err {
+		if dal.ErrBucketDoesNotExist == err {
 			http.Error(w, fmt.Sprintf("couldn't find bucket '%s'. Error: %s", bucketName, err), 404)
 			return
 		}
@@ -365,7 +365,7 @@ func (s *BucketService) handleUploadFile(w http.ResponseWriter, r *http.Request)
 
 	bucket, err := s.store.GetBucketByName(bucketName)
 	if nil != err {
-		if intelligentstore.ErrBucketDoesNotExist == err {
+		if dal.ErrBucketDoesNotExist == err {
 			http.Error(w, fmt.Sprintf("couldn't find bucket '%s'. Error: %s", bucketName, err), 404)
 			return
 		}
@@ -397,7 +397,7 @@ func (s *BucketService) handleUploadFile(w http.ResponseWriter, r *http.Request)
 		bytes.NewBuffer(uploadedFile.Contents))
 	if nil != err {
 		errCode := 500
-		if intelligentstore.ErrFileNotRequiredForTransaction == err {
+		if dal.ErrFileNotRequiredForTransaction == err {
 			errCode = 400
 		}
 		http.Error(w, err.Error(), errCode)
@@ -413,7 +413,7 @@ func (s *BucketService) handleCommitTransaction(w http.ResponseWriter, r *http.R
 
 	bucket, err := s.store.GetBucketByName(bucketName)
 	if nil != err {
-		if intelligentstore.ErrBucketDoesNotExist == err {
+		if dal.ErrBucketDoesNotExist == err {
 			http.Error(w, fmt.Sprintf("couldn't find bucket '%s'. Error: %s", bucketName, err), 404)
 			return
 		}
@@ -450,7 +450,7 @@ func (s *BucketService) handleGetFileContents(w http.ResponseWriter, r *http.Req
 
 	file, err := s.store.RevisionDAL.GetFileContentsInRevision(revision.Bucket, revision, relativePath)
 	if nil != err {
-		if err == intelligentstore.ErrNoFileWithThisRelativePathInRevision {
+		if err == dal.ErrNoFileWithThisRelativePathInRevision {
 			http.Error(w, fmt.Sprintf("couldn't get '%s'", relativePath), 404)
 			return
 		}
@@ -474,7 +474,7 @@ func (s *BucketService) handleUploadHashes(w http.ResponseWriter, r *http.Reques
 
 	bucket, err := s.store.GetBucketByName(bucketName)
 	if nil != err {
-		if intelligentstore.ErrBucketDoesNotExist == err {
+		if dal.ErrBucketDoesNotExist == err {
 			http.Error(w, fmt.Sprintf("couldn't find bucket '%s'. Error: %s", bucketName, err), 404)
 			return
 		}
@@ -548,7 +548,7 @@ func (s *BucketService) handleUploadSymlinks(w http.ResponseWriter, r *http.Requ
 
 	bucket, err := s.store.GetBucketByName(bucketName)
 	if nil != err {
-		if intelligentstore.ErrBucketDoesNotExist == err {
+		if dal.ErrBucketDoesNotExist == err {
 			http.Error(w, fmt.Sprintf("couldn't find bucket '%s'. Error: %s", bucketName, err), 404)
 			return
 		}

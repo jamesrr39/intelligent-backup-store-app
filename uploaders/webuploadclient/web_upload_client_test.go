@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
 	"github.com/jamesrr39/intelligent-backup-store-app/storewebserver"
@@ -50,7 +50,7 @@ func Test_UploadToStore(t *testing.T) {
 	require.Nil(t, err)
 
 	// set up remote store server
-	remoteStore := intelligentstore.NewMockStore(t, mockTimeProvider, afero.NewMemMapFs())
+	remoteStore := dal.NewMockStore(t, mockTimeProvider, afero.NewMemMapFs())
 
 	bucket := remoteStore.CreateBucket(t, "docs")
 

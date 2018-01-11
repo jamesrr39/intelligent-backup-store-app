@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
 	"github.com/spf13/afero"
@@ -46,7 +46,7 @@ func Test_UploadToStore(t *testing.T) {
 		bytes.NewBuffer([]byte("\nexclude*\n")))
 	require.Nil(t, err)
 
-	store := intelligentstore.NewMockStore(t, intelligentstore.MockNowProvider, afero.NewMemMapFs())
+	store := dal.NewMockStore(t, dal.MockNowProvider, afero.NewMemMapFs())
 
 	store.CreateBucket(t, "docs")
 

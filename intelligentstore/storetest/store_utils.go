@@ -5,13 +5,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
 	"github.com/stretchr/testify/require"
 )
 
 // CreateBucket creates a Bucket in a Store, or panics
-func CreateBucket(t *testing.T, store *intelligentstore.IntelligentStoreDAL, bucketName string) *domain.Bucket {
+func CreateBucket(t *testing.T, store *dal.IntelligentStoreDAL, bucketName string) *domain.Bucket {
 	bucket, err := store.CreateBucket(bucketName)
 	require.Nil(t, err)
 	return bucket
@@ -20,7 +20,7 @@ func CreateBucket(t *testing.T, store *intelligentstore.IntelligentStoreDAL, buc
 // CreateRevision creates a Revision. Useful for pre-populating a Store.
 func CreateRevision(
 	t *testing.T,
-	store *intelligentstore.IntelligentStoreDAL,
+	store *dal.IntelligentStoreDAL,
 	bucket *domain.Bucket,
 	regularFiles []*domain.RegularFileDescriptorWithContents,
 	// symlinks []*domain.SymlinkFileDescriptor,

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
 	"github.com/spf13/afero"
@@ -57,7 +57,7 @@ func Test_BuildFileInfosMap(t *testing.T) {
 
 func Test_ToSlice(t *testing.T) {
 	relativePath := domain.NewRelativePath("a.txt")
-	fileInfo := domain.NewFileInfo(domain.FileTypeRegular, relativePath, time.Unix(0, 0), 0, intelligentstore.FileMode600)
+	fileInfo := domain.NewFileInfo(domain.FileTypeRegular, relativePath, time.Unix(0, 0), 0, dal.FileMode600)
 
 	f := FileInfoMap{}
 	f[relativePath] = fileInfo

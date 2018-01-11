@@ -1,4 +1,4 @@
-package intelligentstore
+package dal
 
 import (
 	"errors"

@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
 	"github.com/jamesrr39/intelligent-backup-store-app/uploaders"
@@ -15,7 +15,7 @@ import (
 
 // LocalUploader represents an object for performing an upload over a local FS
 type LocalUploader struct {
-	backupStoreDAL     *intelligentstore.IntelligentStoreDAL
+	backupStoreDAL     *dal.IntelligentStoreDAL
 	backupBucketName   string
 	backupFromLocation string
 	excludeMatcher     *excludesmatcher.ExcludesMatcher
@@ -25,7 +25,7 @@ type LocalUploader struct {
 
 // NewLocalUploader connects to the upload store and returns a LocalUploader
 func NewLocalUploader(
-	backupStoreDAL *intelligentstore.IntelligentStoreDAL,
+	backupStoreDAL *dal.IntelligentStoreDAL,
 	backupBucketName,
 	backupFromLocation string,
 	excludeMatcher *excludesmatcher.ExcludesMatcher,

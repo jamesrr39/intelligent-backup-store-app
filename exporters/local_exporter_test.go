@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/storetest"
@@ -25,8 +25,8 @@ func Test_Export(t *testing.T) {
 
 	bucket := storetest.CreateBucket(t, testStore.Store, "docs")
 
-	regularFile1 := domain.NewRegularFileDescriptorWithContents(t, "a.txt", time.Unix(0, 0), intelligentstore.FileMode600, []byte("file a contents"))
-	regularFile2 := domain.NewRegularFileDescriptorWithContents(t, "folder-1/a.txt", time.Unix(0, 0), intelligentstore.FileMode600, []byte("file a contents"))
+	regularFile1 := domain.NewRegularFileDescriptorWithContents(t, "a.txt", time.Unix(0, 0), dal.FileMode600, []byte("file a contents"))
+	regularFile2 := domain.NewRegularFileDescriptorWithContents(t, "folder-1/a.txt", time.Unix(0, 0), dal.FileMode600, []byte("file a contents"))
 	fileDescriptors := []*domain.RegularFileDescriptorWithContents{
 		regularFile1,
 		regularFile2,
@@ -96,8 +96,8 @@ func Test_writeFileToFs(t *testing.T) {
 
 	bucket := storetest.CreateBucket(t, testStore.Store, "docs")
 
-	regularFile := domain.NewRegularFileDescriptorWithContents(t, "a.txt", time.Unix(0, 0), intelligentstore.FileMode600, []byte("file a contents"))
-	secondRegularFile := domain.NewRegularFileDescriptorWithContents(t, "b.txt", time.Unix(0, 0), intelligentstore.FileMode755, []byte("file b contents"))
+	regularFile := domain.NewRegularFileDescriptorWithContents(t, "a.txt", time.Unix(0, 0), dal.FileMode600, []byte("file a contents"))
+	secondRegularFile := domain.NewRegularFileDescriptorWithContents(t, "b.txt", time.Unix(0, 0), dal.FileMode755, []byte("file b contents"))
 	storetest.CreateRevision(t, testStore.Store, bucket, []*domain.RegularFileDescriptorWithContents{
 		regularFile,
 		secondRegularFile,
@@ -113,7 +113,7 @@ func Test_writeFileToFs(t *testing.T) {
 	file1Info, err := exporter.fs.Stat(filePath)
 	require.Nil(t, err)
 
-	assert.Equal(t, intelligentstore.FileMode600, file1Info.Mode().Perm())
+	assert.Equal(t, dal.FileMode600, file1Info.Mode().Perm())
 	assert.Equal(t, regularFile.Contents, file1contents)
 
 	// file 2
@@ -124,7 +124,7 @@ func Test_writeFileToFs(t *testing.T) {
 	file2Info, err := exporter.fs.Stat(file2Path)
 	require.Nil(t, err)
 
-	assert.Equal(t, intelligentstore.FileMode755, file2Info.Mode().Perm())
+	assert.Equal(t, dal.FileMode755, file2Info.Mode().Perm())
 }
 
 func Test_writeFileToFs_UnknownFile(t *testing.T) {

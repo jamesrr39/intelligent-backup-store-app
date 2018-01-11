@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
 	"github.com/spf13/afero"
@@ -15,7 +15,7 @@ import (
 const FilesExportSubDir = "files"
 
 type LocalExporter struct {
-	Store           *intelligentstore.IntelligentStoreDAL
+	Store           *dal.IntelligentStoreDAL
 	BucketName      string
 	RevisionVersion *domain.RevisionVersion // nil = latest version
 	ExportDir       string
@@ -24,7 +24,7 @@ type LocalExporter struct {
 	symlinker       func(oldName, newName string) error
 }
 
-func NewLocalExporter(store *intelligentstore.IntelligentStoreDAL, bucketName string, exportDir string, revisionVersion *domain.RevisionVersion, matcher excludesmatcher.Matcher) *LocalExporter {
+func NewLocalExporter(store *dal.IntelligentStoreDAL, bucketName string, exportDir string, revisionVersion *domain.RevisionVersion, matcher excludesmatcher.Matcher) *LocalExporter {
 	return &LocalExporter{
 		Store:           store,
 		BucketName:      bucketName,

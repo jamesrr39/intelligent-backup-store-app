@@ -1,4 +1,4 @@
-package intelligentstore
+package dal
 
 import "github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
 
