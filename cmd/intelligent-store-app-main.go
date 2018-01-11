@@ -21,8 +21,20 @@ import (
 
 //go:generate swagger generate spec
 func main() {
+	setupStoreInitCommand()
+	setupCreateBucketCommand()
+	setupBackupToCommand()
+	setupListBucketsCommand()
+	setupListRevisionsCommand()
+	setupStartWebappCommand()
+	setupExportCommand()
+
+	kingpin.Parse()
+}
+
+func setupStoreInitCommand() {
 	initCommand := kingpin.Command("init", "create a new store")
-	initStoreLocation := initCommand.Arg("store location", "location of the store").Default(".").String()
+	initStoreLocation := addStoreLocation(initCommand, false)
 	initCommand.Action(func(ctx *kingpin.ParseContext) error {
 		store, err := dal.CreateIntelligentStoreAndNewConn(*initStoreLocation)
 		if nil != err {
@@ -32,31 +44,35 @@ func main() {
 		fmt.Printf("Created a new store at '%s'\n", store.StoreBasePath)
 		return nil
 	})
+}
 
-	initBucketCommand := kingpin.Command("create-bucket", "create a new bucket")
-	initBucketStoreLocation := initBucketCommand.Arg("store location", "location of the store").Required().String()
-	initBucketBucketName := initBucketCommand.Arg("bucket name", "name of the bucket").Required().String()
-	initBucketCommand.Action(func(ctx *kingpin.ParseContext) error {
+func setupCreateBucketCommand() {
+	createBucketCommand := kingpin.Command("create-bucket", "create a new bucket")
+	createBucketStoreLocation := addStoreLocation(createBucketCommand, true)
+	createBucketBucketName := addBucketName(createBucketCommand)
+	createBucketCommand.Action(func(ctx *kingpin.ParseContext) error {
 		store, err := dal.NewIntelligentStoreConnToExisting(
-			*initBucketStoreLocation,
+			*createBucketStoreLocation,
 		)
 
 		if nil != err {
 			return err
 		}
 
-		_, err = store.BucketDAL.CreateBucket(*initBucketBucketName)
+		_, err = store.BucketDAL.CreateBucket(*createBucketBucketName)
 		if nil != err {
 			return err
 		}
 
-		log.Printf("created bucket '%s'\n", *initBucketBucketName)
+		log.Printf("created bucket '%s'\n", *createBucketBucketName)
 		return nil
 	})
 
+}
+func setupBackupToCommand() {
 	backupIntoCommand := kingpin.Command("backup-to", "backup a new version of the folder into the store")
-	backupStoreLocation := backupIntoCommand.Arg("store location", "location of the store").Required().String()
-	backupBucketName := backupIntoCommand.Arg("bucket name", "name of the bucket to back up into").Required().String()
+	backupStoreLocation := addStoreLocation(backupIntoCommand, true)
+	backupBucketName := addBucketName(backupIntoCommand)
 	backupFromLocation := backupIntoCommand.Arg("backup from location", "location to backup from").Default(".").String()
 	backupExcludesMatcherLocation := backupIntoCommand.Flag("exclude", "path to a file with glob-style patterns to exclude files").Default("").String()
 	backupIntoCommand.Action(func(ctx *kingpin.ParseContext) error {
@@ -87,9 +103,11 @@ func main() {
 
 		return uploaderClient.UploadToStore()
 	})
+}
 
+func setupListBucketsCommand() {
 	listBucketsCommand := kingpin.Command("list-buckets", "produce a listing of all the buckets and the last backup time")
-	listBucketsStoreLocation := listBucketsCommand.Arg("store location", "location of the store").Default(".").String()
+	listBucketsStoreLocation := addStoreLocation(listBucketsCommand, false)
 	listBucketsCommand.Action(func(ctx *kingpin.ParseContext) error {
 		store, err := dal.NewIntelligentStoreConnToExisting(*listBucketsStoreLocation)
 		if nil != err {
@@ -122,10 +140,12 @@ func main() {
 
 		return nil
 	})
+}
 
+func setupListRevisionsCommand() {
 	listBucketRevisionsCommand := kingpin.Command("list-revisions", "produce a listing of all the revisions in a bucket")
-	listBucketRevisionsStoreLocation := listBucketRevisionsCommand.Arg("store location", "location of the store").Required().String()
-	listBucketRevisionsBucketName := listBucketRevisionsCommand.Arg("bucket name", "name of the bucket to back up into").Required().String()
+	listBucketRevisionsStoreLocation := addStoreLocation(listBucketRevisionsCommand, true)
+	listBucketRevisionsBucketName := addBucketName(listBucketRevisionsCommand)
 	listBucketRevisionsCommand.Action(func(ctx *kingpin.ParseContext) error {
 		store, err := dal.NewIntelligentStoreConnToExisting(
 			*listBucketRevisionsStoreLocation)
@@ -151,10 +171,12 @@ func main() {
 		return nil
 
 	})
+}
 
+func setupExportCommand() {
 	exportCommand := kingpin.Command("export", "export files from the store to the local file system")
-	exportCommandStoreLocation := exportCommand.Arg("store location", "location of the store").Required().String()
-	exportCommandBucketName := exportCommand.Arg("bucket name", "name of the bucket to export from").Required().String()
+	exportCommandStoreLocation := addStoreLocation(exportCommand, true)
+	exportCommandBucketName := addBucketName(exportCommand)
 	exportCommandExportDir := exportCommand.Arg("export folder", "where to export files to").Required().String()
 	exportCommandRevisionVersion := exportCommand.Flag(
 		"revision-version",
@@ -188,9 +210,11 @@ func main() {
 		return nil
 
 	})
+}
 
+func setupStartWebappCommand() {
 	startWebappCommand := kingpin.Command("start-webapp", "start a webapplication")
-	startWebappStoreLocation := startWebappCommand.Arg("store location", "location of the store").Default(".").String()
+	startWebappStoreLocation := addStoreLocation(startWebappCommand, false)
 	startWebappAddr := startWebappCommand.Flag("address", "custom address to expose the webapp to. Example: ':8081': expose to everyone on port 8081").Default("localhost:8080").String()
 	startWebappCommand.Action(func(ctx *kingpin.ParseContext) error {
 		store, err := dal.NewIntelligentStoreConnToExisting(
@@ -216,7 +240,16 @@ func main() {
 
 		return nil
 	})
+}
 
-	kingpin.Parse()
+func addStoreLocation(cmdClause *kingpin.CmdClause, required bool) *string {
+	arg := cmdClause.Arg("store location", "location of the store")
+	if required {
+		return arg.Required().String()
+	}
+	return arg.Default(".").String()
+}
 
+func addBucketName(cmdClause *kingpin.CmdClause) *string {
+	return cmdClause.Arg("bucket name", "name of the bucket to back up into").Required().String()
 }
