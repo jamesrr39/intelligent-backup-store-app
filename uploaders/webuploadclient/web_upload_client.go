@@ -6,16 +6,14 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/protobufs"
 	protofiles "github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/protobufs/proto_files"
+	"github.com/jamesrr39/intelligent-backup-store-app/uploaders"
 	"github.com/pkg/errors"
 	"github.com/spf13/afero"
 )
@@ -27,11 +25,14 @@ type WebUploadClient struct {
 	folderPath     string
 	excludeMatcher *excludesmatcher.ExcludesMatcher
 	fs             afero.Fs
+	linkReader     uploaders.LinkReader
 }
 
 // NewWebUploadClient creates a new WebUploadClient
 func NewWebUploadClient(
-	storeURL, bucketName, folderPath string,
+	storeURL,
+	bucketName,
+	folderPath string,
 	excludeMatcher *excludesmatcher.ExcludesMatcher,
 ) *WebUploadClient {
 
@@ -41,96 +42,65 @@ func NewWebUploadClient(
 		folderPath,
 		excludeMatcher,
 		afero.NewOsFs(),
+		uploaders.OsFsLinkReader,
 	}
 }
 
-// BackupFolder backs up a directory on the local machine to the bucket in the store in the WebUploadClient
+// UploadToStore backs up a directory on the local machine to the bucket in the store in the WebUploadClient
 func (c *WebUploadClient) UploadToStore() error {
-	var fileList []*intelligentstore.FileDescriptor
+	// FIXME abort if error
 
-	var totalFilesToUpload int64
-	var totalBytesToUpload int64
-
-	// build file list
-	err := afero.Walk(c.fs, c.folderPath, func(path string, fileInfo os.FileInfo, err error) error {
-		if nil != err {
-			return err
-		}
-
-		if fileInfo.IsDir() {
-			return nil
-		}
-
-		if !fileInfo.Mode().IsRegular() {
-			// skip symlinks
-			return nil
-		}
-
-		relativeFilePath := intelligentstore.NewRelativePath(strings.TrimPrefix(path, c.folderPath))
-
-		if c.excludeMatcher.Matches(relativeFilePath) {
-			// skip excluded file
-			log.Printf("skipping %s\n", relativeFilePath)
-			return nil
-		}
-
-		log.Printf("adding %s to the file descriptor list\n", relativeFilePath)
-
-		totalFilesToUpload++
-		totalBytesToUpload += fileInfo.Size()
-
-		file, err := c.fs.Open(path)
-		if nil != err {
-			return err
-		}
-		defer file.Close()
-
-		fileDescriptor, err := intelligentstore.NewFileDescriptorFromReader(relativeFilePath, file)
-		if nil != err {
-			return err
-		}
-
-		fileList = append(fileList, fileDescriptor)
-
-		return nil
-	})
+	fileInfosMap, err := uploaders.BuildFileInfosMap(c.fs, c.linkReader, c.folderPath, c.excludeMatcher)
 	if nil != err {
 		return err
 	}
 
-	// open transaction
-	revisionStr, filesToSendDescriptors, err := c.openTx(fileList)
+	revisionVersion, requiredRelativePaths, err := c.openTx(fileInfosMap.ToSlice())
 	if nil != err {
 		return err
 	}
-	log.Printf("opened Tx. Rev: %d\n", revisionStr)
 
-	var filesSuccessfullyBackedUpCount int64
-	var filesFailedToBackup []*intelligentstore.FileDescriptor
-	amountOfFilesToSend := len(filesToSendDescriptors)
-	filesAlreadyOnServerCount := totalFilesToUpload - int64(amountOfFilesToSend)
+	log.Printf("== requiredRelativePaths: %s\n", requiredRelativePaths)
 
-	for _, fileDescriptor := range filesToSendDescriptors {
-		err = c.backupFile(revisionStr, fileDescriptor)
-		if nil != err {
-			filesFailedToBackup = append(filesFailedToBackup, fileDescriptor)
-			log.Printf("failed to backup %s. Error: %s\n", fileDescriptor, err)
-		} else {
-			filesSuccessfullyBackedUpCount++
-		}
+	var requiredRegularFileRelativePaths []domain.RelativePath
+	var requiredSymlinkRelativePaths []domain.RelativePath
 
-		filesProcessedSoFar := filesSuccessfullyBackedUpCount + int64(len(filesFailedToBackup))
-		if (filesProcessedSoFar % 10) == 0 {
-			log.Printf("%d of %d files processed (%f%% complete) (%d were already on the server)\n",
-				filesProcessedSoFar,
-				amountOfFilesToSend,
-				100*float64(filesProcessedSoFar)/float64(amountOfFilesToSend),
-				filesAlreadyOnServerCount)
+	for _, requiredRelativePath := range requiredRelativePaths {
+		fileInfo := fileInfosMap[requiredRelativePath]
+		switch fileInfo.Type {
+		case domain.FileTypeRegular:
+			requiredRegularFileRelativePaths = append(requiredRegularFileRelativePaths, requiredRelativePath)
+		case domain.FileTypeSymlink:
+			requiredSymlinkRelativePaths = append(requiredSymlinkRelativePaths, requiredRelativePath)
+		default:
+			return fmt.Errorf("unsupported file type: '%d' for fileInfo: '%v'", fileInfo.Type, fileInfo)
 		}
 	}
 
-	log.Println("commiting Tx")
-	err = c.commitTx(revisionStr)
+	err = c.uploadSymlinks(revisionVersion, fileInfosMap, requiredSymlinkRelativePaths)
+	if nil != err {
+		return err
+	}
+
+	hashRelativePathMap, err := uploaders.BuildRelativePathsWithHashes(c.fs, c.folderPath, requiredRegularFileRelativePaths)
+	if nil != err {
+		return err
+	}
+
+	requiredHashes, err := c.fetchRequiredHashes(revisionVersion, hashRelativePathMap.ToSlice())
+	if nil != err {
+		return err
+	}
+
+	for _, requiredHash := range requiredHashes {
+		relativePath := hashRelativePathMap[requiredHash][0]
+		err = c.backupFile(revisionVersion, relativePath)
+		if nil != err {
+			return err
+		}
+	}
+
+	err = c.commitTx(revisionVersion)
 	if nil != err {
 		return err
 	}
@@ -138,20 +108,126 @@ func (c *WebUploadClient) UploadToStore() error {
 	return nil
 }
 
-// openTx opens a transaction with the server and sends a list of files it wants to back up
-func (c *WebUploadClient) openTx(fileDescriptors []*intelligentstore.FileDescriptor) (intelligentstore.RevisionVersion, []*intelligentstore.FileDescriptor, error) {
-	protoFileDescriptors := &protofiles.FileDescriptorProtoList{}
-	for _, descriptor := range fileDescriptors {
-		descriptorProto := &protofiles.FileDescriptorProto{
-			Filename: string(descriptor.RelativePath),
-			Hash:     string(descriptor.Hash),
+func (c *WebUploadClient) uploadSymlinks(revisionVersion domain.RevisionVersion, fileInfosMap uploaders.FileInfoMap, requiredRelativePaths []domain.RelativePath) error {
+	uploadSymlinksRequest := &protofiles.UploadSymlinksRequest{}
+	for _, requiredRelativePath := range requiredRelativePaths {
+		fileInfo := fileInfosMap[requiredRelativePath]
+
+		filePath := filepath.Join(c.folderPath, string(fileInfo.RelativePath))
+
+		dest, err := c.linkReader(filePath)
+		if nil != err {
+			return fmt.Errorf("couldn't read link for %s. Error: %s", filePath, err)
 		}
 
-		protoFileDescriptors.FileDescriptors = append(protoFileDescriptors.FileDescriptors, descriptorProto)
+		uploadSymlinksRequest.SymlinksWithRelativePaths = append(
+			uploadSymlinksRequest.SymlinksWithRelativePaths,
+			&protofiles.SymlinkWithRelativePath{
+				RelativePath: string(fileInfo.RelativePath),
+				Dest:         dest,
+			},
+		)
 	}
 
+	uploadSymlinksRequestBytes, err := proto.Marshal(uploadSymlinksRequest)
+	if nil != err {
+		return err
+	}
+
+	url := fmt.Sprintf("%s/api/buckets/%s/upload/%d/symlinks", c.storeURL, c.bucketName, revisionVersion)
+	client := http.Client{Timeout: time.Minute}
+	resp, err := client.Post(
+		url,
+		"application/octet-stream",
+		bytes.NewBuffer(uploadSymlinksRequestBytes))
+	if nil != err {
+		return fmt.Errorf("couln't POST to %s. Error: %s", url, err)
+	}
+	defer resp.Body.Close()
+
+	if 200 != resp.StatusCode {
+		errMessageBytes, err := ioutil.ReadAll(resp.Body)
+		if nil != err {
+			errMessageBytes = []byte(fmt.Sprintf("couldn't read response body. Error: %v", err))
+		}
+		return fmt.Errorf("expected 200 response code but got %d. Response body: '%s'", resp.StatusCode, errMessageBytes)
+	}
+
+	return nil
+}
+
+func (c *WebUploadClient) fetchRequiredHashes(revisionVersion domain.RevisionVersion, relativePathsWithHashes []*domain.RelativePathWithHash) ([]domain.Hash, error) {
+	fetchRequiredHashesRequestProto := &protofiles.GetRequiredHashesRequest{
+		RelativePathsAndHashes: nil,
+	}
+
+	for _, relativePathWithHash := range relativePathsWithHashes {
+		fetchRequiredHashesRequestProto.RelativePathsAndHashes = append(
+			fetchRequiredHashesRequestProto.RelativePathsAndHashes,
+			&protofiles.RelativePathAndHashProto{
+				RelativePath: string(relativePathWithHash.RelativePath),
+				Hash:         string(relativePathWithHash.Hash),
+			},
+		)
+	}
+
+	fetchRequiredHashesRequestBytes, err := proto.Marshal(fetchRequiredHashesRequestProto)
+	if nil != err {
+		return nil, err
+	}
+
+	fetchRequiredHashesRequest := http.Client{Timeout: time.Minute}
+
+	url := fmt.Sprintf("%s/api/buckets/%s/upload/%d/hashes", c.storeURL, c.bucketName, revisionVersion)
+	resp, err := fetchRequiredHashesRequest.Post(
+		url,
+		"application/octet-stream",
+		bytes.NewBuffer(fetchRequiredHashesRequestBytes))
+	if nil != err {
+		return nil, fmt.Errorf("couln't POST to %s. Error: %s", url, err)
+	}
+	defer resp.Body.Close()
+
+	// read the response body now; we will need it whether the response was good or bad.
+	respBytes, err := ioutil.ReadAll(resp.Body)
+	if nil != err {
+		return nil, fmt.Errorf("couldn't read hashes upload response body. Error: %s", err)
+	}
+
+	if 200 != resp.StatusCode {
+		return nil, fmt.Errorf("hashes upload to %s failed with error: HTTP %d: %s", url, resp.StatusCode, respBytes)
+	}
+
+	var getRequiredHashesResponse protofiles.GetRequiredHashesResponse
+	err = proto.Unmarshal(respBytes, &getRequiredHashesResponse)
+	if nil != err {
+		return nil, fmt.Errorf("couldn't unmarshal hashes upload response body. Error: %s", err)
+	}
+
+	var hashes []domain.Hash
+	for _, hash := range getRequiredHashesResponse.GetHashes() {
+		hashes = append(hashes, domain.Hash(hash))
+	}
+
+	return hashes, nil
+}
+
+// openTx opens a transaction with the server and sends a list of files it wants to back up
+func (c *WebUploadClient) openTx(fileInfos []*domain.FileInfo) (domain.RevisionVersion, []domain.RelativePath, error) {
 	openTxRequest := &protofiles.OpenTxRequest{
-		FileDescriptorList: protoFileDescriptors,
+		FileInfos: nil,
+	}
+
+	for _, fileInfo := range fileInfos {
+		openTxRequest.FileInfos = append(
+			openTxRequest.FileInfos,
+			&protofiles.FileInfoProto{
+				RelativePath: string(fileInfo.RelativePath),
+				ModTime:      fileInfo.ModTime.Unix(),
+				Size:         fileInfo.Size,
+				FileType:     protofiles.FileType(fileInfo.Type),
+			},
+		)
 	}
 
 	openTxRequestBodyBytes, err := proto.Marshal(openTxRequest)
@@ -197,42 +273,42 @@ func (c *WebUploadClient) openTx(fileDescriptors []*intelligentstore.FileDescrip
 		return 0, nil, fmt.Errorf("couldn't unmarshal OpenTx response. Error: %s", err)
 	}
 
-	var filesToSendDescriptors []*intelligentstore.FileDescriptor
-	for _, fileDescriptorProto := range openTxResponse.FileDescriptorList.FileDescriptors {
-		filesToSendDescriptors = append(
-			filesToSendDescriptors,
-			protobufs.FileDescriptorProtoToFileDescriptor(fileDescriptorProto))
+	var requiredRelativePaths []domain.RelativePath
+	for _, wantedHash := range openTxResponse.GetRequiredRelativePaths() {
+		requiredRelativePaths = append(requiredRelativePaths, domain.NewRelativePath(wantedHash))
 	}
-	log.Printf("created a new version: %d\n", openTxResponse.RevisionStr)
-	return intelligentstore.RevisionVersion(openTxResponse.RevisionStr), filesToSendDescriptors, nil
+	log.Printf("created a new version: %d\n", openTxResponse.GetRevisionID())
+	return domain.RevisionVersion(openTxResponse.GetRevisionID()), requiredRelativePaths, nil
 }
 
-func (c *WebUploadClient) backupFile(revisionStr intelligentstore.RevisionVersion, fileDescriptor *intelligentstore.FileDescriptor) error {
-	log.Printf("BACKING UP %s\n", fileDescriptor.RelativePath)
+func (c *WebUploadClient) backupFile(revisionStr domain.RevisionVersion, relativePath domain.RelativePath) error {
+	log.Printf("BACKING UP %s\n", relativePath)
 
 	client := http.Client{Timeout: time.Hour}
 	fileContents, err := afero.ReadFile(c.fs, filepath.Join(
 		c.folderPath,
-		string(fileDescriptor.RelativePath)))
+		string(relativePath)))
 	if nil != err {
-		return errors.Wrapf(err, "couldn't read file at %s", fileDescriptor.RelativePath)
+		return errors.Wrapf(err, "couldn't read file at %s", relativePath)
 	}
 
-	protoBufFile := &protofiles.FileProto{
-		Descriptor_: protobufs.FileDescriptorToProto(fileDescriptor),
-		Contents:    fileContents,
+	protoBufFile := &protofiles.FileContentsProto{
+		Contents: fileContents,
 	}
 
 	marshalledFile, err := proto.Marshal(protoBufFile)
 	if nil != err {
-		return errors.Wrapf(err, "couldn't marshall file at %s to protobuf", fileDescriptor.RelativePath)
+		return errors.Wrapf(err, "couldn't marshall file at %s to protobuf", relativePath)
 	}
 
 	uploadURL := fmt.Sprintf("%s/api/buckets/%s/upload/%d/file",
 		c.storeURL, c.bucketName, revisionStr)
+
+	log.Printf("UPLOADING file to %s\n", uploadURL)
+
 	resp, err := client.Post(uploadURL, "application/octet-stream", bytes.NewBuffer(marshalledFile))
 	if nil != err {
-		return errors.Wrapf(err, "couldn't send file at %s to remote Store server", fileDescriptor.RelativePath)
+		return errors.Wrapf(err, "couldn't send file at %s to remote Store server", relativePath)
 	}
 	defer resp.Body.Close()
 
@@ -242,7 +318,7 @@ func (c *WebUploadClient) backupFile(revisionStr intelligentstore.RevisionVersio
 			respBodyBytes = []byte(fmt.Sprintf("couldn't read response body. Error: '%s'", err))
 		}
 		return fmt.Errorf("expected 200 (OK) repsonse code for file upload for '%s' to '%s', but received '%s'. Response Text: '%s'",
-			string(fileDescriptor.RelativePath),
+			string(relativePath),
 			uploadURL,
 			resp.Status,
 			respBodyBytes)
@@ -250,7 +326,7 @@ func (c *WebUploadClient) backupFile(revisionStr intelligentstore.RevisionVersio
 	return nil
 }
 
-func (c *WebUploadClient) commitTx(revisionStr intelligentstore.RevisionVersion) error {
+func (c *WebUploadClient) commitTx(revisionStr domain.RevisionVersion) error {
 	commitTxClient := http.Client{Timeout: time.Second * 20}
 	url := fmt.Sprintf("%s/api/buckets/%s/upload/%d/commit", c.storeURL, c.bucketName, revisionStr)
 	resp, err := commitTxClient.Get(url)

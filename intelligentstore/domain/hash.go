@@ -3,19 +3,24 @@ package domain
 import (
 	"crypto/sha512"
 	"encoding/hex"
+	"hash"
 	"io"
 )
 
 type Hash string
 
 func NewHash(r io.Reader) (Hash, error) {
-	hasher := sha512.New()
+	hasher := newHasher()
 	_, err := io.Copy(hasher, r)
 	if nil != err {
 		return "", err
 	}
 
 	return Hash(hex.EncodeToString(hasher.Sum(nil))), nil
+}
+
+func newHasher() hash.Hash {
+	return sha512.New()
 }
 
 // FirstChunk is the first 2 tokens of the hash

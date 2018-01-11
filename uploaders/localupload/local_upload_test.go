@@ -2,6 +2,7 @@ package localupload
 
 import (
 	"bytes"
+	"errors"
 	"testing"
 	"time"
 
@@ -12,12 +13,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-func Test_fullPathToRelative(t *testing.T) {
-	assert.Equal(t, "abc/b.txt", string(fullPathToRelative("/ry", "/ry/abc/b.txt")))
-	assert.Equal(t, "b.txt", string(fullPathToRelative("/ry/", "/ry/b.txt")))
-	assert.Equal(t, "abc/b.txt", string(fullPathToRelative("/ry/", "/ry/abc/b.txt")))
-}
 
 type testfile struct {
 	path     domain.RelativePath
@@ -51,47 +46,45 @@ func Test_UploadToStore(t *testing.T) {
 		bytes.NewBuffer([]byte("\nexclude*\n")))
 	require.Nil(t, err)
 
-	store := intelligentstore.NewMockStore(t, mockTimeProvider, fs)
-	_, err = store.CreateBucket("docs")
-	require.Nil(t, err)
+	store := intelligentstore.NewMockStore(t, intelligentstore.MockNowProvider, afero.NewMemMapFs())
+
+	store.CreateBucket(t, "docs")
+
+	mockLinkReader := func(path string) (string, error) {
+		return "", errors.New("not implemented")
+	}
 
 	uploader := &LocalUploader{
-		store.Path,
+		store.Store,
 		"docs",
 		"/docs",
 		excludeMatcher,
 		fs,
+		mockLinkReader,
 	}
-
-	d, err := afero.ReadDir(fs, "/test-store")
-	require.Nil(t, err)
-	t.Log(d[0].Name())
 
 	err = uploader.UploadToStore()
 	require.Nil(t, err)
 
-	_, err = store.GetBucket("not existing bucket")
+	_, err = store.Store.BucketDAL.GetBucketByName("not existing bucket")
 	require.NotNil(t, err)
 
-	bucket, err := store.GetBucket("docs")
+	bucket, err := store.Store.GetBucketByName("docs")
 	require.Nil(t, err)
 
-	bucketDAL := intelligentstore.NewBucketDAL(store.IntelligentStoreDAL)
-
-	revisions, err := bucketDAL.GetRevisions(bucket)
+	revisions, err := store.Store.BucketDAL.GetRevisions(bucket)
 	require.Nil(t, err)
 	assert.Len(t, revisions, 1)
 
 	revision := revisions[0]
-	revisionDAL := intelligentstore.NewRevisionDAL(store.IntelligentStoreDAL, bucketDAL)
 
-	fileDescriptors, err := revisionDAL.GetFilesInRevision(bucket, revision)
+	fileDescriptors, err := store.Store.RevisionDAL.GetFilesInRevision(bucket, revision)
 	require.Nil(t, err)
 	assert.Len(t, fileDescriptors, 4)
 
-	fileDescriptorNameMap := make(map[domain.RelativePath]*domain.FileDescriptor)
+	fileDescriptorNameMap := make(map[domain.RelativePath]domain.FileDescriptor)
 	for _, fileDescriptor := range fileDescriptors {
-		fileDescriptorNameMap[fileDescriptor.RelativePath] = fileDescriptor
+		fileDescriptorNameMap[fileDescriptor.GetFileInfo().RelativePath] = fileDescriptor
 	}
 
 	for _, testFile := range testFiles {
@@ -99,8 +92,9 @@ func Test_UploadToStore(t *testing.T) {
 			bytes.NewBuffer([]byte(testFile.contents)))
 		require.Nil(t, err)
 
-		assert.Equal(t, testFile.path, fileDescriptorNameMap[testFile.path].RelativePath)
-		assert.Equal(t, hash, fileDescriptorNameMap[testFile.path].Hash)
+		assert.Equal(t, testFile.path, fileDescriptorNameMap[testFile.path].GetFileInfo().RelativePath)
+		fileDescriptor := (fileDescriptorNameMap[testFile.path]).(*domain.RegularFileDescriptor)
+		assert.Equal(t, hash, fileDescriptor.Hash)
 	}
 
 }

@@ -1,0 +1,45 @@
+package uploaders
+
+import (
+	"log"
+	"path/filepath"
+
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
+	"github.com/spf13/afero"
+)
+
+type HashRelativePathMap map[domain.Hash][]domain.RelativePath
+
+func (m HashRelativePathMap) ToSlice() []*domain.RelativePathWithHash {
+	var relativePathsWithHashes []*domain.RelativePathWithHash
+	for hash, relativePaths := range m {
+		for _, relativePath := range relativePaths {
+			relativePathWithHash := &domain.RelativePathWithHash{
+				RelativePath: relativePath,
+				Hash:         hash,
+			}
+			relativePathsWithHashes = append(relativePathsWithHashes, relativePathWithHash)
+		}
+	}
+	return relativePathsWithHashes
+}
+
+func BuildRelativePathsWithHashes(fs afero.Fs, backupFromLocation string, requiredRelativePaths []domain.RelativePath) (HashRelativePathMap, error) {
+	hashRelativePathMap := make(HashRelativePathMap)
+	log.Printf("required relative paths: %s\n", requiredRelativePaths)
+	for _, requiredRelativePath := range requiredRelativePaths {
+		file, err := fs.Open(filepath.Join(backupFromLocation, string(requiredRelativePath)))
+		if nil != err {
+			return nil, err
+		}
+		hash, err := domain.NewHash(file)
+		if nil != err {
+			return nil, err
+		}
+		file.Close()
+
+		hashRelativePathMap[hash] = append(hashRelativePathMap[hash], requiredRelativePath)
+	}
+
+	return hashRelativePathMap, nil
+}

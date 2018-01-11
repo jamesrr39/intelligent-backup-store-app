@@ -1,25 +1,51 @@
 syntax = "proto3";
 package protobufgenerated;
 
-message FileDescriptorProto {
-  string filename = 1;
+enum FileType {
+  UNKNOWN = 0;
+  REGULAR = 1;
+  SYMLINK = 2;
+}
+
+message FileInfoProto {
+  FileType fileType = 4;
+  string relativePath = 1;
+  int64 modTime = 2;
+  int64 size = 3;
+  uint32 mode = 5; // maps to Go os.FileMode
+}
+
+message RelativePathAndHashProto {
+  string relativePath = 1;
   string hash = 2;
 }
 
-message FileProto {
-  FileDescriptorProto descriptor = 1;
-  bytes contents = 2;
-}
-
-message FileDescriptorProtoList {
-  repeated FileDescriptorProto fileDescriptors = 1;
+message FileContentsProto {
+  bytes contents = 1;
 }
 
 message OpenTxRequest {
-  FileDescriptorProtoList fileDescriptorList = 1;
+  repeated FileInfoProto fileInfos = 1;
 }
 
 message OpenTxResponse {
-  int64 revisionStr = 1;
-  FileDescriptorProtoList FileDescriptorList = 2;
+  int64 revisionID = 1;
+  repeated string requiredRelativePaths = 2;
+}
+
+message GetRequiredHashesRequest {
+  repeated RelativePathAndHashProto relativePathsAndHashes = 1;
+}
+
+message GetRequiredHashesResponse {
+  repeated string hashes = 1;
+}
+
+message SymlinkWithRelativePath {
+  string relativePath = 1;
+  string dest = 2;
+}
+
+message UploadSymlinksRequest {
+  repeated SymlinkWithRelativePath symlinksWithRelativePaths = 1;
 }

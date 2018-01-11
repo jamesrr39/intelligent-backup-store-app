@@ -15,6 +15,8 @@ define([
 
   var $contentEl = $("#content");
 
+  var currentView;
+
 	window.onhashchange = function(){
 		var hashFragments = window.location.hash.substring(2).split("/").map(function(fragment){
       return decodeURIComponent(fragment);
@@ -22,6 +24,10 @@ define([
     var bucketName;
     var revisionStr;
     var rootDir;
+
+    if (currentView && currentView.onClose) {
+      currentView.onClose();
+    }
 
     switch (hashFragments[0]) {
       case "buckets":
@@ -35,12 +41,15 @@ define([
 
         if (bucketName) {
           var bucketView = new BucketView(bucketName, revisionStr, rootDir);
+          currentView = bucketView;
           bucketView.render($contentEl);
           return
         }
+        currentView = bucketListingView;
         bucketListingView.render($contentEl);
         return;
       default:
+        currentView = bucketListingView;
         bucketListingView.render($contentEl);
 		}
 	}

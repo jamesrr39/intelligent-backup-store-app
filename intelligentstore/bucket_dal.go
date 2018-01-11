@@ -2,6 +2,7 @@ package intelligentstore
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strconv"
 
@@ -28,22 +29,47 @@ func NewBucketDAL(intelligentStoreDAL *IntelligentStoreDAL) *BucketDAL {
 	return &BucketDAL{intelligentStoreDAL}
 }
 
-func (dal *BucketDAL) Begin(bucket *domain.Bucket) *domain.Transaction {
-	versionTimestamp := dal.nowProvider().Unix()
+// Begin creates a new Transaction to create a new revision of files in the Bucket.
+// FIXME remove (use CreateTransaction instead)
+// func (dal *BucketDAL) Begin(bucket *domain.Bucket, fileInfos []*domain.FileInfo) (*domain.Transaction, error) {
+// 	versionTimestamp := dal.nowProvider().Unix()
+//
+// 	err := dal.acquireStoreLock(fmt.Sprintf("bucket: %s", bucket.BucketName))
+// 	if nil != err {
+// 		return nil, err
+// 	}
+//
+// 	revision := domain.NewRevision(bucket, domain.RevisionVersion(versionTimestamp))
+// 	tx := &domain.Transaction{
+// 		Revision: revision,
+// 	}
+// 	if nil != err {
+// 		removeStockLockErr := dal.removeStoreLock()
+// 		if nil != removeStockLockErr {
+// 			return nil, errors.Errorf("couldn't start a transaction and remove Stock lock. Start transaction error: '%s'. Remove Store lock error: '%s'", err, removeStockLockErr)
+// 		}
+// 		return nil, errors.Errorf("couldn't start a transaction. Error: '%s'", err)
+// 	}
+//
+// 	return tx, nil
+// }
 
-	return domain.NewTransaction(
-		domain.NewRevision(
-			bucket,
-			domain.RevisionVersion(versionTimestamp)),
-		nil)
-}
+// func (dal *BucketDAL) Begin(bucket *domain.Bucket, fileInfos []*domain.FileInfo) *domain.Transaction {
+// 	versionTimestamp := dal.nowProvider().Unix()
+//
+// 	return domain.NewTransaction(
+// 		domain.NewRevision(
+// 			bucket,
+// 			domain.RevisionVersion(versionTimestamp)),
+// 		nil)
+// }
 
-func (dal *BucketDAL) bucketPath(bucket *domain.Bucket) string {
+func (bucketDAL *BucketDAL) bucketPath(bucket *domain.Bucket) string {
 	return filepath.Join(
-		dal.IntelligentStoreDAL.StoreBasePath,
+		bucketDAL.StoreBasePath,
 		".backup_data",
 		"buckets",
-		bucket.BucketName)
+		strconv.Itoa(bucket.ID))
 }
 
 func isValidBucketName(name string) error {
@@ -83,7 +109,12 @@ func (dal *BucketDAL) GetLatestRevision(bucket *domain.Bucket) (*domain.Revision
 	for _, fileInfo := range versionsFileInfos {
 		ts, err := strconv.ParseInt(fileInfo.Name(), 10, 64)
 		if nil != err {
-			return nil, fmt.Errorf("couldn't understand revision '%s' of bucket '%s'. Error: '%s'", fileInfo.Name(), bucket.BucketName, err)
+			return nil, fmt.Errorf(
+				"couldn't understand revision '%s' of bucket '%s'. Error: '%s'",
+				fileInfo.Name(),
+				bucket.BucketName,
+				err,
+			)
 		}
 
 		if ts > highestTs {
@@ -117,6 +148,8 @@ func (dal *BucketDAL) GetRevisions(bucket *domain.Bucket) ([]*domain.Revision, e
 	return versions, nil
 }
 
+var ErrRevisionDoesNotExist = errors.New("revision doesn't exist")
+
 // GetRevision gets a specific version of this bucket
 func (dal *BucketDAL) GetRevision(bucket *domain.Bucket, revisionTimeStamp domain.RevisionVersion) (*domain.Revision, error) {
 	versionsFolderPath := filepath.Join(dal.bucketPath(bucket), "versions")
@@ -126,8 +159,40 @@ func (dal *BucketDAL) GetRevision(bucket *domain.Bucket, revisionTimeStamp domai
 			versionsFolderPath,
 			revisionTimeStamp.String()))
 	if nil != err {
+		if os.IsNotExist(err) {
+			return nil, ErrRevisionDoesNotExist
+		}
 		return nil, errors.Wrapf(err, "couldn't get revision '%d'", revisionTimeStamp)
 	}
 
 	return domain.NewRevision(bucket, domain.RevisionVersion(revisionTimeStamp)), nil
 }
+
+// // Bucket represents an organisational area of the Store.
+// type Bucket struct {
+// 	store *IntelligentStore
+// 	ID    int64  `json:"id"`
+// 	Name  string `json:"name"`
+// }
+//
+// // Begin creates a new Transaction to create a new revision of files in the Bucket.
+// func (bucket *Bucket) Begin(fileInfos []*FileInfo) (*Transaction, error) {
+// 	versionTimestamp := bucket.store.nowProvider().Unix()
+//
+// 	err := bucket.store.acquireStoreLock(fmt.Sprintf("bucket: %s", bucket.Name))
+// 	if nil != err {
+// 		return nil, err
+// 	}
+//
+// 	revision := &Revision{bucket, RevisionVersion(versionTimestamp)}
+// 	tx, err := NewTransaction(revision, fileInfos)
+// 	if nil != err {
+// 		removeStockLockErr := bucket.store.removeStoreLock()
+// 		if nil != removeStockLockErr {
+// 			return nil, errors.Errorf("couldn't start a transaction and remove Stock lock. Start transaction error: '%s'. Remove Store lock error: '%s'", err, removeStockLockErr)
+// 		}
+// 		return nil, errors.Errorf("couldn't start a transaction. Error: '%s'", err)
+// 	}
+//
+// 	return tx, nil
+// }
