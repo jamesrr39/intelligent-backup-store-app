@@ -1,7 +1,6 @@
 package dal
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -27,6 +26,7 @@ type IntelligentStoreDAL struct {
 	RevisionDAL    *RevisionDAL
 	TransactionDAL *TransactionDAL
 	LockDAL        *LockDAL
+	UserDAL        *UserDAL
 }
 
 func NewIntelligentStoreConnToExisting(pathToBase string) (*IntelligentStoreDAL, error) {
@@ -55,6 +55,7 @@ func newIntelligentStoreConnToExisting(pathToBase string, nowFunc nowProvider, f
 	storeDAL.RevisionDAL = &RevisionDAL{storeDAL, storeDAL.BucketDAL}
 	storeDAL.TransactionDAL = &TransactionDAL{storeDAL}
 	storeDAL.LockDAL = &LockDAL{storeDAL}
+	storeDAL.UserDAL = &UserDAL{storeDAL}
 	return storeDAL, nil
 }
 
@@ -124,85 +125,6 @@ func createIntelligentStoreAndNewConn(pathToBase string, nowFunc nowProvider, fs
 	// }
 	// storeDAL.BucketDAL = &BucketDAL{storeDAL}
 	// return storeDAL, nil
-}
-
-func (s *IntelligentStoreDAL) getUsersInformationPath() string {
-	return filepath.Join(s.StoreBasePath, ".backup_data", "store_metadata", "users-data.json")
-}
-
-var ErrUserNotFound = errors.New("couldn't find user")
-
-func (s *IntelligentStoreDAL) GetUserByUsername(username string) (*domain.User, error) {
-	file, err := s.fs.Open(s.getUsersInformationPath())
-	if nil != err {
-		return nil, err
-	}
-	defer file.Close()
-
-	var users []*domain.User
-	err = json.NewDecoder(file).Decode(&users)
-	if nil != err {
-		return nil, err
-	}
-
-	for _, user := range users {
-		if user.DisplayName == username {
-			return user, nil
-		}
-	}
-
-	return nil, ErrUserNotFound
-}
-
-func (s *IntelligentStoreDAL) GetAllUsers() ([]*domain.User, error) {
-	file, err := s.fs.Open(s.getUsersInformationPath())
-	if nil != err {
-		return nil, err
-	}
-	defer file.Close()
-
-	var users []*domain.User
-	err = json.NewDecoder(file).Decode(&users)
-	if nil != err {
-		return nil, err
-	}
-
-	return users, nil
-}
-
-func (s *IntelligentStoreDAL) CreateUser(user *domain.User) (*domain.User, error) {
-	if user.ID != 0 {
-		return nil, errors.Errorf("tried to create a user with ID %d (expected 0)", user.ID)
-	}
-
-	users, err := s.GetAllUsers()
-	if nil != err {
-		return nil, err
-	}
-
-	highestID := 0
-	for _, user := range users {
-		if user.ID > highestID {
-			highestID = user.ID
-		}
-	}
-
-	newUser := domain.NewUser(highestID+1, user.DisplayName, user.HashedPassword)
-
-	file, err := s.fs.OpenFile(s.getUsersInformationPath(), os.O_WRONLY, 0600)
-	if nil != err {
-		return nil, err
-	}
-	defer file.Close()
-
-	users = append(users, newUser)
-
-	err = json.NewEncoder(file).Encode(users)
-	if nil != err {
-		return nil, err
-	}
-
-	return newUser, nil
 }
 
 func (s *IntelligentStoreDAL) GetObjectByHash(hash domain.Hash) (io.ReadCloser, error) {

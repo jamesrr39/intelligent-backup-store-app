@@ -86,19 +86,6 @@ func Test_CreateBucket(t *testing.T) {
 	assert.Equal(t, ErrBucketNameAlreadyTaken, err)
 }
 
-func Test_CreateUser(t *testing.T) {
-	mockStore := NewMockStore(t, MockNowProvider, afero.NewMemMapFs())
-
-	_, err := mockStore.Store.CreateUser(domain.NewUser(1, "test öäø user", "testpassword"))
-	assert.Equal(t, "tried to create a user with ID 1 (expected 0)", err.Error())
-
-	u := domain.NewUser(0, "test öäø user", "testpassword2")
-	newUser, err := mockStore.Store.CreateUser(u)
-	require.Nil(t, err)
-	assert.Equal(t, 0, u.ID, "a new object should be returned")
-	assert.Equal(t, 1, newUser.ID)
-}
-
 func Test_GetObjectByHash(t *testing.T) {
 	mockStore := NewMockStore(t, MockNowProvider, afero.NewMemMapFs())
 	bucket, err := mockStore.Store.BucketDAL.CreateBucket("docs")
