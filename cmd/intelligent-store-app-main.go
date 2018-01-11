@@ -45,7 +45,7 @@ func main() {
 			return err
 		}
 
-		_, err = store.CreateBucket(*initBucketBucketName)
+		_, err = store.BucketDAL.CreateBucket(*initBucketBucketName)
 		if nil != err {
 			return err
 		}
@@ -96,7 +96,7 @@ func main() {
 			return err
 		}
 
-		buckets, err := store.GetAllBuckets()
+		buckets, err := store.BucketDAL.GetAllBuckets()
 		if nil != err {
 			return err
 		}
@@ -134,7 +134,7 @@ func main() {
 			return err
 		}
 
-		bucket, err := store.GetBucketByName(*listBucketRevisionsBucketName)
+		bucket, err := store.BucketDAL.GetBucketByName(*listBucketRevisionsBucketName)
 		if nil != err {
 			return err
 		}

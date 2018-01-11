@@ -57,12 +57,12 @@ func Test_createIntelligentStoreAndNewConn(t *testing.T) {
 func Test_GetBucketByName(t *testing.T) {
 	mockStore := NewMockStore(t, MockNowProvider, afero.NewMemMapFs())
 
-	bucket, err := mockStore.Store.CreateBucket("test bucket")
+	bucket, err := mockStore.Store.BucketDAL.CreateBucket("test bucket")
 	require.Nil(t, err)
 	assert.Equal(t, 1, bucket.ID)
 	assert.Equal(t, "test bucket", bucket.BucketName)
 
-	fetchedBucket, err := mockStore.Store.GetBucketByName("test bucket")
+	fetchedBucket, err := mockStore.Store.BucketDAL.GetBucketByName("test bucket")
 	require.Nil(t, err)
 	assert.Equal(t, 1, fetchedBucket.ID)
 	assert.Equal(t, "test bucket", fetchedBucket.BucketName)
@@ -71,17 +71,17 @@ func Test_GetBucketByName(t *testing.T) {
 func Test_CreateBucket(t *testing.T) {
 	mockStore := NewMockStore(t, MockNowProvider, afero.NewMemMapFs())
 
-	bucket1, err := mockStore.Store.CreateBucket("test bucket")
+	bucket1, err := mockStore.Store.BucketDAL.CreateBucket("test bucket")
 	require.Nil(t, err)
 	assert.Equal(t, 1, bucket1.ID)
 	assert.Equal(t, "test bucket", bucket1.BucketName)
 
-	bucket2, err := mockStore.Store.CreateBucket("test bucket 2")
+	bucket2, err := mockStore.Store.BucketDAL.CreateBucket("test bucket 2")
 	require.Nil(t, err)
 	assert.Equal(t, 2, bucket2.ID)
 	assert.Equal(t, "test bucket 2", bucket2.BucketName)
 
-	bucket3, err := mockStore.Store.CreateBucket("test bucket")
+	bucket3, err := mockStore.Store.BucketDAL.CreateBucket("test bucket")
 	require.Nil(t, bucket3)
 	assert.Equal(t, ErrBucketNameAlreadyTaken, err)
 }
@@ -101,7 +101,7 @@ func Test_CreateUser(t *testing.T) {
 
 func Test_GetObjectByHash(t *testing.T) {
 	mockStore := NewMockStore(t, MockNowProvider, afero.NewMemMapFs())
-	bucket, err := mockStore.Store.CreateBucket("docs")
+	bucket, err := mockStore.Store.BucketDAL.CreateBucket("docs")
 	require.Nil(t, err)
 
 	fileContents := "my file contents"
@@ -147,14 +147,14 @@ func Test_GetLockInformation(t *testing.T) {
 	mockStore := NewMockStore(t, MockNowProvider, afero.NewMemMapFs())
 	bucket := mockStore.CreateBucket(t, "docs")
 
-	lock, err := mockStore.Store.GetLockInformation()
+	lock, err := mockStore.Store.LockDAL.GetLockInformation()
 	require.Nil(t, err)
 	require.Nil(t, lock)
 
 	tx, err := mockStore.Store.TransactionDAL.CreateTransaction(bucket, nil)
 	require.Nil(t, err)
 
-	lock, err = mockStore.Store.GetLockInformation()
+	lock, err = mockStore.Store.LockDAL.GetLockInformation()
 	require.Nil(t, err)
 	require.NotNil(t, lock)
 	assert.Equal(t, "lock from transaction. Bucket: 1 (docs), revision version: 946782245", lock.Text)
@@ -165,7 +165,7 @@ func Test_GetLockInformation(t *testing.T) {
 	err = mockStore.Store.TransactionDAL.Commit(tx)
 	require.Nil(t, err)
 
-	lock, err = mockStore.Store.GetLockInformation()
+	lock, err = mockStore.Store.LockDAL.GetLockInformation()
 	require.Nil(t, err)
 	require.Nil(t, lock)
 }

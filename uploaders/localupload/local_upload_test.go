@@ -69,7 +69,7 @@ func Test_UploadToStore(t *testing.T) {
 	_, err = store.Store.BucketDAL.GetBucketByName("not existing bucket")
 	require.NotNil(t, err)
 
-	bucket, err := store.Store.GetBucketByName("docs")
+	bucket, err := store.Store.BucketDAL.GetBucketByName("docs")
 	require.Nil(t, err)
 
 	revisions, err := store.Store.BucketDAL.GetRevisions(bucket)

@@ -37,7 +37,7 @@ func NewLocalExporter(store *dal.IntelligentStoreDAL, bucketName string, exportD
 }
 
 func (exporter *LocalExporter) Export() error {
-	bucket, err := exporter.Store.GetBucketByName(exporter.BucketName)
+	bucket, err := exporter.Store.BucketDAL.GetBucketByName(exporter.BucketName)
 	if nil != err {
 		return err
 	}

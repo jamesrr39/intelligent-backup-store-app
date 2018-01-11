@@ -77,7 +77,7 @@ type revisionInfoWithFiles struct {
 // @Success 200 {object} string &quot;Success&quot;
 func (s *BucketService) handleGetAllBuckets(w http.ResponseWriter, r *http.Request) {
 
-	buckets, err := s.store.GetAllBuckets()
+	buckets, err := s.store.BucketDAL.GetAllBuckets()
 	if nil != err {
 		http.Error(w, err.Error(), 500)
 		return
@@ -121,7 +121,7 @@ type handleGetBucketResponse struct {
 func (s *BucketService) handleGetBucket(w http.ResponseWriter, r *http.Request) {
 	bucketName := mux.Vars(r)["bucketName"]
 
-	bucket, err := s.store.GetBucketByName(bucketName)
+	bucket, err := s.store.BucketDAL.GetBucketByName(bucketName)
 	if nil != err {
 		if dal.ErrBucketDoesNotExist == err {
 			http.Error(w, err.Error(), 404)
@@ -158,7 +158,7 @@ func (s *BucketService) handleGetBucket(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *BucketService) getRevision(bucketName, revisionTsString string) (*domain.Revision, *HTTPError) {
-	bucket, err := s.store.GetBucketByName(bucketName)
+	bucket, err := s.store.BucketDAL.GetBucketByName(bucketName)
 	if nil != err {
 		if dal.ErrBucketDoesNotExist == err {
 			return nil, NewHTTPError(fmt.Errorf("couldn't find bucket '%s'. Error: %s", bucketName, err), 404)
@@ -255,7 +255,7 @@ func (s *BucketService) handleCreateRevision(w http.ResponseWriter, r *http.Requ
 
 	bucketName := vars["bucketName"]
 
-	bucket, err := s.store.GetBucketByName(bucketName)
+	bucket, err := s.store.BucketDAL.GetBucketByName(bucketName)
 	if nil != err {
 		if dal.ErrBucketDoesNotExist == err {
 			http.Error(w, fmt.Sprintf("couldn't find bucket '%s'. Error: %s", bucketName, err), 404)
@@ -363,7 +363,7 @@ func (s *BucketService) handleUploadFile(w http.ResponseWriter, r *http.Request)
 	bucketName := vars["bucketName"]
 	revisionTsString := vars["revisionTs"]
 
-	bucket, err := s.store.GetBucketByName(bucketName)
+	bucket, err := s.store.BucketDAL.GetBucketByName(bucketName)
 	if nil != err {
 		if dal.ErrBucketDoesNotExist == err {
 			http.Error(w, fmt.Sprintf("couldn't find bucket '%s'. Error: %s", bucketName, err), 404)
@@ -411,7 +411,7 @@ func (s *BucketService) handleCommitTransaction(w http.ResponseWriter, r *http.R
 	bucketName := vars["bucketName"]
 	revisionTsString := vars["revisionTs"]
 
-	bucket, err := s.store.GetBucketByName(bucketName)
+	bucket, err := s.store.BucketDAL.GetBucketByName(bucketName)
 	if nil != err {
 		if dal.ErrBucketDoesNotExist == err {
 			http.Error(w, fmt.Sprintf("couldn't find bucket '%s'. Error: %s", bucketName, err), 404)
@@ -472,7 +472,7 @@ func (s *BucketService) handleUploadHashes(w http.ResponseWriter, r *http.Reques
 	bucketName := vars["bucketName"]
 	revisionTsString := vars["revisionTs"]
 
-	bucket, err := s.store.GetBucketByName(bucketName)
+	bucket, err := s.store.BucketDAL.GetBucketByName(bucketName)
 	if nil != err {
 		if dal.ErrBucketDoesNotExist == err {
 			http.Error(w, fmt.Sprintf("couldn't find bucket '%s'. Error: %s", bucketName, err), 404)
@@ -546,7 +546,7 @@ func (s *BucketService) handleUploadSymlinks(w http.ResponseWriter, r *http.Requ
 	bucketName := vars["bucketName"]
 	revisionTsString := vars["revisionTs"]
 
-	bucket, err := s.store.GetBucketByName(bucketName)
+	bucket, err := s.store.BucketDAL.GetBucketByName(bucketName)
 	if nil != err {
 		if dal.ErrBucketDoesNotExist == err {
 			http.Error(w, fmt.Sprintf("couldn't find bucket '%s'. Error: %s", bucketName, err), 404)

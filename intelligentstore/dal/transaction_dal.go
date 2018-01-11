@@ -26,7 +26,7 @@ func (dal *TransactionDAL) CreateTransaction(bucket *domain.Bucket, fileInfos []
 	revisionVersion := domain.RevisionVersion(dal.IntelligentStoreDAL.nowProvider().Unix())
 	revision := domain.NewRevision(bucket, revisionVersion)
 
-	dal.IntelligentStoreDAL.acquireStoreLock(fmt.Sprintf("lock from transaction. Bucket: %d (%s), revision version: %d",
+	dal.IntelligentStoreDAL.LockDAL.acquireStoreLock(fmt.Sprintf("lock from transaction. Bucket: %d (%s), revision version: %d",
 		bucket.ID,
 		bucket.BucketName,
 		revisionVersion,
@@ -325,7 +325,7 @@ func (dal *TransactionDAL) Commit(transaction *domain.Transaction) error {
 
 	transaction.Stage = domain.TransactionStageCommitted
 
-	err = dal.IntelligentStoreDAL.removeStoreLock()
+	err = dal.IntelligentStoreDAL.LockDAL.removeStoreLock()
 	if nil != err {
 		return errors.Wrap(err, "couldn't remove lock file")
 	}
@@ -341,7 +341,7 @@ func (dal *TransactionDAL) Rollback(transaction *domain.Transaction) error {
 		return err
 	}
 
-	err = dal.IntelligentStoreDAL.removeStoreLock()
+	err = dal.IntelligentStoreDAL.LockDAL.removeStoreLock()
 	if nil != err {
 		return errors.Wrap(err, "couldn't remove lock file")
 	}

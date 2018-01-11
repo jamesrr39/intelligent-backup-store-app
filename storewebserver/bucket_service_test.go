@@ -41,7 +41,7 @@ func Test_handleGetAllBuckets(t *testing.T) {
 	assert.Equal(t, []byte("[]"), w1.Body.Bytes())
 	assert.Equal(t, 200, w1.Code)
 
-	_, err := bucketService.store.CreateBucket("docs")
+	_, err := bucketService.store.BucketDAL.CreateBucket("docs")
 	require.Nil(t, err)
 
 	r2 := &http.Request{Method: "GET", URL: requestURL}

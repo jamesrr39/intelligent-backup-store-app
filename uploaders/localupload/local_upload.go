@@ -149,7 +149,7 @@ func (uploader *LocalUploader) uploadFile(tx *domain.Transaction, relativePath d
 }
 
 func (uploader *LocalUploader) begin(fileInfos []*domain.FileInfo) (*domain.Transaction, error) {
-	bucket, err := uploader.backupStoreDAL.GetBucketByName(uploader.backupBucketName)
+	bucket, err := uploader.backupStoreDAL.BucketDAL.GetBucketByName(uploader.backupBucketName)
 	if nil != err {
 		return nil, err
 	}

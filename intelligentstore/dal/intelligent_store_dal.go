@@ -1,15 +1,12 @@
 package dal
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
-	"time"
 
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
 	"github.com/pkg/errors"
@@ -29,6 +26,7 @@ type IntelligentStoreDAL struct {
 	BucketDAL      *BucketDAL
 	RevisionDAL    *RevisionDAL
 	TransactionDAL *TransactionDAL
+	LockDAL        *LockDAL
 }
 
 func NewIntelligentStoreConnToExisting(pathToBase string) (*IntelligentStoreDAL, error) {
@@ -56,6 +54,7 @@ func newIntelligentStoreConnToExisting(pathToBase string, nowFunc nowProvider, f
 	storeDAL.BucketDAL = &BucketDAL{storeDAL}
 	storeDAL.RevisionDAL = &RevisionDAL{storeDAL, storeDAL.BucketDAL}
 	storeDAL.TransactionDAL = &TransactionDAL{storeDAL}
+	storeDAL.LockDAL = &LockDAL{storeDAL}
 	return storeDAL, nil
 }
 
@@ -127,89 +126,8 @@ func createIntelligentStoreAndNewConn(pathToBase string, nowFunc nowProvider, fs
 	// return storeDAL, nil
 }
 
-func (s *IntelligentStoreDAL) getBucketsInformationPath() string {
-	return filepath.Join(s.StoreBasePath, ".backup_data", "store_metadata", "buckets-data.json")
-}
-
 func (s *IntelligentStoreDAL) getUsersInformationPath() string {
 	return filepath.Join(s.StoreBasePath, ".backup_data", "store_metadata", "users-data.json")
-}
-
-func (s *IntelligentStoreDAL) GetAllBuckets() ([]*domain.Bucket, error) {
-	file, err := s.fs.Open(s.getBucketsInformationPath())
-	if nil != err {
-		return nil, err
-	}
-	defer file.Close()
-
-	var buckets []*domain.Bucket
-	err = json.NewDecoder(file).Decode(&buckets)
-	if nil != err {
-		return nil, err
-	}
-
-	return buckets, nil
-}
-
-// GetBucketByName gets a bucket by its name
-// If the bucket is not found, the error returned will be ErrBucketDoesNotExist
-// Otherwise, it will be an os/fs related error
-func (s *IntelligentStoreDAL) GetBucketByName(bucketName string) (*domain.Bucket, error) {
-	buckets, err := s.GetAllBuckets()
-	if nil != err {
-		return nil, err
-	}
-
-	for _, bucket := range buckets {
-		if bucketName == bucket.BucketName {
-			return bucket, nil
-		}
-	}
-
-	return nil, ErrBucketDoesNotExist
-}
-
-var ErrBucketNameAlreadyTaken = errors.New("This bucket name is already taken")
-
-func (s *IntelligentStoreDAL) CreateBucket(bucketName string) (*domain.Bucket, error) {
-	buckets, err := s.GetAllBuckets()
-	if nil != err {
-		return nil, err
-	}
-
-	highestID := 0
-	for _, bucket := range buckets {
-		if bucketName == bucket.BucketName {
-			return nil, ErrBucketNameAlreadyTaken
-		}
-
-		if bucket.ID > highestID {
-			highestID = bucket.ID
-		}
-	}
-
-	id := highestID + 1
-
-	buckets = append(buckets, domain.NewBucket(id, bucketName))
-
-	byteBuffer := bytes.NewBuffer(nil)
-	err = json.NewEncoder(byteBuffer).Encode(buckets)
-	if nil != err {
-		return nil, err
-	}
-
-	err = afero.WriteFile(s.fs, s.getBucketsInformationPath(), byteBuffer.Bytes(), 0600)
-	if nil != err {
-		return nil, err
-	}
-
-	bucketVersionsPath := filepath.Join(s.StoreBasePath, ".backup_data", "buckets", strconv.Itoa(id), "versions")
-	err = s.fs.MkdirAll(bucketVersionsPath, 0700)
-	if nil != err {
-		return nil, err
-	}
-
-	return domain.NewBucket(id, bucketName), nil
 }
 
 var ErrUserNotFound = errors.New("couldn't find user")
@@ -292,79 +210,9 @@ func (s *IntelligentStoreDAL) GetObjectByHash(hash domain.Hash) (io.ReadCloser, 
 	return s.fs.Open(objectPath)
 }
 
-// GetLockInformation gets the information about the current Lock on the Store, if any.
-// It returns
-// - (*StoreLock, nil) if there is a lock
-// - (nil, nil) if there is currently no lock
-// - (nil, error) for any error
-func (s *IntelligentStoreDAL) GetLockInformation() (*StoreLock, error) {
-	file, err := s.fs.Open(s.getLockFilePath())
-	if nil != err {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	defer file.Close()
-
-	var storeLock *StoreLock
-	err = json.NewDecoder(file).Decode(&storeLock)
-	if nil != err {
-		return nil, err
-	}
-
-	return storeLock, nil
-}
-
-var ErrLockAlreadyTaken = errors.New("lock already taken")
-
-func (s *IntelligentStoreDAL) acquireStoreLock(text string) (*StoreLock, error) {
-	_, err := s.fs.Stat(s.getLockFilePath())
-	if nil == err {
-		return nil, ErrLockAlreadyTaken
-	}
-	if !os.IsNotExist(err) {
-		return nil, err
-	}
-
-	//lockFile, err := s.fs.OpenFile(s.getLockFilePath(), os.O_CREATE, 0600)
-	lockFile, err := s.fs.OpenFile(s.getLockFilePath(), os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0600)
-	if nil != err {
-		return nil, err
-	}
-	defer lockFile.Close()
-
-	lock := &StoreLock{
-		time.Now(),
-		os.Getpid(),
-		text,
-	}
-
-	err = json.NewEncoder(lockFile).Encode(lock)
-	if nil != err {
-		return nil, err
-	}
-
-	return lock, nil
-}
-
-func (s *IntelligentStoreDAL) removeStoreLock() error {
-	return s.fs.RemoveAll(s.getLockFilePath())
-}
-
-func (s *IntelligentStoreDAL) getLockFilePath() string {
-	return filepath.Join(s.StoreBasePath, ".backup_data", "locks", "store_lock.txt")
-}
-
-type StoreLock struct {
-	AcquisitionTime time.Time `json:"acquisitionTime"`
-	Pid             int       `json:"pid"`
-	Text            string    `json:"text"`
-}
-
 // Search looks for the searchTerm in any of the file paths in the store
 func (s *IntelligentStoreDAL) Search(searchTerm string) ([]*domain.SearchResult, error) {
-	buckets, err := s.GetAllBuckets()
+	buckets, err := s.BucketDAL.GetAllBuckets()
 	if nil != err {
 		return nil, err
 	}

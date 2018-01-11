@@ -12,7 +12,7 @@ import (
 
 // CreateBucket creates a Bucket in a Store, or panics
 func CreateBucket(t *testing.T, store *dal.IntelligentStoreDAL, bucketName string) *domain.Bucket {
-	bucket, err := store.CreateBucket(bucketName)
+	bucket, err := store.BucketDAL.CreateBucket(bucketName)
 	require.Nil(t, err)
 	return bucket
 }

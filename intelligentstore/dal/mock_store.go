@@ -39,7 +39,7 @@ func NewMockStore(t *testing.T, nowFunc nowProvider, fs afero.Fs) *MockStore {
 }
 
 func (m *MockStore) CreateBucket(t *testing.T, bucketName string) *domain.Bucket {
-	bucket, err := m.Store.CreateBucket(bucketName)
+	bucket, err := m.Store.BucketDAL.CreateBucket(bucketName)
 	require.Nil(t, err)
 	return bucket
 }

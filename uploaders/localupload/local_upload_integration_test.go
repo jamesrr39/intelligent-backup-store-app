@@ -32,7 +32,7 @@ func Test_LocalUploadIntegration(t *testing.T) {
 		Dest:         "a.txt",
 	})
 
-	bucket, err := store.Store.CreateBucket("docs")
+	bucket, err := store.Store.BucketDAL.CreateBucket("docs")
 	require.Nil(t, err)
 
 	excludesMatcher, err := excludesmatcher.NewExcludesMatcherFromReader(bytes.NewBuffer([]byte("")))

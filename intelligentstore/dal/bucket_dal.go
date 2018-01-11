@@ -1,6 +1,8 @@
 package dal
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -168,31 +170,83 @@ func (dal *BucketDAL) GetRevision(bucket *domain.Bucket, revisionTimeStamp domai
 	return domain.NewRevision(bucket, domain.RevisionVersion(revisionTimeStamp)), nil
 }
 
-// // Bucket represents an organisational area of the Store.
-// type Bucket struct {
-// 	store *IntelligentStore
-// 	ID    int64  `json:"id"`
-// 	Name  string `json:"name"`
-// }
-//
-// // Begin creates a new Transaction to create a new revision of files in the Bucket.
-// func (bucket *Bucket) Begin(fileInfos []*FileInfo) (*Transaction, error) {
-// 	versionTimestamp := bucket.store.nowProvider().Unix()
-//
-// 	err := bucket.store.acquireStoreLock(fmt.Sprintf("bucket: %s", bucket.Name))
-// 	if nil != err {
-// 		return nil, err
-// 	}
-//
-// 	revision := &Revision{bucket, RevisionVersion(versionTimestamp)}
-// 	tx, err := NewTransaction(revision, fileInfos)
-// 	if nil != err {
-// 		removeStockLockErr := bucket.store.removeStoreLock()
-// 		if nil != removeStockLockErr {
-// 			return nil, errors.Errorf("couldn't start a transaction and remove Stock lock. Start transaction error: '%s'. Remove Store lock error: '%s'", err, removeStockLockErr)
-// 		}
-// 		return nil, errors.Errorf("couldn't start a transaction. Error: '%s'", err)
-// 	}
-//
-// 	return tx, nil
-// }
+func (s *BucketDAL) getBucketsInformationPath() string {
+	return filepath.Join(s.StoreBasePath, ".backup_data", "store_metadata", "buckets-data.json")
+}
+
+func (s *BucketDAL) GetAllBuckets() ([]*domain.Bucket, error) {
+	file, err := s.fs.Open(s.getBucketsInformationPath())
+	if nil != err {
+		return nil, err
+	}
+	defer file.Close()
+
+	var buckets []*domain.Bucket
+	err = json.NewDecoder(file).Decode(&buckets)
+	if nil != err {
+		return nil, err
+	}
+
+	return buckets, nil
+}
+
+// GetBucketByName gets a bucket by its name
+// If the bucket is not found, the error returned will be ErrBucketDoesNotExist
+// Otherwise, it will be an os/fs related error
+func (s *BucketDAL) GetBucketByName(bucketName string) (*domain.Bucket, error) {
+	buckets, err := s.GetAllBuckets()
+	if nil != err {
+		return nil, err
+	}
+
+	for _, bucket := range buckets {
+		if bucketName == bucket.BucketName {
+			return bucket, nil
+		}
+	}
+
+	return nil, ErrBucketDoesNotExist
+}
+
+var ErrBucketNameAlreadyTaken = errors.New("This bucket name is already taken")
+
+func (s *BucketDAL) CreateBucket(bucketName string) (*domain.Bucket, error) {
+	buckets, err := s.GetAllBuckets()
+	if nil != err {
+		return nil, err
+	}
+
+	highestID := 0
+	for _, bucket := range buckets {
+		if bucketName == bucket.BucketName {
+			return nil, ErrBucketNameAlreadyTaken
+		}
+
+		if bucket.ID > highestID {
+			highestID = bucket.ID
+		}
+	}
+
+	id := highestID + 1
+
+	buckets = append(buckets, domain.NewBucket(id, bucketName))
+
+	byteBuffer := bytes.NewBuffer(nil)
+	err = json.NewEncoder(byteBuffer).Encode(buckets)
+	if nil != err {
+		return nil, err
+	}
+
+	err = afero.WriteFile(s.fs, s.getBucketsInformationPath(), byteBuffer.Bytes(), 0600)
+	if nil != err {
+		return nil, err
+	}
+
+	bucketVersionsPath := filepath.Join(s.StoreBasePath, ".backup_data", "buckets", strconv.Itoa(id), "versions")
+	err = s.fs.MkdirAll(bucketVersionsPath, 0700)
+	if nil != err {
+		return nil, err
+	}
+
+	return domain.NewBucket(id, bucketName), nil
+}
