@@ -65,11 +65,11 @@ func Test_handleGetAllBuckets(t *testing.T) {
 
 func Test_handleGetRevision(t *testing.T) {
 	// create the fs, and put some test data in it
-	testFiles := []*intelligentstore.RegularFileDescriptorWithContents{
-		intelligentstore.NewRegularFileDescriptorWithContents(t, "a.txt", time.Unix(0, 0), intelligentstore.FileMode600, []byte("file a")),
-		intelligentstore.NewRegularFileDescriptorWithContents(t, "b.txt", time.Unix(0, 0), intelligentstore.FileMode600, []byte("file b")),
-		intelligentstore.NewRegularFileDescriptorWithContents(t, "folder-1/a.txt", time.Unix(0, 0), intelligentstore.FileMode600, []byte("file 1/a")),
-		intelligentstore.NewRegularFileDescriptorWithContents(t, "folder-1/c.txt", time.Unix(0, 0), intelligentstore.FileMode600, []byte("file 1/c")),
+	testFiles := []*domain.RegularFileDescriptorWithContents{
+		domain.NewRegularFileDescriptorWithContents(t, "a.txt", time.Unix(0, 0), intelligentstore.FileMode600, []byte("file a")),
+		domain.NewRegularFileDescriptorWithContents(t, "b.txt", time.Unix(0, 0), intelligentstore.FileMode600, []byte("file b")),
+		domain.NewRegularFileDescriptorWithContents(t, "folder-1/a.txt", time.Unix(0, 0), intelligentstore.FileMode600, []byte("file 1/a")),
+		domain.NewRegularFileDescriptorWithContents(t, "folder-1/c.txt", time.Unix(0, 0), intelligentstore.FileMode600, []byte("file 1/c")),
 	}
 
 	store := intelligentstore.NewMockStore(t, testNowProvider, afero.NewMemMapFs())

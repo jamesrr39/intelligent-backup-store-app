@@ -19,9 +19,9 @@ func Test_handleSearch(t *testing.T) {
 	store := storetest.NewInMemoryStore(t)
 	bucket := storetest.CreateBucket(t, store.Store, "docs")
 
-	revision := storetest.CreateRevision(t, store.Store, bucket, []*intelligentstore.RegularFileDescriptorWithContents{
-		intelligentstore.NewRegularFileDescriptorWithContents(t, domain.NewRelativePath("a/contract.txt"), time.Unix(0, 0), intelligentstore.FileMode600, []byte("")),
-		intelligentstore.NewRegularFileDescriptorWithContents(t, domain.NewRelativePath("a/something else.txt"), time.Unix(0, 0), intelligentstore.FileMode600, []byte("")),
+	revision := storetest.CreateRevision(t, store.Store, bucket, []*domain.RegularFileDescriptorWithContents{
+		domain.NewRegularFileDescriptorWithContents(t, domain.NewRelativePath("a/contract.txt"), time.Unix(0, 0), intelligentstore.FileMode600, []byte("")),
+		domain.NewRegularFileDescriptorWithContents(t, domain.NewRelativePath("a/something else.txt"), time.Unix(0, 0), intelligentstore.FileMode600, []byte("")),
 	})
 
 	storeHandler := NewStoreWebServer(store.Store)

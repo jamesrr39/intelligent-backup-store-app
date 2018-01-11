@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/storetest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -20,8 +20,8 @@ func Test_LocalExporterIntegration(t *testing.T) {
 
 	bucket := storetest.CreateBucket(t, store.Store, "docs")
 
-	regularFile := intelligentstore.NewRegularFileDescriptorWithContents(t, "a.txt", time.Unix(0, 0), 0700, []byte("file a contents"))
-	storetest.CreateRevision(t, store.Store, bucket, []*intelligentstore.RegularFileDescriptorWithContents{regularFile})
+	regularFile := domain.NewRegularFileDescriptorWithContents(t, "a.txt", time.Unix(0, 0), 0700, []byte("file a contents"))
+	storetest.CreateRevision(t, store.Store, bucket, []*domain.RegularFileDescriptorWithContents{regularFile})
 
 	exporter := NewLocalExporter(store.Store, bucket.BucketName, store.ExportDir, nil, nil)
 

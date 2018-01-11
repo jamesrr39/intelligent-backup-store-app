@@ -22,7 +22,7 @@ func CreateRevision(
 	t *testing.T,
 	store *intelligentstore.IntelligentStoreDAL,
 	bucket *domain.Bucket,
-	regularFiles []*intelligentstore.RegularFileDescriptorWithContents,
+	regularFiles []*domain.RegularFileDescriptorWithContents,
 	// symlinks []*domain.SymlinkFileDescriptor,
 ) *domain.Revision {
 
@@ -34,7 +34,7 @@ func CreateRevision(
 	tx, err := store.TransactionDAL.CreateTransaction(bucket, fileInfos)
 	require.Nil(t, err)
 
-	fileDescriptorMap := make(map[domain.RelativePath]*intelligentstore.RegularFileDescriptorWithContents)
+	fileDescriptorMap := make(map[domain.RelativePath]*domain.RegularFileDescriptorWithContents)
 	for _, fileDescriptor := range regularFiles {
 		fileDescriptorMap[fileDescriptor.Descriptor.GetFileInfo().RelativePath] = fileDescriptor
 	}
@@ -52,7 +52,7 @@ func CreateRevision(
 		)
 	}
 
-	mapOfHashes := make(map[domain.Hash]*intelligentstore.RegularFileDescriptorWithContents)
+	mapOfHashes := make(map[domain.Hash]*domain.RegularFileDescriptorWithContents)
 	for _, descriptorWithContents := range regularFiles {
 		mapOfHashes[descriptorWithContents.Descriptor.Hash] = descriptorWithContents
 	}

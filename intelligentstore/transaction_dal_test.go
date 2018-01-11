@@ -15,7 +15,7 @@ func Test_BackupFile(t *testing.T) {
 	mockStore := NewMockStore(t, MockNowProvider, afero.NewMemMapFs())
 	bucket := mockStore.CreateBucket(t, "docs")
 
-	descriptor := NewRegularFileDescriptorWithContents(
+	descriptor := domain.NewRegularFileDescriptorWithContents(
 		t,
 		"../a.txt",
 		time.Unix(0, 0),
@@ -64,7 +64,7 @@ func Test_BackupFile(t *testing.T) {
 
 func Test_ProcessUploadHashesAndGetRequiredHashes(t *testing.T) {
 	aFileContents := "a text"
-	goodADescriptor := NewRegularFileDescriptorWithContents(
+	goodADescriptor := domain.NewRegularFileDescriptorWithContents(
 		t,
 		"a.txt",
 		time.Unix(0, 0),
@@ -73,7 +73,7 @@ func Test_ProcessUploadHashesAndGetRequiredHashes(t *testing.T) {
 	)
 
 	bFileContents := "b text"
-	goodBDescriptor := NewRegularFileDescriptorWithContents(
+	goodBDescriptor := domain.NewRegularFileDescriptorWithContents(
 		t,
 		"b.txt",
 		time.Unix(0, 0),

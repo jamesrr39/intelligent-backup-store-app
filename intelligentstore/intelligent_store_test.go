@@ -174,9 +174,9 @@ func Test_Search(t *testing.T) {
 	store := NewMockStore(t, MockNowProvider, afero.NewMemMapFs())
 	bucket := store.CreateBucket(t, "docs")
 
-	revision := store.CreateRevision(t, bucket, []*RegularFileDescriptorWithContents{
-		NewRegularFileDescriptorWithContents(t, domain.NewRelativePath("a/contract.txt"), time.Unix(0, 0), FileMode600, []byte("")),
-		NewRegularFileDescriptorWithContents(t, domain.NewRelativePath("a/something else.txt"), time.Unix(0, 0), FileMode600, []byte("")),
+	revision := store.CreateRevision(t, bucket, []*domain.RegularFileDescriptorWithContents{
+		domain.NewRegularFileDescriptorWithContents(t, domain.NewRelativePath("a/contract.txt"), time.Unix(0, 0), FileMode600, []byte("")),
+		domain.NewRegularFileDescriptorWithContents(t, domain.NewRelativePath("a/something else.txt"), time.Unix(0, 0), FileMode600, []byte("")),
 	})
 
 	searchResults, err := store.Store.Search("contract")

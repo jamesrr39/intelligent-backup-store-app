@@ -25,9 +25,9 @@ func Test_Export(t *testing.T) {
 
 	bucket := storetest.CreateBucket(t, testStore.Store, "docs")
 
-	regularFile1 := intelligentstore.NewRegularFileDescriptorWithContents(t, "a.txt", time.Unix(0, 0), intelligentstore.FileMode600, []byte("file a contents"))
-	regularFile2 := intelligentstore.NewRegularFileDescriptorWithContents(t, "folder-1/a.txt", time.Unix(0, 0), intelligentstore.FileMode600, []byte("file a contents"))
-	fileDescriptors := []*intelligentstore.RegularFileDescriptorWithContents{
+	regularFile1 := domain.NewRegularFileDescriptorWithContents(t, "a.txt", time.Unix(0, 0), intelligentstore.FileMode600, []byte("file a contents"))
+	regularFile2 := domain.NewRegularFileDescriptorWithContents(t, "folder-1/a.txt", time.Unix(0, 0), intelligentstore.FileMode600, []byte("file a contents"))
+	fileDescriptors := []*domain.RegularFileDescriptorWithContents{
 		regularFile1,
 		regularFile2,
 	}
@@ -96,9 +96,9 @@ func Test_writeFileToFs(t *testing.T) {
 
 	bucket := storetest.CreateBucket(t, testStore.Store, "docs")
 
-	regularFile := intelligentstore.NewRegularFileDescriptorWithContents(t, "a.txt", time.Unix(0, 0), intelligentstore.FileMode600, []byte("file a contents"))
-	secondRegularFile := intelligentstore.NewRegularFileDescriptorWithContents(t, "b.txt", time.Unix(0, 0), intelligentstore.FileMode755, []byte("file b contents"))
-	storetest.CreateRevision(t, testStore.Store, bucket, []*intelligentstore.RegularFileDescriptorWithContents{
+	regularFile := domain.NewRegularFileDescriptorWithContents(t, "a.txt", time.Unix(0, 0), intelligentstore.FileMode600, []byte("file a contents"))
+	secondRegularFile := domain.NewRegularFileDescriptorWithContents(t, "b.txt", time.Unix(0, 0), intelligentstore.FileMode755, []byte("file b contents"))
+	storetest.CreateRevision(t, testStore.Store, bucket, []*domain.RegularFileDescriptorWithContents{
 		regularFile,
 		secondRegularFile,
 	})

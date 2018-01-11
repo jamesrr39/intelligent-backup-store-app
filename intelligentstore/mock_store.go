@@ -44,7 +44,7 @@ func (m *MockStore) CreateBucket(t *testing.T, bucketName string) *domain.Bucket
 	return bucket
 }
 
-func (m *MockStore) CreateRevision(t *testing.T, bucket *domain.Bucket, fileDescriptors []*RegularFileDescriptorWithContents) *domain.Revision {
+func (m *MockStore) CreateRevision(t *testing.T, bucket *domain.Bucket, fileDescriptors []*domain.RegularFileDescriptorWithContents) *domain.Revision {
 	var fileInfos []*domain.FileInfo
 	for _, fileDescriptor := range fileDescriptors {
 		fileInfos = append(fileInfos, fileDescriptor.Descriptor.GetFileInfo())
@@ -53,7 +53,7 @@ func (m *MockStore) CreateRevision(t *testing.T, bucket *domain.Bucket, fileDesc
 	tx, err := m.Store.TransactionDAL.CreateTransaction(bucket, fileInfos)
 	require.Nil(t, err)
 
-	fileDescriptorMap := make(map[domain.RelativePath]*RegularFileDescriptorWithContents)
+	fileDescriptorMap := make(map[domain.RelativePath]*domain.RegularFileDescriptorWithContents)
 	for _, fileDescriptor := range fileDescriptors {
 		fileDescriptorMap[fileDescriptor.Descriptor.GetFileInfo().RelativePath] = fileDescriptor
 	}
@@ -66,7 +66,7 @@ func (m *MockStore) CreateRevision(t *testing.T, bucket *domain.Bucket, fileDesc
 		relativePathsWithHashes = append(relativePathsWithHashes, relativePathWithHash)
 	}
 
-	mapOfHashes := make(map[domain.Hash]*RegularFileDescriptorWithContents)
+	mapOfHashes := make(map[domain.Hash]*domain.RegularFileDescriptorWithContents)
 	for _, descriptorWithContents := range fileDescriptors {
 		mapOfHashes[descriptorWithContents.Descriptor.Hash] = descriptorWithContents
 	}
