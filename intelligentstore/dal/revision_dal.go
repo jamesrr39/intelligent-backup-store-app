@@ -80,18 +80,3 @@ func (r *RevisionDAL) GetFileContentsInRevision(
 
 	return nil, ErrNoFileWithThisRelativePathInRevision
 }
-
-// func (r *RevisionDAL) ToFileDescriptorMapByName(bucket *domain.Bucket, revision *domain.Revision) (map[domain.RelativePath]domain.FileDescriptor, error) {
-// 	m := make(map[domain.RelativePath]domain.FileDescriptor)
-//
-// 	filesInRevision, err := r.GetFilesInRevision(bucket, revision)
-// 	if nil != err {
-// 		return nil, err
-// 	}
-//
-// 	for _, fileInRevision := range filesInRevision {
-// 		m[fileInRevision.GetFileInfo().RelativePath] = fileInRevision
-// 	}
-//
-// 	return m, nil
-// }
