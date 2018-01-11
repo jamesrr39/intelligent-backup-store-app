@@ -38,7 +38,7 @@ func Test_handleSearch(t *testing.T) {
 
 	storeHandler.ServeHTTP(w1, r1)
 
-	var results []*intelligentstore.SearchResult
+	var results []*domain.SearchResult
 	err := json.Unmarshal(w1.Body.Bytes(), &results)
 	require.Nil(t, err)
 

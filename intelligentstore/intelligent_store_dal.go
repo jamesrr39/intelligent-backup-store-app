@@ -363,13 +363,13 @@ type StoreLock struct {
 }
 
 // Search looks for the searchTerm in any of the file paths in the store
-func (s *IntelligentStoreDAL) Search(searchTerm string) ([]*SearchResult, error) {
+func (s *IntelligentStoreDAL) Search(searchTerm string) ([]*domain.SearchResult, error) {
 	buckets, err := s.GetAllBuckets()
 	if nil != err {
 		return nil, err
 	}
 
-	var searchResults []*SearchResult
+	var searchResults []*domain.SearchResult
 	for _, bucket := range buckets {
 		revisions, err := s.BucketDAL.GetRevisions(bucket)
 		if nil != err {
@@ -384,11 +384,11 @@ func (s *IntelligentStoreDAL) Search(searchTerm string) ([]*SearchResult, error)
 			for _, fileDescriptor := range fileDescriptors {
 				relativePath := fileDescriptor.GetFileInfo().RelativePath
 				if strings.Contains(string(relativePath), searchTerm) {
-					searchResults = append(searchResults, &SearchResult{
+					searchResults = append(searchResults, domain.NewSearchResult(
 						relativePath,
 						bucket,
 						revision,
-					})
+					))
 				}
 			}
 		}
