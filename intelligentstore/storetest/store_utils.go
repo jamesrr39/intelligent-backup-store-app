@@ -5,13 +5,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
 	"github.com/stretchr/testify/require"
 )
 
 // CreateBucket creates a Bucket in a Store, or panics
-func CreateBucket(t *testing.T, store *intelligentstore.IntelligentStore, bucketName string) *intelligentstore.Bucket {
-	bucket, err := store.CreateBucket(bucketName)
+func CreateBucket(t *testing.T, store *dal.IntelligentStoreDAL, bucketName string) *domain.Bucket {
+	bucket, err := store.BucketDAL.CreateBucket(bucketName)
 	require.Nil(t, err)
 	return bucket
 }
@@ -19,39 +20,39 @@ func CreateBucket(t *testing.T, store *intelligentstore.IntelligentStore, bucket
 // CreateRevision creates a Revision. Useful for pre-populating a Store.
 func CreateRevision(
 	t *testing.T,
-	store *intelligentstore.IntelligentStore,
-	bucket *intelligentstore.Bucket,
-	regularFiles []*intelligentstore.RegularFileDescriptorWithContents,
-	// symlinks []*intelligentstore.SymlinkFileDescriptor,
-) *intelligentstore.Revision {
+	store *dal.IntelligentStoreDAL,
+	bucket *domain.Bucket,
+	regularFiles []*domain.RegularFileDescriptorWithContents,
+	// symlinks []*domain.SymlinkFileDescriptor,
+) *domain.Revision {
 
-	var fileInfos []*intelligentstore.FileInfo
+	var fileInfos []*domain.FileInfo
 	for _, fileDescriptor := range regularFiles {
 		fileInfos = append(fileInfos, fileDescriptor.Descriptor.GetFileInfo())
 	}
 
-	tx, err := bucket.Begin(fileInfos)
+	tx, err := store.TransactionDAL.CreateTransaction(bucket, fileInfos)
 	require.Nil(t, err)
 
-	fileDescriptorMap := make(map[intelligentstore.RelativePath]*intelligentstore.RegularFileDescriptorWithContents)
+	fileDescriptorMap := make(map[domain.RelativePath]*domain.RegularFileDescriptorWithContents)
 	for _, fileDescriptor := range regularFiles {
 		fileDescriptorMap[fileDescriptor.Descriptor.GetFileInfo().RelativePath] = fileDescriptor
 	}
 
-	var relativePathsWithHashes []*intelligentstore.RelativePathWithHash
+	var relativePathsWithHashes []*domain.RelativePathWithHash
 	relativePathsRequired := tx.GetRelativePathsRequired()
 	for _, relativePathRequired := range relativePathsRequired {
 		descriptor := fileDescriptorMap[relativePathRequired]
 		relativePathsWithHashes = append(
 			relativePathsWithHashes,
-			&intelligentstore.RelativePathWithHash{
+			&domain.RelativePathWithHash{
 				RelativePath: descriptor.Descriptor.RelativePath,
 				Hash:         descriptor.Descriptor.Hash,
 			},
 		)
 	}
 
-	mapOfHashes := make(map[intelligentstore.Hash]*intelligentstore.RegularFileDescriptorWithContents)
+	mapOfHashes := make(map[domain.Hash]*domain.RegularFileDescriptorWithContents)
 	for _, descriptorWithContents := range regularFiles {
 		mapOfHashes[descriptorWithContents.Descriptor.Hash] = descriptorWithContents
 	}
@@ -60,11 +61,11 @@ func CreateRevision(
 	require.Nil(t, err)
 
 	for _, hash := range hashes {
-		err := tx.BackupFile(bytes.NewBuffer(mapOfHashes[hash].Contents))
-		require.Nil(t, err)
+		backupErr := store.TransactionDAL.BackupFile(tx, bytes.NewBuffer(mapOfHashes[hash].Contents))
+		require.Nil(t, backupErr)
 	}
 
-	err = tx.Commit()
+	err = store.TransactionDAL.Commit(tx)
 	require.Nil(t, err)
 
 	return tx.Revision

@@ -6,14 +6,15 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 )
 
 // OsFsTestStore represents an instance of a Store on an OS filesystem in a tempdir
 type OsFsTestStore struct {
-	Store       *intelligentstore.IntelligentStore
+	Store       *dal.IntelligentStoreDAL
 	BasePath    string
 	SourcesPath string
 	ExportDir   string
@@ -21,13 +22,13 @@ type OsFsTestStore struct {
 
 // TextFile is a simple convience regular file type
 type TextFile struct {
-	RelativePath intelligentstore.RelativePath
+	RelativePath domain.RelativePath
 	Contents     string
 }
 
 // Symlink is a simple convience symlink file type
 type Symlink struct {
-	RelativePath intelligentstore.RelativePath
+	RelativePath domain.RelativePath
 	Dest         string
 }
 
@@ -41,7 +42,7 @@ func CreateOsFsTestStore(t *testing.T) *OsFsTestStore {
 	err = os.MkdirAll(storePath, 0700)
 	require.Nil(t, err)
 
-	store, err := intelligentstore.CreateTestStoreAndNewConn(storePath, MockNowProvider, afero.NewOsFs())
+	store, err := dal.CreateTestStoreAndNewConn(storePath, MockNowProvider, afero.NewOsFs())
 	require.Nil(t, err)
 
 	return &OsFsTestStore{store, tempdir, filepath.Join(tempdir, "sources"), filepath.Join(tempdir, "outDir")}

@@ -3,11 +3,13 @@ package webuploadclient
 import (
 	"bytes"
 	"errors"
+	"log"
 	"net/http/httptest"
 	"testing"
 	"time"
 
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
 	"github.com/jamesrr39/intelligent-backup-store-app/storewebserver"
 	"github.com/spf13/afero"
@@ -16,7 +18,7 @@ import (
 )
 
 type testfile struct {
-	path     intelligentstore.RelativePath
+	path     domain.RelativePath
 	contents string
 }
 
@@ -48,7 +50,7 @@ func Test_UploadToStore(t *testing.T) {
 	require.Nil(t, err)
 
 	// set up remote store server
-	remoteStore := intelligentstore.NewMockStore(t, mockTimeProvider)
+	remoteStore := dal.NewMockStore(t, mockTimeProvider, afero.NewMemMapFs())
 
 	bucket := remoteStore.CreateBucket(t, "docs")
 
@@ -56,14 +58,14 @@ func Test_UploadToStore(t *testing.T) {
 		storewebserver.NewStoreWebServer(remoteStore.Store))
 	defer storeServer.Close()
 
-	t.Logf("store URL: %s\n", storeServer.URL)
+	log.Printf("store URL: %s\n", storeServer.URL)
 
 	mockLinkReader := func(path string) (string, error) {
 		return "", errors.New("not implemented")
 	}
 
 	// create client and upload
-	uploadClient := WebUploadClient{
+	uploadClient := &WebUploadClient{
 		storeServer.URL,
 		"docs",
 		"/docs",
@@ -76,28 +78,28 @@ func Test_UploadToStore(t *testing.T) {
 	require.Nil(t, err)
 
 	// assertions
-	revisions, err := bucket.GetRevisions()
+	revisions, err := remoteStore.Store.RevisionDAL.GetRevisions(bucket)
 	require.Nil(t, err)
 	assert.Len(t, revisions, 1)
 
 	revision := revisions[0]
 
-	fileDescriptors, err := revision.GetFilesInRevision()
+	fileDescriptors, err := remoteStore.Store.RevisionDAL.GetFilesInRevision(bucket, revision)
 	require.Nil(t, err)
 	assert.Len(t, fileDescriptors, 4)
 
-	fileDescriptorNameMap := make(map[intelligentstore.RelativePath]intelligentstore.FileDescriptor)
+	fileDescriptorNameMap := make(map[domain.RelativePath]domain.FileDescriptor)
 	for _, fileDescriptor := range fileDescriptors {
 		fileDescriptorNameMap[fileDescriptor.GetFileInfo().RelativePath] = fileDescriptor
 	}
 
 	for _, testFile := range testFiles {
-		hash, err := intelligentstore.NewHash(
+		hash, err := domain.NewHash(
 			bytes.NewBuffer([]byte(testFile.contents)))
 		require.Nil(t, err)
 
 		assert.Equal(t, testFile.path, fileDescriptorNameMap[testFile.path].GetFileInfo().RelativePath)
-		fileDescriptor := (fileDescriptorNameMap[testFile.path]).(*intelligentstore.RegularFileDescriptor)
+		fileDescriptor := (fileDescriptorNameMap[testFile.path]).(*domain.RegularFileDescriptor)
 		assert.Equal(t, hash, fileDescriptor.Hash)
 	}
 }

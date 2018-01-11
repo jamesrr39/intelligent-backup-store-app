@@ -17,18 +17,19 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/gorilla/mux"
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
 	protofiles "github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/protobufs/proto_files"
 )
 
 // BucketService handles HTTP requests to get bucket information.
 type BucketService struct {
-	store *intelligentstore.IntelligentStore
+	store *dal.IntelligentStoreDAL
 	http.Handler
 	openTransactionsMap
 }
 
-type openTransactionsMap map[string]*intelligentstore.Transaction
+type openTransactionsMap map[string]*domain.Transaction
 
 type subDirInfo struct {
 	Name            string `json:"name"`
@@ -36,7 +37,7 @@ type subDirInfo struct {
 }
 
 // NewBucketService creates a new BucketService and a router for handling requests.
-func NewBucketService(store *intelligentstore.IntelligentStore) *BucketService {
+func NewBucketService(store *dal.IntelligentStoreDAL) *BucketService {
 	router := mux.NewRouter()
 	bucketService := &BucketService{store, router, make(openTransactionsMap)}
 
@@ -62,15 +63,21 @@ func NewBucketService(store *intelligentstore.IntelligentStore) *BucketService {
 }
 
 type bucketSummary struct {
-	Name           string                            `json:"name"`
-	LastRevisionTs *intelligentstore.RevisionVersion `json:"lastRevisionTs"`
+	Name           string                  `json:"name"`
+	LastRevisionTs *domain.RevisionVersion `json:"lastRevisionTs"`
+}
+
+type revisionInfoWithFiles struct {
+	LastRevisionTs domain.RevisionVersion  `json:"revisionTs"`
+	Files          []domain.FileDescriptor `json:"files"`
+	Dirs           []*subDirInfo           `json:"dirs"`
 }
 
 // @Title Get Latest Buckets Information
 // @Success 200 {object} string &quot;Success&quot;
 func (s *BucketService) handleGetAllBuckets(w http.ResponseWriter, r *http.Request) {
 
-	buckets, err := s.store.GetAllBuckets()
+	buckets, err := s.store.BucketDAL.GetAllBuckets()
 	if nil != err {
 		http.Error(w, err.Error(), 500)
 		return
@@ -84,12 +91,12 @@ func (s *BucketService) handleGetAllBuckets(w http.ResponseWriter, r *http.Reque
 	}
 
 	var bucketsSummaries []*bucketSummary
-	var latestRevision *intelligentstore.Revision
-	var latestRevisionTs *intelligentstore.RevisionVersion
+	var latestRevision *domain.Revision
+	var latestRevisionTs *domain.RevisionVersion
 	for _, bucket := range buckets {
-		latestRevision, err = bucket.GetLatestRevision()
+		latestRevision, err = s.store.RevisionDAL.GetLatestRevision(bucket)
 		if nil != err {
-			if intelligentstore.ErrNoRevisionsForBucket != err {
+			if dal.ErrNoRevisionsForBucket != err {
 				http.Error(w, err.Error(), 500)
 				return
 			}
@@ -97,7 +104,7 @@ func (s *BucketService) handleGetAllBuckets(w http.ResponseWriter, r *http.Reque
 			latestRevisionTs = &latestRevision.VersionTimestamp
 		}
 
-		bucketsSummaries = append(bucketsSummaries, &bucketSummary{bucket.Name, latestRevisionTs})
+		bucketsSummaries = append(bucketsSummaries, &bucketSummary{bucket.BucketName, latestRevisionTs})
 	}
 
 	err = json.NewEncoder(w).Encode(bucketsSummaries)
@@ -108,15 +115,15 @@ func (s *BucketService) handleGetAllBuckets(w http.ResponseWriter, r *http.Reque
 }
 
 type handleGetBucketResponse struct {
-	Revisions []*intelligentstore.Revision `json:"revisions"`
+	Revisions []*domain.Revision `json:"revisions"`
 }
 
 func (s *BucketService) handleGetBucket(w http.ResponseWriter, r *http.Request) {
 	bucketName := mux.Vars(r)["bucketName"]
 
-	bucket, err := s.store.GetBucketByName(bucketName)
+	bucket, err := s.store.BucketDAL.GetBucketByName(bucketName)
 	if nil != err {
-		if intelligentstore.ErrBucketDoesNotExist == err {
+		if dal.ErrBucketDoesNotExist == err {
 			http.Error(w, err.Error(), 404)
 			return
 		}
@@ -124,7 +131,7 @@ func (s *BucketService) handleGetBucket(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	revisions, err := bucket.GetRevisions()
+	revisions, err := s.store.RevisionDAL.GetRevisions(bucket)
 	if nil != err {
 		http.Error(w, err.Error(), 500)
 		return
@@ -133,7 +140,7 @@ func (s *BucketService) handleGetBucket(w http.ResponseWriter, r *http.Request) 
 	w.Header().Set("content-type", "application/json")
 
 	if 0 == len(revisions) {
-		revisions = make([]*intelligentstore.Revision, 0)
+		revisions = make([]*domain.Revision, 0)
 	}
 
 	sort.Slice(revisions, func(i int, j int) bool {
@@ -150,19 +157,19 @@ func (s *BucketService) handleGetBucket(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
-func (s *BucketService) getRevision(bucketName, revisionTsString string) (*intelligentstore.Revision, *HTTPError) {
-	bucket, err := s.store.GetBucketByName(bucketName)
+func (s *BucketService) getRevision(bucketName, revisionTsString string) (*domain.Revision, *HTTPError) {
+	bucket, err := s.store.BucketDAL.GetBucketByName(bucketName)
 	if nil != err {
-		if intelligentstore.ErrBucketDoesNotExist == err {
+		if dal.ErrBucketDoesNotExist == err {
 			return nil, NewHTTPError(fmt.Errorf("couldn't find bucket '%s'. Error: %s", bucketName, err), 404)
 		}
 		return nil, NewHTTPError(err, 500)
 	}
 
-	var revision *intelligentstore.Revision
+	var revision *domain.Revision
 	if "latest" == revisionTsString {
-		revision, err = bucket.GetLatestRevision()
-		if intelligentstore.ErrNoRevisionsForBucket == err {
+		revision, err = s.store.RevisionDAL.GetLatestRevision(bucket)
+		if dal.ErrNoRevisionsForBucket == err {
 			return nil, NewHTTPError(err, 404)
 		}
 	} else {
@@ -171,10 +178,10 @@ func (s *BucketService) getRevision(bucketName, revisionTsString string) (*intel
 		if nil != err {
 			return nil, NewHTTPError(fmt.Errorf("couldn't convert '%s' to a timestamp. Error: '%s'", revisionTsString, err), 400)
 		}
-		revision, err = bucket.GetRevision(intelligentstore.RevisionVersion(revisionTimestamp))
+		revision, err = s.store.RevisionDAL.GetRevision(bucket, domain.RevisionVersion(revisionTimestamp))
 	}
 	if nil != err {
-		if err == intelligentstore.ErrRevisionDoesNotExist {
+		if err == dal.ErrRevisionDoesNotExist {
 			return nil, NewHTTPError(err, 404)
 		}
 
@@ -195,7 +202,7 @@ func (s *BucketService) handleGetRevision(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	allFiles, err := revision.GetFilesInRevision()
+	allFiles, err := s.store.RevisionDAL.GetFilesInRevision(revision.Bucket, revision)
 	if nil != err {
 		http.Error(w, err.Error(), 500)
 		return
@@ -203,7 +210,7 @@ func (s *BucketService) handleGetRevision(w http.ResponseWriter, r *http.Request
 
 	rootDir := r.URL.Query().Get("rootDir")
 
-	files := []intelligentstore.FileDescriptor{}
+	files := []domain.FileDescriptor{}
 
 	type subDirInfoMap map[string]int64 // map[name]nestedFileCount
 	dirnames := subDirInfoMap{}         // dirname[nested file count]
@@ -213,7 +220,7 @@ func (s *BucketService) handleGetRevision(w http.ResponseWriter, r *http.Request
 			continue
 		}
 
-		relativeFilePath := intelligentstore.NewRelativePath(
+		relativeFilePath := domain.NewRelativePath(
 			strings.TrimPrefix(
 				string(file.GetFileInfo().RelativePath),
 				rootDir))
@@ -248,9 +255,9 @@ func (s *BucketService) handleCreateRevision(w http.ResponseWriter, r *http.Requ
 
 	bucketName := vars["bucketName"]
 
-	bucket, err := s.store.GetBucketByName(bucketName)
+	bucket, err := s.store.BucketDAL.GetBucketByName(bucketName)
 	if nil != err {
-		if intelligentstore.ErrBucketDoesNotExist == err {
+		if dal.ErrBucketDoesNotExist == err {
 			http.Error(w, fmt.Sprintf("couldn't find bucket '%s'. Error: %s", bucketName, err), 404)
 			return
 		}
@@ -276,7 +283,7 @@ func (s *BucketService) handleCreateRevision(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	var fileInfos []*intelligentstore.FileInfo
+	var fileInfos []*domain.FileInfo
 
 	for _, fileInfoProto := range openTxRequest.GetFileInfos() {
 
@@ -294,9 +301,9 @@ func (s *BucketService) handleCreateRevision(w http.ResponseWriter, r *http.Requ
 
 		fileInfos = append(
 			fileInfos,
-			intelligentstore.NewFileInfo(
+			domain.NewFileInfo(
 				fileType,
-				intelligentstore.NewRelativePath(fileInfoProto.GetRelativePath()),
+				domain.NewRelativePath(fileInfoProto.GetRelativePath()),
 				time.Unix(fileInfoProto.GetModTime(), 0), // FIXME is this right?
 				fileInfoProto.GetSize(),
 				os.FileMode(fileInfoProto.GetMode()),
@@ -304,12 +311,14 @@ func (s *BucketService) handleCreateRevision(w http.ResponseWriter, r *http.Requ
 		)
 	}
 
-	transaction, err := bucket.Begin(fileInfos)
+	transaction, err := s.store.TransactionDAL.CreateTransaction(bucket, fileInfos)
 	if nil != err {
 		http.Error(w, "couldn't start a transaction. Error: "+err.Error(), 500)
 		return
 	}
-	s.openTransactionsMap[bucket.Name+"__"+strconv.FormatInt(int64(transaction.Revision.VersionTimestamp), 10)] = transaction
+
+	transactionString := fmt.Sprintf("%s__%d", bucket.BucketName, transaction.Revision.VersionTimestamp)
+	s.openTransactionsMap[transactionString] = transaction
 
 	var relativePaths []string
 	for _, relativePath := range transaction.GetRelativePathsRequired() {
@@ -337,14 +346,14 @@ func (s *BucketService) handleCreateRevision(w http.ResponseWriter, r *http.Requ
 	}
 }
 
-func fileTypeProtoToFileType(protoFileType protofiles.FileType) (intelligentstore.FileType, error) {
+func fileTypeProtoToFileType(protoFileType protofiles.FileType) (domain.FileType, error) {
 	switch protoFileType {
 	case protofiles.FileType_REGULAR:
-		return intelligentstore.FileTypeRegular, nil
+		return domain.FileTypeRegular, nil
 	case protofiles.FileType_SYMLINK:
-		return intelligentstore.FileTypeSymlink, nil
+		return domain.FileTypeSymlink, nil
 	default:
-		return intelligentstore.FileTypeUnknown, errors.New("didn't recognise proto file type: " + protoFileType.String())
+		return domain.FileTypeUnknown, errors.New("didn't recognise proto file type: " + protoFileType.String())
 	}
 }
 
@@ -354,9 +363,9 @@ func (s *BucketService) handleUploadFile(w http.ResponseWriter, r *http.Request)
 	bucketName := vars["bucketName"]
 	revisionTsString := vars["revisionTs"]
 
-	bucket, err := s.store.GetBucketByName(bucketName)
+	bucket, err := s.store.BucketDAL.GetBucketByName(bucketName)
 	if nil != err {
-		if intelligentstore.ErrBucketDoesNotExist == err {
+		if dal.ErrBucketDoesNotExist == err {
 			http.Error(w, fmt.Sprintf("couldn't find bucket '%s'. Error: %s", bucketName, err), 404)
 			return
 		}
@@ -364,9 +373,9 @@ func (s *BucketService) handleUploadFile(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	transaction := s.openTransactionsMap[bucket.Name+"__"+revisionTsString]
+	transaction := s.openTransactionsMap[bucket.BucketName+"__"+revisionTsString]
 	if nil == transaction {
-		http.Error(w, fmt.Sprintf("there is no open transaction for bucket %s and revisionTs %s", bucket.Name, revisionTsString), 400)
+		http.Error(w, fmt.Sprintf("there is no open transaction for bucket %s and revisionTs %s", bucket.BucketName, revisionTsString), 400)
 		return
 	}
 
@@ -384,11 +393,11 @@ func (s *BucketService) handleUploadFile(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	err = transaction.BackupFile(
+	err = s.store.TransactionDAL.BackupFile(transaction,
 		bytes.NewBuffer(uploadedFile.Contents))
 	if nil != err {
 		errCode := 500
-		if intelligentstore.ErrFileNotRequiredForTransaction == err {
+		if dal.ErrFileNotRequiredForTransaction == err {
 			errCode = 400
 		}
 		http.Error(w, err.Error(), errCode)
@@ -402,9 +411,9 @@ func (s *BucketService) handleCommitTransaction(w http.ResponseWriter, r *http.R
 	bucketName := vars["bucketName"]
 	revisionTsString := vars["revisionTs"]
 
-	bucket, err := s.store.GetBucketByName(bucketName)
+	bucket, err := s.store.BucketDAL.GetBucketByName(bucketName)
 	if nil != err {
-		if intelligentstore.ErrBucketDoesNotExist == err {
+		if dal.ErrBucketDoesNotExist == err {
 			http.Error(w, fmt.Sprintf("couldn't find bucket '%s'. Error: %s", bucketName, err), 404)
 			return
 		}
@@ -414,11 +423,11 @@ func (s *BucketService) handleCommitTransaction(w http.ResponseWriter, r *http.R
 
 	transaction := s.openTransactionsMap[bucketName+"__"+revisionTsString]
 	if nil == transaction {
-		http.Error(w, fmt.Sprintf("there is no open transaction for bucket %s and revisionTs %s", bucket.Name, revisionTsString), 400)
+		http.Error(w, fmt.Sprintf("there is no open transaction for bucket %s and revisionTs %s", bucket.BucketName, revisionTsString), 400)
 		return
 	}
 
-	err = transaction.Commit()
+	err = s.store.TransactionDAL.Commit(transaction)
 	if nil != err {
 		http.Error(w, "failed to commit transaction. Error: "+err.Error(), 500)
 		return
@@ -432,16 +441,16 @@ func (s *BucketService) handleGetFileContents(w http.ResponseWriter, r *http.Req
 	bucketName := vars["bucketName"]
 	revisionTsString := vars["revisionTs"]
 
-	relativePath := intelligentstore.NewRelativePath(r.URL.Query().Get("relativePath"))
+	relativePath := domain.NewRelativePath(r.URL.Query().Get("relativePath"))
 	revision, revErr := s.getRevision(bucketName, revisionTsString)
 	if nil != revErr {
 		http.Error(w, revErr.Error(), revErr.StatusCode)
 		return
 	}
 
-	file, err := revision.GetFileContentsInRevision(relativePath)
+	file, err := s.store.RevisionDAL.GetFileContentsInRevision(revision.Bucket, revision, relativePath)
 	if nil != err {
-		if err == intelligentstore.ErrNoFileWithThisRelativePathInRevision {
+		if err == dal.ErrNoFileWithThisRelativePathInRevision {
 			http.Error(w, fmt.Sprintf("couldn't get '%s'", relativePath), 404)
 			return
 		}
@@ -463,9 +472,9 @@ func (s *BucketService) handleUploadHashes(w http.ResponseWriter, r *http.Reques
 	bucketName := vars["bucketName"]
 	revisionTsString := vars["revisionTs"]
 
-	bucket, err := s.store.GetBucketByName(bucketName)
+	bucket, err := s.store.BucketDAL.GetBucketByName(bucketName)
 	if nil != err {
-		if intelligentstore.ErrBucketDoesNotExist == err {
+		if dal.ErrBucketDoesNotExist == err {
 			http.Error(w, fmt.Sprintf("couldn't find bucket '%s'. Error: %s", bucketName, err), 404)
 			return
 		}
@@ -475,7 +484,7 @@ func (s *BucketService) handleUploadHashes(w http.ResponseWriter, r *http.Reques
 
 	transaction := s.openTransactionsMap[bucketName+"__"+revisionTsString]
 	if nil == transaction {
-		http.Error(w, fmt.Sprintf("there is no open transaction for bucket %s and revisionTs %s", bucket.Name, revisionTsString), 400)
+		http.Error(w, fmt.Sprintf("there is no open transaction for bucket %s and revisionTs %s", bucket.BucketName, revisionTsString), 400)
 		return
 	}
 
@@ -492,11 +501,11 @@ func (s *BucketService) handleUploadHashes(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	var relativePathsWithHashes []*intelligentstore.RelativePathWithHash
+	var relativePathsWithHashes []*domain.RelativePathWithHash
 	for _, relativePathAndHashProto := range getRequiredHashesRequest.GetRelativePathsAndHashes() {
-		relativePathsWithHashes = append(relativePathsWithHashes, &intelligentstore.RelativePathWithHash{
-			RelativePath: intelligentstore.NewRelativePath(relativePathAndHashProto.GetRelativePath()),
-			Hash:         intelligentstore.Hash(relativePathAndHashProto.GetHash()),
+		relativePathsWithHashes = append(relativePathsWithHashes, &domain.RelativePathWithHash{
+			RelativePath: domain.NewRelativePath(relativePathAndHashProto.GetRelativePath()),
+			Hash:         domain.Hash(relativePathAndHashProto.GetHash()),
 		})
 	}
 
@@ -537,9 +546,9 @@ func (s *BucketService) handleUploadSymlinks(w http.ResponseWriter, r *http.Requ
 	bucketName := vars["bucketName"]
 	revisionTsString := vars["revisionTs"]
 
-	bucket, err := s.store.GetBucketByName(bucketName)
+	bucket, err := s.store.BucketDAL.GetBucketByName(bucketName)
 	if nil != err {
-		if intelligentstore.ErrBucketDoesNotExist == err {
+		if dal.ErrBucketDoesNotExist == err {
 			http.Error(w, fmt.Sprintf("couldn't find bucket '%s'. Error: %s", bucketName, err), 404)
 			return
 		}
@@ -549,7 +558,7 @@ func (s *BucketService) handleUploadSymlinks(w http.ResponseWriter, r *http.Requ
 
 	transaction := s.openTransactionsMap[bucketName+"__"+revisionTsString]
 	if nil == transaction {
-		http.Error(w, fmt.Sprintf("there is no open transaction for bucket %s and revisionTs %s", bucket.Name, revisionTsString), 400)
+		http.Error(w, fmt.Sprintf("there is no open transaction for bucket %s and revisionTs %s", bucket.BucketName, revisionTsString), 400)
 		return
 	}
 
@@ -566,12 +575,12 @@ func (s *BucketService) handleUploadSymlinks(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	var symlinksWithRelativePaths []*intelligentstore.SymlinkWithRelativePath
+	var symlinksWithRelativePaths []*domain.SymlinkWithRelativePath
 	for _, symlinkWithRelativePath := range uploadSymlinksRequest.SymlinksWithRelativePaths {
 		symlinksWithRelativePaths = append(
 			symlinksWithRelativePaths,
-			&intelligentstore.SymlinkWithRelativePath{
-				RelativePath: intelligentstore.NewRelativePath(symlinkWithRelativePath.GetRelativePath()),
+			&domain.SymlinkWithRelativePath{
+				RelativePath: domain.NewRelativePath(symlinkWithRelativePath.GetRelativePath()),
 				Dest:         symlinkWithRelativePath.GetDest(),
 			},
 		)

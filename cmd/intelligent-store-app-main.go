@@ -9,7 +9,8 @@ import (
 	"time"
 
 	"github.com/jamesrr39/intelligent-backup-store-app/exporters"
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
 	"github.com/jamesrr39/intelligent-backup-store-app/storewebserver"
 	"github.com/jamesrr39/intelligent-backup-store-app/uploaders"
@@ -23,7 +24,7 @@ func main() {
 	initCommand := kingpin.Command("init", "create a new store")
 	initStoreLocation := initCommand.Arg("store location", "location of the store").Default(".").String()
 	initCommand.Action(func(ctx *kingpin.ParseContext) error {
-		store, err := intelligentstore.CreateIntelligentStoreAndNewConn(*initStoreLocation)
+		store, err := dal.CreateIntelligentStoreAndNewConn(*initStoreLocation)
 		if nil != err {
 			return err
 		}
@@ -36,14 +37,15 @@ func main() {
 	initBucketStoreLocation := initBucketCommand.Arg("store location", "location of the store").Required().String()
 	initBucketBucketName := initBucketCommand.Arg("bucket name", "name of the bucket").Required().String()
 	initBucketCommand.Action(func(ctx *kingpin.ParseContext) error {
-		store, err := intelligentstore.NewIntelligentStoreConnToExisting(
-			*initBucketStoreLocation)
+		store, err := dal.NewIntelligentStoreConnToExisting(
+			*initBucketStoreLocation,
+		)
 
 		if nil != err {
 			return err
 		}
 
-		_, err = store.CreateBucket(*initBucketBucketName)
+		_, err = store.BucketDAL.CreateBucket(*initBucketBucketName)
 		if nil != err {
 			return err
 		}
@@ -76,7 +78,7 @@ func main() {
 		if strings.HasPrefix(*backupStoreLocation, "http://") || strings.HasPrefix(*backupStoreLocation, "https://") {
 			uploaderClient = webuploadclient.NewWebUploadClient(*backupStoreLocation, *backupBucketName, *backupFromLocation, excludeMatcher)
 		} else {
-			backupStore, err := intelligentstore.NewIntelligentStoreConnToExisting(*backupStoreLocation)
+			backupStore, err := dal.NewIntelligentStoreConnToExisting(*backupStoreLocation)
 			if nil != err {
 				return err
 			}
@@ -89,12 +91,12 @@ func main() {
 	listBucketsCommand := kingpin.Command("list-buckets", "produce a listing of all the buckets and the last backup time")
 	listBucketsStoreLocation := listBucketsCommand.Arg("store location", "location of the store").Default(".").String()
 	listBucketsCommand.Action(func(ctx *kingpin.ParseContext) error {
-		store, err := intelligentstore.NewIntelligentStoreConnToExisting(*listBucketsStoreLocation)
+		store, err := dal.NewIntelligentStoreConnToExisting(*listBucketsStoreLocation)
 		if nil != err {
 			return err
 		}
 
-		buckets, err := store.GetAllBuckets()
+		buckets, err := store.BucketDAL.GetAllBuckets()
 		if nil != err {
 			return err
 		}
@@ -103,9 +105,9 @@ func main() {
 		for _, bucket := range buckets {
 			var latestRevDisplay string
 
-			latestRevision, err := bucket.GetLatestRevision()
+			latestRevision, err := store.BucketDAL.GetLatestRevision(bucket)
 			if nil != err {
-				if intelligentstore.ErrNoRevisionsForBucket == err {
+				if dal.ErrNoRevisionsForBucket == err {
 					latestRevDisplay = err.Error()
 				} else {
 					return err
@@ -115,7 +117,7 @@ func main() {
 				latestRevDisplay = time.Unix(int64(latestRevision.VersionTimestamp), 0).Format(time.ANSIC)
 			}
 
-			fmt.Printf("%s | %s\n", bucket.Name, latestRevDisplay)
+			fmt.Printf("%s | %s\n", bucket.BucketName, latestRevDisplay)
 		}
 
 		return nil
@@ -125,19 +127,19 @@ func main() {
 	listBucketRevisionsStoreLocation := listBucketRevisionsCommand.Arg("store location", "location of the store").Required().String()
 	listBucketRevisionsBucketName := listBucketRevisionsCommand.Arg("bucket name", "name of the bucket to back up into").Required().String()
 	listBucketRevisionsCommand.Action(func(ctx *kingpin.ParseContext) error {
-		store, err := intelligentstore.NewIntelligentStoreConnToExisting(
+		store, err := dal.NewIntelligentStoreConnToExisting(
 			*listBucketRevisionsStoreLocation)
 
 		if nil != err {
 			return err
 		}
 
-		bucket, err := store.GetBucketByName(*listBucketRevisionsBucketName)
+		bucket, err := store.BucketDAL.GetBucketByName(*listBucketRevisionsBucketName)
 		if nil != err {
 			return err
 		}
 
-		revisions, err := bucket.GetRevisions()
+		revisions, err := store.BucketDAL.GetRevisions(bucket)
 		if nil != err {
 			return err
 		}
@@ -160,16 +162,16 @@ func main() {
 	).Int64()
 	exportCommandFilePathPrefix := exportCommand.Flag("with-prefix", "prefix of files to be exported").String()
 	exportCommand.Action(func(ctx *kingpin.ParseContext) error {
-		store, err := intelligentstore.NewIntelligentStoreConnToExisting(
+		store, err := dal.NewIntelligentStoreConnToExisting(
 			*exportCommandStoreLocation)
 
 		if nil != err {
 			return err
 		}
 
-		var version *intelligentstore.RevisionVersion
+		var version *domain.RevisionVersion
 		if 0 != *exportCommandRevisionVersion {
-			r := intelligentstore.RevisionVersion(*exportCommandRevisionVersion)
+			r := domain.RevisionVersion(*exportCommandRevisionVersion)
 			version = &r
 		}
 
@@ -191,7 +193,7 @@ func main() {
 	startWebappStoreLocation := startWebappCommand.Arg("store location", "location of the store").Default(".").String()
 	startWebappAddr := startWebappCommand.Flag("address", "custom address to expose the webapp to. Example: ':8081': expose to everyone on port 8081").Default("localhost:8080").String()
 	startWebappCommand.Action(func(ctx *kingpin.ParseContext) error {
-		store, err := intelligentstore.NewIntelligentStoreConnToExisting(
+		store, err := dal.NewIntelligentStoreConnToExisting(
 			*startWebappStoreLocation)
 
 		if nil != err {

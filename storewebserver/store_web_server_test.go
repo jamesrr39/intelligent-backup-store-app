@@ -8,7 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/storetest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -18,9 +19,9 @@ func Test_handleSearch(t *testing.T) {
 	store := storetest.NewInMemoryStore(t)
 	bucket := storetest.CreateBucket(t, store.Store, "docs")
 
-	revision := storetest.CreateRevision(t, store.Store, bucket, []*intelligentstore.RegularFileDescriptorWithContents{
-		intelligentstore.NewRegularFileDescriptorWithContents(t, intelligentstore.NewRelativePath("a/contract.txt"), time.Unix(0, 0), intelligentstore.FileMode600, []byte("")),
-		intelligentstore.NewRegularFileDescriptorWithContents(t, intelligentstore.NewRelativePath("a/something else.txt"), time.Unix(0, 0), intelligentstore.FileMode600, []byte("")),
+	revision := storetest.CreateRevision(t, store.Store, bucket, []*domain.RegularFileDescriptorWithContents{
+		domain.NewRegularFileDescriptorWithContents(t, domain.NewRelativePath("a/contract.txt"), time.Unix(0, 0), dal.FileMode600, []byte("")),
+		domain.NewRegularFileDescriptorWithContents(t, domain.NewRelativePath("a/something else.txt"), time.Unix(0, 0), dal.FileMode600, []byte("")),
 	})
 
 	storeHandler := NewStoreWebServer(store.Store)
@@ -37,14 +38,14 @@ func Test_handleSearch(t *testing.T) {
 
 	storeHandler.ServeHTTP(w1, r1)
 
-	var results []*intelligentstore.SearchResult
+	var results []*domain.SearchResult
 	err := json.Unmarshal(w1.Body.Bytes(), &results)
 	require.Nil(t, err)
 
 	require.Equal(t, 200, w1.Code)
 	require.Len(t, results, 1)
 	assert.Equal(t, "a/contract.txt", string(results[0].RelativePath))
-	assert.Equal(t, bucket.Name, results[0].Bucket.Name)
+	assert.Equal(t, bucket.BucketName, results[0].Bucket.BucketName)
 	assert.Equal(t, revision.VersionTimestamp, results[0].Revision.VersionTimestamp)
 
 	// bad request (no search term specified)

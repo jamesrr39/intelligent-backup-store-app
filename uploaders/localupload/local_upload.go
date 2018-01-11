@@ -3,35 +3,36 @@ package localupload
 import (
 	"log"
 	"path/filepath"
+	"strings"
 
-	"github.com/pkg/errors"
-
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
 	"github.com/jamesrr39/intelligent-backup-store-app/uploaders"
+	"github.com/pkg/errors"
 	"github.com/spf13/afero"
 )
 
 // LocalUploader represents an object for performing an upload over a local FS
 type LocalUploader struct {
-	BackupStore        *intelligentstore.IntelligentStore
-	BackupBucketName   string
-	BackupFromLocation string
-	ExcludeMatcher     *excludesmatcher.ExcludesMatcher
-	Fs                 afero.Fs
+	backupStoreDAL     *dal.IntelligentStoreDAL
+	backupBucketName   string
+	backupFromLocation string
+	excludeMatcher     *excludesmatcher.ExcludesMatcher
+	fs                 afero.Fs
 	linkReader         uploaders.LinkReader
 }
 
 // NewLocalUploader connects to the upload store and returns a LocalUploader
 func NewLocalUploader(
-	backupStore *intelligentstore.IntelligentStore,
+	backupStoreDAL *dal.IntelligentStoreDAL,
 	backupBucketName,
 	backupFromLocation string,
 	excludeMatcher *excludesmatcher.ExcludesMatcher,
 ) *LocalUploader {
 
 	return &LocalUploader{
-		backupStore,
+		backupStoreDAL,
 		backupBucketName,
 		backupFromLocation,
 		excludeMatcher,
@@ -47,7 +48,7 @@ func (uploader *LocalUploader) UploadToStore() error {
 		// FIXME: handle abort tx on err
 	}()
 
-	fileInfosMap, err := uploaders.BuildFileInfosMap(uploader.Fs, uploader.linkReader, uploader.BackupFromLocation, uploader.ExcludeMatcher)
+	fileInfosMap, err := uploaders.BuildFileInfosMap(uploader.fs, uploader.linkReader, uploader.backupFromLocation, uploader.excludeMatcher)
 	if nil != err {
 		return err
 	}
@@ -63,24 +64,24 @@ func (uploader *LocalUploader) UploadToStore() error {
 
 	log.Printf("%d paths required: %s\n", len(requiredRelativePaths), requiredRelativePaths)
 
-	var requiredRelativePathsForHashes []intelligentstore.RelativePath
-	var symlinksWithRelativePath []*intelligentstore.SymlinkWithRelativePath
+	var requiredRelativePathsForHashes []domain.RelativePath
+	var symlinksWithRelativePath []*domain.SymlinkWithRelativePath
 
 	for _, requiredRelativePath := range requiredRelativePaths {
 		fileInfo := fileInfosMap[requiredRelativePath]
 
 		log.Printf("filename: %s, type: %v\n", fileInfo.RelativePath, fileInfo.Type)
 		switch fileInfo.Type {
-		case intelligentstore.FileTypeRegular:
+		case domain.FileTypeRegular:
 			requiredRelativePathsForHashes = append(requiredRelativePathsForHashes, requiredRelativePath)
-		case intelligentstore.FileTypeSymlink:
-			dest, err := uploader.linkReader(filepath.Join(uploader.BackupFromLocation, string(fileInfo.RelativePath)))
+		case domain.FileTypeSymlink:
+			dest, err := uploader.linkReader(filepath.Join(uploader.backupFromLocation, string(fileInfo.RelativePath)))
 			if nil != err {
 				return err
 			}
 			symlinksWithRelativePath = append(
 				symlinksWithRelativePath,
-				&intelligentstore.SymlinkWithRelativePath{
+				&domain.SymlinkWithRelativePath{
 					RelativePath: fileInfo.RelativePath,
 					Dest:         dest,
 				},
@@ -93,27 +94,34 @@ func (uploader *LocalUploader) UploadToStore() error {
 		return err
 	}
 
-	hashRelativePathMap, err := uploaders.BuildRelativePathsWithHashes(uploader.Fs, uploader.BackupFromLocation, requiredRelativePathsForHashes)
+	hashRelativePathMap, err := uploaders.BuildRelativePathsWithHashes(uploader.fs, uploader.backupFromLocation, requiredRelativePathsForHashes)
 	if nil != err {
 		return err
 	}
+
+	// transactionDAL := intelligentstore.NewTransactionDAL(backupStore)
+	//
+	// for _, filePath := range filePathsToUpload {
 
 	requiredHashes, err := tx.ProcessUploadHashesAndGetRequiredHashes(hashRelativePathMap.ToSlice())
 	if nil != err {
 		return err
 	}
-
 	log.Printf("%d hashes required\n", len(requiredHashes))
 
 	for _, requiredHash := range requiredHashes {
-		relativePath := hashRelativePathMap[requiredHash][0]
-		err = uploader.uploadFile(tx, relativePath)
+		relativePath := hashRelativePathMap[requiredHash]
+		if 0 == len(relativePath) {
+			return errors.Errorf("couldn't find any paths for hash: '%s'", requiredHash)
+		}
+
+		err = uploader.uploadFile(tx, relativePath[0])
 		if nil != err {
 			return err
 		}
 	}
 
-	err = tx.Commit()
+	err = uploader.backupStoreDAL.TransactionDAL.Commit(tx)
 	if nil != err {
 		return err
 	}
@@ -123,27 +131,32 @@ func (uploader *LocalUploader) UploadToStore() error {
 	return nil
 }
 
-func (uploader *LocalUploader) begin(fileInfos []*intelligentstore.FileInfo) (*intelligentstore.Transaction, error) {
-	bucket, err := uploader.BackupStore.GetBucketByName(uploader.BackupBucketName)
+func (uploader *LocalUploader) uploadFile(tx *domain.Transaction, relativePath domain.RelativePath) error {
+	filePath := filepath.Join(uploader.backupFromLocation, string(relativePath))
+
+	file, err := uploader.fs.Open(filePath)
+	if nil != err {
+		return errors.Wrap(err, filePath)
+	}
+	defer file.Close()
+	// relativeFilePath := fullPathToRelative(uploader.backupFromLocation, filePath)
+	err = uploader.backupStoreDAL.TransactionDAL.BackupFile(tx, file)
+	if nil != err {
+		return err
+	}
+
+	return nil
+}
+
+func (uploader *LocalUploader) begin(fileInfos []*domain.FileInfo) (*domain.Transaction, error) {
+	bucket, err := uploader.backupStoreDAL.BucketDAL.GetBucketByName(uploader.backupBucketName)
 	if nil != err {
 		return nil, err
 	}
 
-	return bucket.Begin(fileInfos)
+	return uploader.backupStoreDAL.TransactionDAL.CreateTransaction(bucket, fileInfos)
 }
 
-func (uploader *LocalUploader) uploadFile(backupTx *intelligentstore.Transaction, relativePath intelligentstore.RelativePath) error {
-	fileAbsolutePath := filepath.Join(uploader.BackupFromLocation, string(relativePath))
-
-	file, err := uploader.Fs.Open(fileAbsolutePath)
-	if nil != err {
-		return errors.Wrapf(err, "couldn't open '%s'", fileAbsolutePath)
-	}
-	defer file.Close()
-
-	err = backupTx.BackupFile(file)
-	if nil != err {
-		return errors.Wrapf(err, "failed to backup '%s'", fileAbsolutePath)
-	}
-	return nil
+func fullPathToRelative(rootPath, fullPath string) domain.RelativePath {
+	return domain.NewRelativePath(strings.TrimPrefix(fullPath, rootPath))
 }

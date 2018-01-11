@@ -6,7 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
@@ -14,11 +15,12 @@ import (
 )
 
 type testfile struct {
-	path     intelligentstore.RelativePath
+	path     domain.RelativePath
 	contents string
 }
 
 func Test_UploadToStore(t *testing.T) {
+	// define and write test files to upload, living under /docs
 	testFiles := []*testfile{
 		&testfile{"a.txt", "file a"},
 		&testfile{"b.txt", "file b"},
@@ -44,7 +46,7 @@ func Test_UploadToStore(t *testing.T) {
 		bytes.NewBuffer([]byte("\nexclude*\n")))
 	require.Nil(t, err)
 
-	store := intelligentstore.NewMockStore(t, mockTimeProvider)
+	store := dal.NewMockStore(t, dal.MockNowProvider, afero.NewMemMapFs())
 
 	store.CreateBucket(t, "docs")
 
@@ -64,34 +66,34 @@ func Test_UploadToStore(t *testing.T) {
 	err = uploader.UploadToStore()
 	require.Nil(t, err)
 
-	_, err = store.Store.GetBucketByName("not existing bucket")
-	assert.NotNil(t, err)
+	_, err = store.Store.BucketDAL.GetBucketByName("not existing bucket")
+	require.NotNil(t, err)
 
-	bucket, err := store.Store.GetBucketByName("docs")
+	bucket, err := store.Store.BucketDAL.GetBucketByName("docs")
 	require.Nil(t, err)
 
-	revisions, err := bucket.GetRevisions()
+	revisions, err := store.Store.BucketDAL.GetRevisions(bucket)
 	require.Nil(t, err)
 	assert.Len(t, revisions, 1)
 
 	revision := revisions[0]
 
-	fileDescriptors, err := revision.GetFilesInRevision()
+	fileDescriptors, err := store.Store.RevisionDAL.GetFilesInRevision(bucket, revision)
 	require.Nil(t, err)
 	assert.Len(t, fileDescriptors, 4)
 
-	fileDescriptorNameMap := make(map[intelligentstore.RelativePath]intelligentstore.FileDescriptor)
+	fileDescriptorNameMap := make(map[domain.RelativePath]domain.FileDescriptor)
 	for _, fileDescriptor := range fileDescriptors {
 		fileDescriptorNameMap[fileDescriptor.GetFileInfo().RelativePath] = fileDescriptor
 	}
 
 	for _, testFile := range testFiles {
-		hash, err := intelligentstore.NewHash(
+		hash, err := domain.NewHash(
 			bytes.NewBuffer([]byte(testFile.contents)))
 		require.Nil(t, err)
 
 		assert.Equal(t, testFile.path, fileDescriptorNameMap[testFile.path].GetFileInfo().RelativePath)
-		fileDescriptor := (fileDescriptorNameMap[testFile.path]).(*intelligentstore.RegularFileDescriptor)
+		fileDescriptor := (fileDescriptorNameMap[testFile.path]).(*domain.RegularFileDescriptor)
 		assert.Equal(t, hash, fileDescriptor.Hash)
 	}
 

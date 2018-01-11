@@ -6,17 +6,17 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
 )
 
 // StoreWebServer represents a handler handling requests for a store.
 type StoreWebServer struct {
-	store *intelligentstore.IntelligentStore
+	store *dal.IntelligentStoreDAL
 	http.Handler
 }
 
 // NewStoreWebServer creates a StoreWebServer and sets up the routing for the services it provides.
-func NewStoreWebServer(store *intelligentstore.IntelligentStore) *StoreWebServer {
+func NewStoreWebServer(store *dal.IntelligentStoreDAL) *StoreWebServer {
 	router := mux.NewRouter()
 	storeHandler := &StoreWebServer{store, router}
 

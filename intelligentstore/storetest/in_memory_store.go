@@ -3,13 +3,13 @@ package storetest
 import (
 	"testing"
 
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 )
 
 type InMemoryStore struct {
-	Store *intelligentstore.IntelligentStore
+	Store *dal.IntelligentStoreDAL
 	Path  string
 	Fs    afero.Fs
 }
@@ -23,7 +23,7 @@ func NewInMemoryStore(t *testing.T) *InMemoryStore {
 	err := fs.Mkdir(path, 0700)
 	require.Nil(t, err)
 
-	store, err := intelligentstore.CreateTestStoreAndNewConn(path, MockNowProvider, fs)
+	store, err := dal.CreateTestStoreAndNewConn(path, MockNowProvider, fs)
 	require.Nil(t, err)
 
 	return &InMemoryStore{store, path, fs}
