@@ -45,10 +45,10 @@ func (r *RevisionDAL) GetFilesInRevision(bucket *domain.Bucket, revision *domain
 	return filesInVersion, nil
 }
 
-func (r *RevisionDAL) GetFileContentsInRevision(
+func (r *RevisionDAL) getFileDescriptorOfFileInRevision(
 	bucket *domain.Bucket,
 	revision *domain.Revision,
-	relativePath domain.RelativePath) (io.ReadCloser, error) {
+	relativePath domain.RelativePath) (domain.FileDescriptor, error) {
 
 	fileDescriptors, err := r.GetFilesInRevision(bucket, revision)
 	if nil != err {
@@ -57,25 +57,41 @@ func (r *RevisionDAL) GetFileContentsInRevision(
 
 	for _, fileDescriptor := range fileDescriptors {
 		if fileDescriptor.GetFileInfo().RelativePath == relativePath {
-			fileType := fileDescriptor.GetFileInfo().Type
-
-			switch fileType {
-			case domain.FileTypeRegular:
-				fd, ok := fileDescriptor.(*domain.RegularFileDescriptor)
-				if !ok {
-					return nil, errors.New("bad type assertion (expected RegularFileDescriptor)")
-				}
-				return r.GetObjectByHash(fd.Hash)
-			case domain.FileTypeSymlink:
-				fd, ok := fileDescriptor.(*domain.SymlinkFileDescriptor)
-				if !ok {
-					return nil, errors.New("bad type assertion (expected SymlinkFileDescriptor)")
-				}
-				return r.GetFileContentsInRevision(bucket, revision, domain.NewRelativePath(fd.Dest))
-			default:
-				return nil, fmt.Errorf("get contents of file type %d (%s) unsupported", fileType, fileType)
-			}
+			return fileDescriptor, nil
 		}
+	}
+
+	return nil, ErrNoFileWithThisRelativePathInRevision
+}
+
+func (r *RevisionDAL) GetFileContentsInRevision(
+	bucket *domain.Bucket,
+	revision *domain.Revision,
+	relativePath domain.RelativePath) (io.ReadCloser, error) {
+
+	fileDescriptor, err := r.getFileDescriptorOfFileInRevision(bucket, revision, relativePath)
+	if nil != err {
+		return nil, err
+	}
+
+	fileType := fileDescriptor.GetFileInfo().Type
+
+	switch fileType {
+	case domain.FileTypeRegular:
+		fd, ok := fileDescriptor.(*domain.RegularFileDescriptor)
+		if !ok {
+			return nil, errors.New("bad type assertion (expected RegularFileDescriptor)")
+		}
+		return r.GetObjectByHash(fd.Hash)
+	case domain.FileTypeSymlink:
+		fd, ok := fileDescriptor.(*domain.SymlinkFileDescriptor)
+		if !ok {
+			return nil, errors.New("bad type assertion (expected SymlinkFileDescriptor)")
+		}
+		return r.GetFileContentsInRevision(bucket, revision, domain.NewRelativePath(fd.Dest))
+	default:
+		return nil, fmt.Errorf("get contents of file type %d (%s) unsupported", fileType, fileType)
+
 	}
 
 	return nil, ErrNoFileWithThisRelativePathInRevision

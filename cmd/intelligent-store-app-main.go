@@ -12,6 +12,7 @@ import (
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
+	"github.com/jamesrr39/intelligent-backup-store-app/storefuse"
 	"github.com/jamesrr39/intelligent-backup-store-app/storewebserver"
 	"github.com/jamesrr39/intelligent-backup-store-app/uploaders"
 	"github.com/jamesrr39/intelligent-backup-store-app/uploaders/localupload"
@@ -28,6 +29,7 @@ func main() {
 	setupListRevisionsCommand()
 	setupStartWebappCommand()
 	setupExportCommand()
+	setupFuseMount()
 
 	kingpin.Parse()
 }
@@ -239,6 +241,23 @@ func setupStartWebappCommand() {
 		}
 
 		return nil
+	})
+}
+
+func setupFuseMount() {
+	cmd := kingpin.Command("mount", "mount the store as a filesystem")
+	storeLocation := addStoreLocation(cmd, true)
+	mountOnPathLocation := cmd.Arg("mount-at", "the path to mount the filesystem at").Required().String()
+	cmd.Action(func(ctx *kingpin.ParseContext) error {
+		store, err := dal.NewIntelligentStoreConnToExisting(
+			*storeLocation)
+
+		if nil != err {
+			return err
+		}
+
+		storeFuse := storefuse.NewStoreFUSE(store)
+		return storeFuse.Mount(*mountOnPathLocation)
 	})
 }
 
