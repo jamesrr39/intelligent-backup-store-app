@@ -3,6 +3,7 @@ package storefuse
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
 	"log"
 
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
@@ -26,18 +27,28 @@ func (f *File) Attr(ctx context.Context, attr *fuse.Attr) error {
 	}
 
 	attr.Mode = f.descriptor.GetFileInfo().FileMode
-	attr.Size = uint64(len(data))
-
-	fmt.Printf("GETTING ATTR '%T': '%v' :: '%s'\n", ctx, ctx, attr.String())
+	attr.Size = uint64(f.descriptor.GetFileInfo().Size)
 
 	return nil
 }
 
 func (f *File) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.ReadResponse) error {
 	log.Printf("reading at offset: %d\n", req.Offset)
-	// if req.Offset >= int64(len())
-	log.Printf("node: %s\n", req.Hdr())
-	log.Printf("request: %s\n", req.String())
-	resp.Data = data
+	if req.Offset >= f.descriptor.GetFileInfo().Size {
+		return nil
+	}
+
+	regularDescriptor := (f.descriptor).(*domain.RegularFileDescriptor)
+	object, err := f.dal.GetObjectByHash(regularDescriptor.Hash)
+	if nil != err {
+		return err
+	}
+
+	b, err := ioutil.ReadAll(object)
+	if nil != err {
+		return err
+	}
+
+	resp.Data = b[req.Offset:]
 	return nil
 }
