@@ -20,3 +20,14 @@ func NewRelativePath(path string) RelativePath {
 
 	return RelativePath(path)
 }
+
+func (r RelativePath) Name() string {
+	rAsStr := string(r)
+	lastSep := strings.LastIndex(rAsStr, string(RelativePathSep))
+	if -1 == lastSep {
+		return rAsStr
+	}
+
+	// +1 for relative path separator
+	return rAsStr[lastSep+1:]
+}

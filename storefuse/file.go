@@ -25,7 +25,7 @@ func (f *File) Attr(ctx context.Context, attr *fuse.Attr) error {
 		return err
 	}
 
-	attr.Mode = 0600
+	attr.Mode = f.descriptor.GetFileInfo().FileMode
 	attr.Size = uint64(len(data))
 
 	fmt.Printf("GETTING ATTR '%T': '%v' :: '%s'\n", ctx, ctx, attr.String())

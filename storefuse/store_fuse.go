@@ -19,7 +19,10 @@ func (f *StoreFUSE) Mount(onPath string) error {
 	if nil != err {
 		return err
 	}
-	defer conn.Close()
+	defer func() {
+		conn.Close()
+		fuse.Unmount(onPath)
+	}()
 
 	err = fs.Serve(conn, newStoreFS(f.dal))
 	if nil != err {

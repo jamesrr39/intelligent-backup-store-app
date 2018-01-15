@@ -28,59 +28,38 @@ func (d *Dir) Attr(ctx context.Context, a *fuse.Attr) error {
 }
 
 func (d *Dir) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
-	log.Printf("direntries: %v\n", d.dirEntries)
+	log.Printf("reading dir name: '%s', entries: '%v'\n", d.name, d.dirEntries)
+	// for _, dirEntry := range d.dirEntries {
+	// 	log.Printf("entry: '%s', type: %v\n", dirEntry.Name, dirEntry.Type.String())
+	// }
 
-	return []fuse.Dirent{
-		fuse.Dirent{
-			Name: "a",
-			Type: fuse.DT_Dir,
-		},
-		fuse.Dirent{
-			Name: "b",
-			Type: fuse.DT_File,
-		},
-	}, nil
-	// return d.dirEntries, nil
+	// return []fuse.Dirent{
+	// 	fuse.Dirent{
+	// 		Name: "a",
+	// 		Type: fuse.DT_Dir,
+	// 	},
+	// 	fuse.Dirent{
+	// 		Name: "b",
+	// 		Type: fuse.DT_File,
+	// 	},
+	// }, nil
+	// d.dirEntries = append(d.dirEntries, fuse.Dirent{
+	// 	Name: "b",
+	// 	Type: fuse.DT_File,
+	// })
+	return d.dirEntries, nil
 }
 
-//FIXME inodes, encode bucket/path names
+//FIXME encode bucket/path names
 func (d *Dir) Lookup(ctx context.Context, name string) (fs.Node, error) {
 
-	log.Printf("lookup for '%s'\n", name)
-	return &Dir{
-		fs:         d.fs,
-		dirEntries: nil,
-		name:       name,
-	}, nil
+	pathInFs := filepath.Join(d.name, name)
 
 	sep := string(filepath.Separator)
-	fragments := strings.Split(name, sep)
+	fragments := strings.Split(strings.TrimPrefix(pathInFs, sep), sep)
+
+	log.Printf("lookup for '%s', fragments: '%v'\n", pathInFs, fragments)
 	bucketName := fragments[0]
-	var bucket *domain.Bucket
-
-	log.Printf("lookup for '%s'\n", name)
-
-	// root
-	// if "" == bucketName {
-	// 	log.Printf("ROOT FROM LOOKUP")
-	// 	buckets, err := d.fs.dal.BucketDAL.GetAllBuckets()
-	// 	if nil != err {
-	// 		return nil, err
-	// 	}
-	//
-	// 	var dirEntries []fuse.Dirent
-	// 	for _, bucket := range buckets {
-	// 		dirEntries = append(dirEntries, fuse.Dirent{
-	// 			Name:  bucket.BucketName,
-	// 			Type:  fuse.DT_Dir,
-	// 			Inode: d.fs.inodeMapInstance.GetOrGenerateInodeId(name),
-	// 		})
-	// 	}
-	// 	return &Dir{
-	// 		d.fs,
-	// 		dirEntries,
-	// 	}, nil
-	// }
 
 	bucket, err := d.fs.dal.BucketDAL.GetBucketByName(bucketName)
 	if nil != err {
@@ -107,7 +86,7 @@ func (d *Dir) Lookup(ctx context.Context, name string) (fs.Node, error) {
 		return &Dir{
 			d.fs,
 			dirEntries,
-			name,
+			pathInFs,
 		}, nil
 	}
 
@@ -123,64 +102,80 @@ func (d *Dir) Lookup(ctx context.Context, name string) (fs.Node, error) {
 		return nil, err
 	}
 
-	// bucket name and revision version given (list root folder of revision)
-	if len(fragments) == 2 {
-		var dirEntries []fuse.Dirent
-		for _, fileInRevision := range filesInRevision {
-			descriptorRelativePathStr := string(fileInRevision.GetFileInfo().RelativePath)
-			if !strings.Contains(descriptorRelativePathStr, string(domain.RelativePathSep)) {
+	searchRelativePath := domain.NewRelativePath(strings.Join(fragments[2:], sep))
+	log.Printf("SEARCHING: '%s'\n", searchRelativePath)
 
-				dirEntries = append(dirEntries, fuse.Dirent{
-					Name:  revision.VersionTimestamp.String(),
-					Type:  fuse.DT_Dir,
-					Inode: d.fs.inodeMapInstance.GetOrGenerateInodeId(name),
-				})
-			}
+	fileDescriptor, filterResults, err := domain.FilterDescriptorsByRelativePath(filesInRevision, searchRelativePath)
+	if nil != err {
+		return nil, err
+	}
 
-			// FIXME also create folders
-		}
-		return &Dir{
-			d.fs,
-			dirEntries,
-			name,
+	log.Printf("FILE DESCRIPTOR: %v\nFILTER RESULTS: %v\n", fileDescriptor, filterResults)
+
+	if nil != fileDescriptor {
+		return &File{
+			d.fs.dal,
+			fileDescriptor,
 		}, nil
+	}
+
+	var dirEntries []fuse.Dirent
+	for _, fileDescriptor := range filterResults.FileDescriptors {
+		fileName := fileDescriptor.GetFileInfo().RelativePath.Name()
+		path := filepath.Join(pathInFs, fileName)
+
+		dirEntries = append(dirEntries, fuse.Dirent{
+			Inode: d.fs.inodeMapInstance.GetOrGenerateInodeId(path),
+			Type:  fuse.DT_File,
+			Name:  fileName,
+		})
+	}
+
+	for _, dirName := range filterResults.DirNames {
+		path := filepath.Join(pathInFs, dirName)
+
+		dirEntries = append(dirEntries, fuse.Dirent{
+			Inode: d.fs.inodeMapInstance.GetOrGenerateInodeId(path),
+			Type:  fuse.DT_File,
+			Name:  dirName,
+		})
 	}
 
 	return &Dir{
 		d.fs,
-		nil,
-		name,
+		dirEntries,
+		pathInFs,
 	}, nil
 
-	// relativePath := domain.NewRelativePath(strings.Join(fragments[2:], sep))
+	// // bucket name and revision version given (list root folder of revision)
+	// if len(fragments) == 2 {
+	// 	var dirEntries []fuse.Dirent
+	// 	for _, fileInRevision := range filesInRevision {
+	// 		descriptorRelativePathStr := string(fileInRevision.GetFileInfo().RelativePath)
+	// 		if !strings.Contains(descriptorRelativePathStr, string(domain.RelativePathSep)) {
 	//
-	//
-	//
-	// relativePathStr := string(relativePath)
-	// var filesMatchingRelativePath []domain.FileDescriptor
-	// for _, fileInRevision := range filesInRevision {
-	// 	descriptorRelativePathStr := string(fileInRevision.GetFileInfo().RelativePath
-	// 	if strings.HasPrefix(descriptorRelativePathStr), relativePathStr) {
-	// 		if (descriptorRelativePathStr == relativePathStr) {
-	// 			return &File{
-	// 				d.dal,
-	// 				fileInRevision,
-	// 			}
+	// 			dirEntries = append(dirEntries, fuse.Dirent{
+	// 				Name:  revision.VersionTimestamp.String(),
+	// 				Type:  fuse.DT_Dir,
+	// 				Inode: d.fs.inodeMapInstance.GetOrGenerateInodeId(name),
+	// 			})
 	// 		}
 	//
-	// 		// is not the same file, but similar
-	// 		filesMatchingRelativePath = append(filesMatchingRelativePath, fileInRevision)
+	// 		// FIXME also create folders
 	// 	}
+	// 	return &Dir{
+	// 		d.fs,
+	// 		dirEntries,
+	// 		pathInFs,
+	// 	}, nil
 	// }
 	//
-	// var n fs.Node
-	// if "a" == name {
-	// 	n = &Dir{}
-	// } else {
-	// 	n = &File{
-	// 		d.dal,
-	// 		fileDescriptor,
-	// 	}
-	// }
+	// // 3 or
+	//
+	// return &Dir{
+	// 	d.fs,
+	// 	nil,
+	// 	pathInFs,
+	// }, nil
 
 }
