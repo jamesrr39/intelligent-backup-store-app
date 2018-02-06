@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -92,7 +92,7 @@ func Test_GetObjectByHash(t *testing.T) {
 	require.Nil(t, err)
 
 	fileContents := "my file contents"
-	descriptor, err := domain.NewRegularFileDescriptorFromReader(
+	descriptor, err := intelligentstore.NewRegularFileDescriptorFromReader(
 		"a.txt",
 		time.Unix(0, 0),
 		FileMode600,
@@ -103,13 +103,13 @@ func Test_GetObjectByHash(t *testing.T) {
 	_, err = mockStore.Store.GetObjectByHash(descriptor.Hash)
 	require.NotNil(t, err)
 
-	fileInfos := []*domain.FileInfo{descriptor.FileInfo}
+	fileInfos := []*intelligentstore.FileInfo{descriptor.FileInfo}
 
 	tx, err := mockStore.Store.TransactionDAL.CreateTransaction(bucket, fileInfos)
 	require.Nil(t, err)
 
-	relativePathsWithHashes := []*domain.RelativePathWithHash{
-		domain.NewRelativePathWithHash(descriptor.RelativePath, descriptor.Hash),
+	relativePathsWithHashes := []*intelligentstore.RelativePathWithHash{
+		intelligentstore.NewRelativePathWithHash(descriptor.RelativePath, descriptor.Hash),
 	}
 
 	_, err = tx.ProcessUploadHashesAndGetRequiredHashes(relativePathsWithHashes)
@@ -161,15 +161,15 @@ func Test_Search(t *testing.T) {
 	store := NewMockStore(t, MockNowProvider, afero.NewMemMapFs())
 	bucket := store.CreateBucket(t, "docs")
 
-	revision := store.CreateRevision(t, bucket, []*domain.RegularFileDescriptorWithContents{
-		domain.NewRegularFileDescriptorWithContents(t, domain.NewRelativePath("a/contract.txt"), time.Unix(0, 0), FileMode600, []byte("")),
-		domain.NewRegularFileDescriptorWithContents(t, domain.NewRelativePath("a/something else.txt"), time.Unix(0, 0), FileMode600, []byte("")),
+	revision := store.CreateRevision(t, bucket, []*intelligentstore.RegularFileDescriptorWithContents{
+		intelligentstore.NewRegularFileDescriptorWithContents(t, intelligentstore.NewRelativePath("a/contract.txt"), time.Unix(0, 0), FileMode600, []byte("")),
+		intelligentstore.NewRegularFileDescriptorWithContents(t, intelligentstore.NewRelativePath("a/something else.txt"), time.Unix(0, 0), FileMode600, []byte("")),
 	})
 
 	searchResults, err := store.Store.Search("contract")
 	require.Nil(t, err)
 	require.Len(t, searchResults, 1)
-	assert.Equal(t, domain.NewRelativePath("a/contract.txt"), searchResults[0].RelativePath)
+	assert.Equal(t, intelligentstore.NewRelativePath("a/contract.txt"), searchResults[0].RelativePath)
 	assert.Equal(t, bucket.BucketName, searchResults[0].Bucket.BucketName)
 	assert.Equal(t, revision.VersionTimestamp, searchResults[0].Revision.VersionTimestamp)
 }

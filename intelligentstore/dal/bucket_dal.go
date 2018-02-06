@@ -11,7 +11,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/jamesrr39/goutil/dirtraversal"
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	"github.com/spf13/afero"
 )
 
@@ -66,7 +66,7 @@ func NewBucketDAL(intelligentStoreDAL *IntelligentStoreDAL) *BucketDAL {
 // 		nil)
 // }
 
-func (bucketDAL *BucketDAL) bucketPath(bucket *domain.Bucket) string {
+func (bucketDAL *BucketDAL) bucketPath(bucket *intelligentstore.Bucket) string {
 	return filepath.Join(
 		bucketDAL.StoreBasePath,
 		".backup_data",
@@ -94,7 +94,7 @@ var ErrNoRevisionsForBucket = errors.New("no revisions for this bucket yet")
 
 // GetLatestRevision returns the latest Revision of this bucket.
 // error could be either ErrNoRevisionsForBucket or an FS-related error.
-func (dal *BucketDAL) GetLatestRevision(bucket *domain.Bucket) (*domain.Revision, error) {
+func (dal *BucketDAL) GetLatestRevision(bucket *intelligentstore.Bucket) (*intelligentstore.Revision, error) {
 	versionsDirPath := filepath.Join(dal.bucketPath(bucket), "versions")
 	versionsFileInfos, err := afero.ReadDir(
 		dal.IntelligentStoreDAL.fs,
@@ -124,12 +124,12 @@ func (dal *BucketDAL) GetLatestRevision(bucket *domain.Bucket) (*domain.Revision
 		}
 	}
 
-	return domain.NewRevision(bucket, domain.RevisionVersion(highestTs)), nil
+	return intelligentstore.NewRevision(bucket, intelligentstore.RevisionVersion(highestTs)), nil
 
 }
 
 // GetRevisions gets all revisions of this bucket
-func (dal *BucketDAL) GetRevisions(bucket *domain.Bucket) ([]*domain.Revision, error) {
+func (dal *BucketDAL) GetRevisions(bucket *intelligentstore.Bucket) ([]*intelligentstore.Revision, error) {
 	versionsFolderPath := filepath.Join(dal.bucketPath(bucket), "versions")
 
 	versionsFileInfos, err := afero.ReadDir(
@@ -138,13 +138,13 @@ func (dal *BucketDAL) GetRevisions(bucket *domain.Bucket) ([]*domain.Revision, e
 		return nil, err
 	}
 
-	var versions []*domain.Revision
+	var versions []*intelligentstore.Revision
 	for _, versionFileInfo := range versionsFileInfos {
 		revisionTs, err := strconv.ParseInt(versionFileInfo.Name(), 10, 64)
 		if nil != err {
 			return nil, errors.Wrapf(err, "couldn't parse '%s' to a revision timestamp", versionFileInfo.Name())
 		}
-		versions = append(versions, domain.NewRevision(bucket, domain.RevisionVersion(revisionTs)))
+		versions = append(versions, intelligentstore.NewRevision(bucket, intelligentstore.RevisionVersion(revisionTs)))
 	}
 
 	return versions, nil
@@ -153,7 +153,7 @@ func (dal *BucketDAL) GetRevisions(bucket *domain.Bucket) ([]*domain.Revision, e
 var ErrRevisionDoesNotExist = errors.New("revision doesn't exist")
 
 // GetRevision gets a specific version of this bucket
-func (dal *BucketDAL) GetRevision(bucket *domain.Bucket, revisionTimeStamp domain.RevisionVersion) (*domain.Revision, error) {
+func (dal *BucketDAL) GetRevision(bucket *intelligentstore.Bucket, revisionTimeStamp intelligentstore.RevisionVersion) (*intelligentstore.Revision, error) {
 	versionsFolderPath := filepath.Join(dal.bucketPath(bucket), "versions")
 
 	_, err := dal.IntelligentStoreDAL.fs.Stat(
@@ -167,21 +167,21 @@ func (dal *BucketDAL) GetRevision(bucket *domain.Bucket, revisionTimeStamp domai
 		return nil, errors.Wrapf(err, "couldn't get revision '%d'", revisionTimeStamp)
 	}
 
-	return domain.NewRevision(bucket, domain.RevisionVersion(revisionTimeStamp)), nil
+	return intelligentstore.NewRevision(bucket, intelligentstore.RevisionVersion(revisionTimeStamp)), nil
 }
 
 func (s *BucketDAL) getBucketsInformationPath() string {
 	return filepath.Join(s.StoreBasePath, ".backup_data", "store_metadata", "buckets-data.json")
 }
 
-func (s *BucketDAL) GetAllBuckets() ([]*domain.Bucket, error) {
+func (s *BucketDAL) GetAllBuckets() ([]*intelligentstore.Bucket, error) {
 	file, err := s.fs.Open(s.getBucketsInformationPath())
 	if nil != err {
 		return nil, err
 	}
 	defer file.Close()
 
-	var buckets []*domain.Bucket
+	var buckets []*intelligentstore.Bucket
 	err = json.NewDecoder(file).Decode(&buckets)
 	if nil != err {
 		return nil, err
@@ -193,7 +193,7 @@ func (s *BucketDAL) GetAllBuckets() ([]*domain.Bucket, error) {
 // GetBucketByName gets a bucket by its name
 // If the bucket is not found, the error returned will be ErrBucketDoesNotExist
 // Otherwise, it will be an os/fs related error
-func (s *BucketDAL) GetBucketByName(bucketName string) (*domain.Bucket, error) {
+func (s *BucketDAL) GetBucketByName(bucketName string) (*intelligentstore.Bucket, error) {
 	buckets, err := s.GetAllBuckets()
 	if nil != err {
 		return nil, err
@@ -210,7 +210,7 @@ func (s *BucketDAL) GetBucketByName(bucketName string) (*domain.Bucket, error) {
 
 var ErrBucketNameAlreadyTaken = errors.New("This bucket name is already taken")
 
-func (s *BucketDAL) CreateBucket(bucketName string) (*domain.Bucket, error) {
+func (s *BucketDAL) CreateBucket(bucketName string) (*intelligentstore.Bucket, error) {
 	buckets, err := s.GetAllBuckets()
 	if nil != err {
 		return nil, err
@@ -229,7 +229,7 @@ func (s *BucketDAL) CreateBucket(bucketName string) (*domain.Bucket, error) {
 
 	id := highestID + 1
 
-	buckets = append(buckets, domain.NewBucket(id, bucketName))
+	buckets = append(buckets, intelligentstore.NewBucket(id, bucketName))
 
 	byteBuffer := bytes.NewBuffer(nil)
 	err = json.NewEncoder(byteBuffer).Encode(buckets)
@@ -248,5 +248,5 @@ func (s *BucketDAL) CreateBucket(bucketName string) (*domain.Bucket, error) {
 		return nil, err
 	}
 
-	return domain.NewBucket(id, bucketName), nil
+	return intelligentstore.NewBucket(id, bucketName), nil
 }

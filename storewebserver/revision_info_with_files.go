@@ -5,14 +5,14 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 )
 
 func (r *revisionInfoWithFiles) UnmarshalJSON(b []byte) error {
 	type revInfoWithFilesIntermediateType struct {
-		LastRevisionTs domain.RevisionVersion `json:"revisionTs"`
-		Files          []json.RawMessage      `json:"files"`
-		Dirs           []*subDirInfo          `json:"dirs"`
+		LastRevisionTs intelligentstore.RevisionVersion `json:"revisionTs"`
+		Files          []json.RawMessage                `json:"files"`
+		Dirs           []*subDirInfo                    `json:"dirs"`
 	}
 	revInfoIntermediate := &revInfoWithFilesIntermediateType{}
 
@@ -25,7 +25,7 @@ func (r *revisionInfoWithFiles) UnmarshalJSON(b []byte) error {
 	r.Dirs = revInfoIntermediate.Dirs
 
 	for _, rawMessage := range revInfoIntermediate.Files {
-		fileInfo := domain.FileInfo{}
+		fileInfo := intelligentstore.FileInfo{}
 		err = json.Unmarshal(rawMessage, &fileInfo)
 		if nil != err {
 			return err
@@ -34,8 +34,8 @@ func (r *revisionInfoWithFiles) UnmarshalJSON(b []byte) error {
 		log.Printf("fileinfo: %v\n", fileInfo)
 
 		switch fileInfo.Type {
-		case domain.FileTypeRegular:
-			var descriptor *domain.RegularFileDescriptor
+		case intelligentstore.FileTypeRegular:
+			var descriptor *intelligentstore.RegularFileDescriptor
 			err = json.Unmarshal(rawMessage, &descriptor)
 			if nil != err {
 				return err
@@ -43,8 +43,8 @@ func (r *revisionInfoWithFiles) UnmarshalJSON(b []byte) error {
 
 			r.Files = append(r.Files, descriptor)
 
-		case domain.FileTypeSymlink:
-			var descriptor *domain.SymlinkFileDescriptor
+		case intelligentstore.FileTypeSymlink:
+			var descriptor *intelligentstore.SymlinkFileDescriptor
 			err = json.Unmarshal(rawMessage, &descriptor)
 			if nil != err {
 				return err

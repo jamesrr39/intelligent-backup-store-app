@@ -1,4 +1,4 @@
-package domain
+package intelligentstore
 
 type SearchResult struct {
 	RelativePath RelativePath `json:"relativePath"`

@@ -1,4 +1,4 @@
-package domain
+package intelligentstore
 
 import "encoding/gob"
 

@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	"github.com/jamesrr39/intelligent-backup-store-app/uploaders"
 	"github.com/pkg/errors"
 	"github.com/spf13/afero"
@@ -64,24 +64,24 @@ func (uploader *LocalUploader) UploadToStore() error {
 
 	log.Printf("%d paths required: %s\n", len(requiredRelativePaths), requiredRelativePaths)
 
-	var requiredRelativePathsForHashes []domain.RelativePath
-	var symlinksWithRelativePath []*domain.SymlinkWithRelativePath
+	var requiredRelativePathsForHashes []intelligentstore.RelativePath
+	var symlinksWithRelativePath []*intelligentstore.SymlinkWithRelativePath
 
 	for _, requiredRelativePath := range requiredRelativePaths {
 		fileInfo := fileInfosMap[requiredRelativePath]
 
 		log.Printf("filename: %s, type: %v\n", fileInfo.RelativePath, fileInfo.Type)
 		switch fileInfo.Type {
-		case domain.FileTypeRegular:
+		case intelligentstore.FileTypeRegular:
 			requiredRelativePathsForHashes = append(requiredRelativePathsForHashes, requiredRelativePath)
-		case domain.FileTypeSymlink:
+		case intelligentstore.FileTypeSymlink:
 			dest, err := uploader.linkReader(filepath.Join(uploader.backupFromLocation, string(fileInfo.RelativePath)))
 			if nil != err {
 				return err
 			}
 			symlinksWithRelativePath = append(
 				symlinksWithRelativePath,
-				&domain.SymlinkWithRelativePath{
+				&intelligentstore.SymlinkWithRelativePath{
 					RelativePath: fileInfo.RelativePath,
 					Dest:         dest,
 				},
@@ -131,7 +131,7 @@ func (uploader *LocalUploader) UploadToStore() error {
 	return nil
 }
 
-func (uploader *LocalUploader) uploadFile(tx *domain.Transaction, relativePath domain.RelativePath) error {
+func (uploader *LocalUploader) uploadFile(tx *intelligentstore.Transaction, relativePath intelligentstore.RelativePath) error {
 	filePath := filepath.Join(uploader.backupFromLocation, string(relativePath))
 
 	file, err := uploader.fs.Open(filePath)
@@ -148,7 +148,7 @@ func (uploader *LocalUploader) uploadFile(tx *domain.Transaction, relativePath d
 	return nil
 }
 
-func (uploader *LocalUploader) begin(fileInfos []*domain.FileInfo) (*domain.Transaction, error) {
+func (uploader *LocalUploader) begin(fileInfos []*intelligentstore.FileInfo) (*intelligentstore.Transaction, error) {
 	bucket, err := uploader.backupStoreDAL.BucketDAL.GetBucketByName(uploader.backupBucketName)
 	if nil != err {
 		return nil, err
@@ -157,6 +157,6 @@ func (uploader *LocalUploader) begin(fileInfos []*domain.FileInfo) (*domain.Tran
 	return uploader.backupStoreDAL.TransactionDAL.CreateTransaction(bucket, fileInfos)
 }
 
-func fullPathToRelative(rootPath, fullPath string) domain.RelativePath {
-	return domain.NewRelativePath(strings.TrimPrefix(fullPath, rootPath))
+func fullPathToRelative(rootPath, fullPath string) intelligentstore.RelativePath {
+	return intelligentstore.NewRelativePath(strings.TrimPrefix(fullPath, rootPath))
 }

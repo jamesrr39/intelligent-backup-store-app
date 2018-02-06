@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 )
@@ -22,13 +22,13 @@ type OsFsTestStore struct {
 
 // TextFile is a simple convience regular file type
 type TextFile struct {
-	RelativePath domain.RelativePath
+	RelativePath intelligentstore.RelativePath
 	Contents     string
 }
 
 // Symlink is a simple convience symlink file type
 type Symlink struct {
-	RelativePath domain.RelativePath
+	RelativePath intelligentstore.RelativePath
 	Dest         string
 }
 

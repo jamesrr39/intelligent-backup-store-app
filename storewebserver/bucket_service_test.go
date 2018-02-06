@@ -20,7 +20,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	protofiles "github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/protobufs/proto_files"
 )
 
@@ -65,11 +65,11 @@ func Test_handleGetAllBuckets(t *testing.T) {
 
 func Test_handleGetRevision(t *testing.T) {
 	// create the fs, and put some test data in it
-	testFiles := []*domain.RegularFileDescriptorWithContents{
-		domain.NewRegularFileDescriptorWithContents(t, "a.txt", time.Unix(0, 0), dal.FileMode600, []byte("file a")),
-		domain.NewRegularFileDescriptorWithContents(t, "b.txt", time.Unix(0, 0), dal.FileMode600, []byte("file b")),
-		domain.NewRegularFileDescriptorWithContents(t, "folder-1/a.txt", time.Unix(0, 0), dal.FileMode600, []byte("file 1/a")),
-		domain.NewRegularFileDescriptorWithContents(t, "folder-1/c.txt", time.Unix(0, 0), dal.FileMode600, []byte("file 1/c")),
+	testFiles := []*intelligentstore.RegularFileDescriptorWithContents{
+		intelligentstore.NewRegularFileDescriptorWithContents(t, "a.txt", time.Unix(0, 0), dal.FileMode600, []byte("file a")),
+		intelligentstore.NewRegularFileDescriptorWithContents(t, "b.txt", time.Unix(0, 0), dal.FileMode600, []byte("file b")),
+		intelligentstore.NewRegularFileDescriptorWithContents(t, "folder-1/a.txt", time.Unix(0, 0), dal.FileMode600, []byte("file 1/a")),
+		intelligentstore.NewRegularFileDescriptorWithContents(t, "folder-1/c.txt", time.Unix(0, 0), dal.FileMode600, []byte("file 1/c")),
 	}
 
 	store := dal.NewMockStore(t, testNowProvider, afero.NewMemMapFs())
@@ -129,7 +129,7 @@ func Test_handleCreateRevision(t *testing.T) {
 	store.CreateBucket(t, "docs")
 
 	aFileText := "test file a"
-	aFileDescriptor, err := domain.NewRegularFileDescriptorFromReader(
+	aFileDescriptor, err := intelligentstore.NewRegularFileDescriptorFromReader(
 		"a.txt",
 		time.Unix(0, 0),
 		dal.FileMode600,
@@ -176,8 +176,8 @@ func Test_handleUploadFile(t *testing.T) {
 	store.CreateBucket(t, "docs")
 
 	aFileText := "my file a.txt"
-	descriptor, err := domain.NewRegularFileDescriptorFromReader(
-		domain.NewRelativePath("a.txt"),
+	descriptor, err := intelligentstore.NewRegularFileDescriptorFromReader(
+		intelligentstore.NewRelativePath("a.txt"),
 		time.Unix(0, 0),
 		dal.FileMode600,
 		bytes.NewBuffer([]byte(aFileText)),
@@ -302,8 +302,8 @@ func Test_handleCommitTransaction(t *testing.T) {
 	require.Len(t, bucketRevisions, 0)
 
 	fileContents := "file contents of a öøæäå"
-	descriptor, err := domain.NewRegularFileDescriptorFromReader(
-		domain.NewRelativePath("my/file a.txt"),
+	descriptor, err := intelligentstore.NewRegularFileDescriptorFromReader(
+		intelligentstore.NewRelativePath("my/file a.txt"),
 		time.Unix(0, 0),
 		dal.FileMode600,
 		bytes.NewBuffer([]byte(fileContents)),
@@ -409,8 +409,8 @@ func Test_handleGetFileContents(t *testing.T) {
 
 	fileContents := "my file contents"
 	fileName := "folder1/file a.txt"
-	descriptor, err := domain.NewRegularFileDescriptorFromReader(
-		domain.NewRelativePath(fileName),
+	descriptor, err := intelligentstore.NewRegularFileDescriptorFromReader(
+		intelligentstore.NewRelativePath(fileName),
 		time.Unix(0, 0),
 		dal.FileMode600,
 		bytes.NewBuffer([]byte(fileContents)))
@@ -440,13 +440,13 @@ func Test_handleGetFileContents(t *testing.T) {
 	bucketService.ServeHTTP(wRevisionNotExist, rRevisionNotExist)
 	assert.Equal(t, 404, wRevisionNotExist.Code)
 
-	fileInfos := []*domain.FileInfo{descriptor.FileInfo}
+	fileInfos := []*intelligentstore.FileInfo{descriptor.FileInfo}
 
 	tx, err := mockStore.Store.TransactionDAL.CreateTransaction(bucket, fileInfos)
 	require.Nil(t, err)
 
-	relativePathsWithHashes := []*domain.RelativePathWithHash{
-		&domain.RelativePathWithHash{
+	relativePathsWithHashes := []*intelligentstore.RelativePathWithHash{
+		&intelligentstore.RelativePathWithHash{
 			RelativePath: descriptor.RelativePath,
 			Hash:         descriptor.Hash,
 		},

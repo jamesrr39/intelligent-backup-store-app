@@ -1,4 +1,4 @@
-package domain
+package intelligentstore
 
 // Bucket represents an organisational area of the Store.
 type Bucket struct {

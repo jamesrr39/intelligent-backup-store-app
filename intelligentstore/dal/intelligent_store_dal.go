@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	"github.com/pkg/errors"
 	"github.com/spf13/afero"
 )
@@ -127,19 +127,19 @@ func createIntelligentStoreAndNewConn(pathToBase string, nowFunc nowProvider, fs
 	// return storeDAL, nil
 }
 
-func (s *IntelligentStoreDAL) GetObjectByHash(hash domain.Hash) (io.ReadCloser, error) {
+func (s *IntelligentStoreDAL) GetObjectByHash(hash intelligentstore.Hash) (io.ReadCloser, error) {
 	objectPath := filepath.Join(s.StoreBasePath, ".backup_data", "objects", hash.FirstChunk(), hash.Remainder())
 	return s.fs.Open(objectPath)
 }
 
 // Search looks for the searchTerm in any of the file paths in the store
-func (s *IntelligentStoreDAL) Search(searchTerm string) ([]*domain.SearchResult, error) {
+func (s *IntelligentStoreDAL) Search(searchTerm string) ([]*intelligentstore.SearchResult, error) {
 	buckets, err := s.BucketDAL.GetAllBuckets()
 	if nil != err {
 		return nil, err
 	}
 
-	var searchResults []*domain.SearchResult
+	var searchResults []*intelligentstore.SearchResult
 	for _, bucket := range buckets {
 		revisions, err := s.BucketDAL.GetRevisions(bucket)
 		if nil != err {
@@ -154,7 +154,7 @@ func (s *IntelligentStoreDAL) Search(searchTerm string) ([]*domain.SearchResult,
 			for _, fileDescriptor := range fileDescriptors {
 				relativePath := fileDescriptor.GetFileInfo().RelativePath
 				if strings.Contains(string(relativePath), searchTerm) {
-					searchResults = append(searchResults, domain.NewSearchResult(
+					searchResults = append(searchResults, intelligentstore.NewSearchResult(
 						relativePath,
 						bucket,
 						revision,
@@ -166,7 +166,7 @@ func (s *IntelligentStoreDAL) Search(searchTerm string) ([]*domain.SearchResult,
 	return searchResults, nil
 }
 
-func (s *IntelligentStoreDAL) IsObjectPresent(hash domain.Hash) (bool, error) {
+func (s *IntelligentStoreDAL) IsObjectPresent(hash intelligentstore.Hash) (bool, error) {
 	bucketsDirPath := filepath.Join(s.StoreBasePath, ".backup_data", "objects")
 
 	filePath := filepath.Join(bucketsDirPath, hash.FirstChunk(), hash.Remainder())

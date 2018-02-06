@@ -11,7 +11,7 @@ import (
 	"strconv"
 
 	"github.com/jamesrr39/goutil/dirtraversal"
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	"github.com/pkg/errors"
 	"github.com/spf13/afero"
 )
@@ -22,9 +22,9 @@ type TransactionDAL struct {
 	IntelligentStoreDAL *IntelligentStoreDAL
 }
 
-func (dal *TransactionDAL) CreateTransaction(bucket *domain.Bucket, fileInfos []*domain.FileInfo) (*domain.Transaction, error) {
-	revisionVersion := domain.RevisionVersion(dal.IntelligentStoreDAL.nowProvider().Unix())
-	revision := domain.NewRevision(bucket, revisionVersion)
+func (dal *TransactionDAL) CreateTransaction(bucket *intelligentstore.Bucket, fileInfos []*intelligentstore.FileInfo) (*intelligentstore.Transaction, error) {
+	revisionVersion := intelligentstore.RevisionVersion(dal.IntelligentStoreDAL.nowProvider().Unix())
+	revision := intelligentstore.NewRevision(bucket, revisionVersion)
 
 	dal.IntelligentStoreDAL.LockDAL.acquireStoreLock(fmt.Sprintf("lock from transaction. Bucket: %d (%s), revision version: %d",
 		bucket.ID,
@@ -32,9 +32,9 @@ func (dal *TransactionDAL) CreateTransaction(bucket *domain.Bucket, fileInfos []
 		revisionVersion,
 	))
 
-	tx := domain.NewTransaction(revision, FsHashPresentResolver{dal.IntelligentStoreDAL})
+	tx := intelligentstore.NewTransaction(revision, FsHashPresentResolver{dal.IntelligentStoreDAL})
 
-	previousRevisionMap := make(map[domain.RelativePath]domain.FileDescriptor)
+	previousRevisionMap := make(map[intelligentstore.RelativePath]intelligentstore.FileDescriptor)
 
 	previousRevision, err := dal.IntelligentStoreDAL.BucketDAL.GetLatestRevision(bucket)
 	if nil != err {
@@ -71,9 +71,9 @@ func (dal *TransactionDAL) CreateTransaction(bucket *domain.Bucket, fileInfos []
 		} else {
 			// file not in previous version, so mark for hash calculation
 			switch fileInfo.Type {
-			case domain.FileTypeSymlink:
+			case intelligentstore.FileTypeSymlink:
 				tx.FileInfosMissingSymlinks[fileInfo.RelativePath] = fileInfo
-			case domain.FileTypeRegular:
+			case intelligentstore.FileTypeRegular:
 				tx.FileInfosMissingHashes[fileInfo.RelativePath] = fileInfo
 			default:
 				return nil, fmt.Errorf("unknown file type: %d (%s)", fileInfo.Type, fileInfo.Type)
@@ -128,7 +128,7 @@ func (dal *TransactionDAL) CreateTransaction(bucket *domain.Bucket, fileInfos []
 // }
 
 // TODO: test for >4GB file
-func (dal *TransactionDAL) BackupFile(transaction *domain.Transaction, sourceFile io.Reader) error {
+func (dal *TransactionDAL) BackupFile(transaction *intelligentstore.Transaction, sourceFile io.Reader) error {
 	// if err := transaction.CheckStage(domain.TransactionStageReadyToUploadFiles); nil != err {
 	// 	return err
 	// }
@@ -187,7 +187,7 @@ func (dal *TransactionDAL) BackupFile(transaction *domain.Transaction, sourceFil
 	//
 	// return nil
 
-	if err := transaction.CheckStage(domain.TransactionStageReadyToUploadFiles); nil != err {
+	if err := transaction.CheckStage(intelligentstore.TransactionStageReadyToUploadFiles); nil != err {
 		return err
 	}
 
@@ -196,7 +196,7 @@ func (dal *TransactionDAL) BackupFile(transaction *domain.Transaction, sourceFil
 		return err
 	}
 
-	hash, err := domain.NewHash(bytes.NewBuffer(sourceAsBytes))
+	hash, err := intelligentstore.NewHash(bytes.NewBuffer(sourceAsBytes))
 	if nil != err {
 		return err
 	}
@@ -284,8 +284,8 @@ func (dal *TransactionDAL) BackupFile(transaction *domain.Transaction, sourceFil
 // }
 
 // Commit closes the transaction and writes the revision data to disk
-func (dal *TransactionDAL) Commit(transaction *domain.Transaction) error {
-	if err := transaction.CheckStage(domain.TransactionStageReadyToUploadFiles); nil != err {
+func (dal *TransactionDAL) Commit(transaction *intelligentstore.Transaction) error {
+	if err := transaction.CheckStage(intelligentstore.TransactionStageReadyToUploadFiles); nil != err {
 		return err
 	}
 
@@ -323,7 +323,7 @@ func (dal *TransactionDAL) Commit(transaction *domain.Transaction) error {
 		return errors.Wrap(err, "couldn't sync the version contents file")
 	}
 
-	transaction.Stage = domain.TransactionStageCommitted
+	transaction.Stage = intelligentstore.TransactionStageCommitted
 
 	err = dal.IntelligentStoreDAL.LockDAL.removeStoreLock()
 	if nil != err {
@@ -335,8 +335,8 @@ func (dal *TransactionDAL) Commit(transaction *domain.Transaction) error {
 
 // Rollback aborts the current transaction and removes the lock.
 // It doesn't remove files inside the object store
-func (dal *TransactionDAL) Rollback(transaction *domain.Transaction) error {
-	err := transaction.CheckStage(domain.TransactionStageAwaitingFileHashes, domain.TransactionStageReadyToUploadFiles)
+func (dal *TransactionDAL) Rollback(transaction *intelligentstore.Transaction) error {
+	err := transaction.CheckStage(intelligentstore.TransactionStageAwaitingFileHashes, intelligentstore.TransactionStageReadyToUploadFiles)
 	if nil != err {
 		return err
 	}

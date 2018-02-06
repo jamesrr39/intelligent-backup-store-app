@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/gobwas/glob"
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 )
 
 // ExcludesMatcher is a type that matches file names against excluded names
@@ -48,7 +48,7 @@ func NewExcludesMatcherFromReader(reader io.Reader) (*ExcludesMatcher, error) {
 }
 
 // Matches tests whether a line matches one of the patterns to be excluded
-func (e *ExcludesMatcher) Matches(relativePath domain.RelativePath) bool {
+func (e *ExcludesMatcher) Matches(relativePath intelligentstore.RelativePath) bool {
 	for _, matcherGlob := range e.globs {
 		doesMatch := matcherGlob.Match(string(relativePath))
 

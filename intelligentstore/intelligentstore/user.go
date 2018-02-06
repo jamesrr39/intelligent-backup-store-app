@@ -1,4 +1,4 @@
-package domain
+package intelligentstore
 
 // User represents a system user
 type User struct {

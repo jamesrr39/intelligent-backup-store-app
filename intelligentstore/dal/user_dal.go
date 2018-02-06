@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	"github.com/pkg/errors"
 )
 
@@ -19,14 +19,14 @@ func (s *UserDAL) getUsersInformationPath() string {
 
 var ErrUserNotFound = errors.New("couldn't find user")
 
-func (s *UserDAL) GetUserByUsername(username string) (*domain.User, error) {
+func (s *UserDAL) GetUserByUsername(username string) (*intelligentstore.User, error) {
 	file, err := s.store.fs.Open(s.getUsersInformationPath())
 	if nil != err {
 		return nil, err
 	}
 	defer file.Close()
 
-	var users []*domain.User
+	var users []*intelligentstore.User
 	err = json.NewDecoder(file).Decode(&users)
 	if nil != err {
 		return nil, err
@@ -41,14 +41,14 @@ func (s *UserDAL) GetUserByUsername(username string) (*domain.User, error) {
 	return nil, ErrUserNotFound
 }
 
-func (s *UserDAL) GetAllUsers() ([]*domain.User, error) {
+func (s *UserDAL) GetAllUsers() ([]*intelligentstore.User, error) {
 	file, err := s.store.fs.Open(s.getUsersInformationPath())
 	if nil != err {
 		return nil, err
 	}
 	defer file.Close()
 
-	var users []*domain.User
+	var users []*intelligentstore.User
 	err = json.NewDecoder(file).Decode(&users)
 	if nil != err {
 		return nil, err
@@ -57,7 +57,7 @@ func (s *UserDAL) GetAllUsers() ([]*domain.User, error) {
 	return users, nil
 }
 
-func (s *UserDAL) CreateUser(user *domain.User) (*domain.User, error) {
+func (s *UserDAL) CreateUser(user *intelligentstore.User) (*intelligentstore.User, error) {
 	if user.ID != 0 {
 		return nil, errors.Errorf("tried to create a user with ID %d (expected 0)", user.ID)
 	}
@@ -74,7 +74,7 @@ func (s *UserDAL) CreateUser(user *domain.User) (*domain.User, error) {
 		}
 	}
 
-	newUser := domain.NewUser(highestID+1, user.DisplayName, user.HashedPassword)
+	newUser := intelligentstore.NewUser(highestID+1, user.DisplayName, user.HashedPassword)
 
 	file, err := s.store.fs.OpenFile(s.getUsersInformationPath(), os.O_WRONLY, 0600)
 	if nil != err {

@@ -10,8 +10,8 @@ import (
 
 	"github.com/jamesrr39/intelligent-backup-store-app/exporters"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	"github.com/jamesrr39/intelligent-backup-store-app/storewebserver"
 	"github.com/jamesrr39/intelligent-backup-store-app/uploaders"
 	"github.com/jamesrr39/intelligent-backup-store-app/uploaders/localupload"
@@ -169,9 +169,9 @@ func main() {
 			return err
 		}
 
-		var version *domain.RevisionVersion
+		var version *intelligentstore.RevisionVersion
 		if 0 != *exportCommandRevisionVersion {
-			r := domain.RevisionVersion(*exportCommandRevisionVersion)
+			r := intelligentstore.RevisionVersion(*exportCommandRevisionVersion)
 			version = &r
 		}
 

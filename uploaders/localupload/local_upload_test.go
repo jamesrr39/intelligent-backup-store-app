@@ -7,15 +7,15 @@ import (
 	"time"
 
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 type testfile struct {
-	path     domain.RelativePath
+	path     intelligentstore.RelativePath
 	contents string
 }
 
@@ -82,18 +82,18 @@ func Test_UploadToStore(t *testing.T) {
 	require.Nil(t, err)
 	assert.Len(t, fileDescriptors, 4)
 
-	fileDescriptorNameMap := make(map[domain.RelativePath]domain.FileDescriptor)
+	fileDescriptorNameMap := make(map[intelligentstore.RelativePath]intelligentstore.FileDescriptor)
 	for _, fileDescriptor := range fileDescriptors {
 		fileDescriptorNameMap[fileDescriptor.GetFileInfo().RelativePath] = fileDescriptor
 	}
 
 	for _, testFile := range testFiles {
-		hash, err := domain.NewHash(
+		hash, err := intelligentstore.NewHash(
 			bytes.NewBuffer([]byte(testFile.contents)))
 		require.Nil(t, err)
 
 		assert.Equal(t, testFile.path, fileDescriptorNameMap[testFile.path].GetFileInfo().RelativePath)
-		fileDescriptor := (fileDescriptorNameMap[testFile.path]).(*domain.RegularFileDescriptor)
+		fileDescriptor := (fileDescriptorNameMap[testFile.path]).(*intelligentstore.RegularFileDescriptor)
 		assert.Equal(t, hash, fileDescriptor.Hash)
 	}
 

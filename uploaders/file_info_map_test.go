@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -26,7 +26,7 @@ func Test_BuildFileInfosMap(t *testing.T) {
 	require.Nil(t, err)
 
 	fileContents := []byte("123")
-	fileRelativePath := domain.NewRelativePath("folder-1/a.txt")
+	fileRelativePath := intelligentstore.NewRelativePath("folder-1/a.txt")
 
 	err = fs.MkdirAll("/test/folder-1", 0700)
 	require.Nil(t, err)
@@ -36,7 +36,7 @@ func Test_BuildFileInfosMap(t *testing.T) {
 	osFileInfo, err := fs.Stat("/test/" + string(fileRelativePath))
 	require.Nil(t, err)
 
-	fileInfo := domain.NewFileInfo(domain.FileTypeRegular, fileRelativePath, osFileInfo.ModTime(), osFileInfo.Size(), osFileInfo.Mode())
+	fileInfo := intelligentstore.NewFileInfo(intelligentstore.FileTypeRegular, fileRelativePath, osFileInfo.ModTime(), osFileInfo.Size(), osFileInfo.Mode())
 
 	err = afero.WriteFile(fs, "/test/exclude-me.txt", fileContents, 0600)
 	require.Nil(t, err)
@@ -56,8 +56,8 @@ func Test_BuildFileInfosMap(t *testing.T) {
 }
 
 func Test_ToSlice(t *testing.T) {
-	relativePath := domain.NewRelativePath("a.txt")
-	fileInfo := domain.NewFileInfo(domain.FileTypeRegular, relativePath, time.Unix(0, 0), 0, dal.FileMode600)
+	relativePath := intelligentstore.NewRelativePath("a.txt")
+	fileInfo := intelligentstore.NewFileInfo(intelligentstore.FileTypeRegular, relativePath, time.Unix(0, 0), 0, dal.FileMode600)
 
 	f := FileInfoMap{}
 	f[relativePath] = fileInfo

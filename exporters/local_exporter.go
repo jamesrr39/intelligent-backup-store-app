@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	"github.com/spf13/afero"
 )
 
@@ -17,14 +17,14 @@ const FilesExportSubDir = "files"
 type LocalExporter struct {
 	Store           *dal.IntelligentStoreDAL
 	BucketName      string
-	RevisionVersion *domain.RevisionVersion // nil = latest version
+	RevisionVersion *intelligentstore.RevisionVersion // nil = latest version
 	ExportDir       string
 	Matcher         excludesmatcher.Matcher
 	fs              afero.Fs
 	symlinker       func(oldName, newName string) error
 }
 
-func NewLocalExporter(store *dal.IntelligentStoreDAL, bucketName string, exportDir string, revisionVersion *domain.RevisionVersion, matcher excludesmatcher.Matcher) *LocalExporter {
+func NewLocalExporter(store *dal.IntelligentStoreDAL, bucketName string, exportDir string, revisionVersion *intelligentstore.RevisionVersion, matcher excludesmatcher.Matcher) *LocalExporter {
 	return &LocalExporter{
 		Store:           store,
 		BucketName:      bucketName,
@@ -42,7 +42,7 @@ func (exporter *LocalExporter) Export() error {
 		return err
 	}
 
-	var revision *domain.Revision
+	var revision *intelligentstore.Revision
 	if nil == exporter.RevisionVersion {
 		revision, err = exporter.Store.BucketDAL.GetLatestRevision(bucket)
 	} else {
@@ -77,7 +77,7 @@ func (exporter *LocalExporter) Export() error {
 	return nil
 }
 
-func (exporter *LocalExporter) writeFileToFs(fileDescriptor domain.FileDescriptor) error {
+func (exporter *LocalExporter) writeFileToFs(fileDescriptor intelligentstore.FileDescriptor) error {
 	filePath := filepath.Join(exporter.ExportDir, FilesExportSubDir, string(fileDescriptor.GetFileInfo().RelativePath))
 	dirPath := filepath.Dir(filePath)
 	err := exporter.fs.MkdirAll(dirPath, 0700)
@@ -85,8 +85,8 @@ func (exporter *LocalExporter) writeFileToFs(fileDescriptor domain.FileDescripto
 		return fmt.Errorf("couldn't make the directory for '%s'. Error: %s", dirPath, err)
 	}
 	switch fileDescriptor.GetFileInfo().Type {
-	case domain.FileTypeRegular:
-		regularFileDescriptor := fileDescriptor.(*domain.RegularFileDescriptor)
+	case intelligentstore.FileTypeRegular:
+		regularFileDescriptor := fileDescriptor.(*intelligentstore.RegularFileDescriptor)
 		var reader io.ReadCloser
 		reader, err = exporter.Store.GetObjectByHash(regularFileDescriptor.Hash)
 		if nil != err {
@@ -98,8 +98,8 @@ func (exporter *LocalExporter) writeFileToFs(fileDescriptor domain.FileDescripto
 		if nil != err {
 			return fmt.Errorf("couldn't write the export file to '%s'. Error: %s", filePath, err)
 		}
-	case domain.FileTypeSymlink:
-		symlinkFileDescriptor := fileDescriptor.(*domain.SymlinkFileDescriptor)
+	case intelligentstore.FileTypeSymlink:
+		symlinkFileDescriptor := fileDescriptor.(*intelligentstore.SymlinkFileDescriptor)
 		err = exporter.symlinker(symlinkFileDescriptor.Dest, filePath)
 		if nil != err {
 			return fmt.Errorf("couldn't create the symlink at '%s'. Error: %s", filePath, err)

@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/storetest"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
@@ -25,9 +25,9 @@ func Test_Export(t *testing.T) {
 
 	bucket := storetest.CreateBucket(t, testStore.Store, "docs")
 
-	regularFile1 := domain.NewRegularFileDescriptorWithContents(t, "a.txt", time.Unix(0, 0), dal.FileMode600, []byte("file a contents"))
-	regularFile2 := domain.NewRegularFileDescriptorWithContents(t, "folder-1/a.txt", time.Unix(0, 0), dal.FileMode600, []byte("file a contents"))
-	fileDescriptors := []*domain.RegularFileDescriptorWithContents{
+	regularFile1 := intelligentstore.NewRegularFileDescriptorWithContents(t, "a.txt", time.Unix(0, 0), dal.FileMode600, []byte("file a contents"))
+	regularFile2 := intelligentstore.NewRegularFileDescriptorWithContents(t, "folder-1/a.txt", time.Unix(0, 0), dal.FileMode600, []byte("file a contents"))
+	fileDescriptors := []*intelligentstore.RegularFileDescriptorWithContents{
 		regularFile1,
 		regularFile2,
 	}
@@ -96,9 +96,9 @@ func Test_writeFileToFs(t *testing.T) {
 
 	bucket := storetest.CreateBucket(t, testStore.Store, "docs")
 
-	regularFile := domain.NewRegularFileDescriptorWithContents(t, "a.txt", time.Unix(0, 0), dal.FileMode600, []byte("file a contents"))
-	secondRegularFile := domain.NewRegularFileDescriptorWithContents(t, "b.txt", time.Unix(0, 0), dal.FileMode755, []byte("file b contents"))
-	storetest.CreateRevision(t, testStore.Store, bucket, []*domain.RegularFileDescriptorWithContents{
+	regularFile := intelligentstore.NewRegularFileDescriptorWithContents(t, "a.txt", time.Unix(0, 0), dal.FileMode600, []byte("file a contents"))
+	secondRegularFile := intelligentstore.NewRegularFileDescriptorWithContents(t, "b.txt", time.Unix(0, 0), dal.FileMode755, []byte("file b contents"))
+	storetest.CreateRevision(t, testStore.Store, bucket, []*intelligentstore.RegularFileDescriptorWithContents{
 		regularFile,
 		secondRegularFile,
 	})
@@ -138,9 +138,9 @@ func Test_writeFileToFs_UnknownFile(t *testing.T) {
 		symlinker:       testSymlinker,
 	}
 
-	unknownDescriptor := &domain.RegularFileDescriptor{
-		FileInfo: &domain.FileInfo{
-			Type: domain.FileTypeUnknown,
+	unknownDescriptor := &intelligentstore.RegularFileDescriptor{
+		FileInfo: &intelligentstore.FileInfo{
+			Type: intelligentstore.FileTypeUnknown,
 		},
 	}
 

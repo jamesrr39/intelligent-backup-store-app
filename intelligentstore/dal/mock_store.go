@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 )
@@ -38,14 +38,14 @@ func NewMockStore(t *testing.T, nowFunc nowProvider, fs afero.Fs) *MockStore {
 	return &MockStore{store, path, fs}
 }
 
-func (m *MockStore) CreateBucket(t *testing.T, bucketName string) *domain.Bucket {
+func (m *MockStore) CreateBucket(t *testing.T, bucketName string) *intelligentstore.Bucket {
 	bucket, err := m.Store.BucketDAL.CreateBucket(bucketName)
 	require.Nil(t, err)
 	return bucket
 }
 
-func (m *MockStore) CreateRevision(t *testing.T, bucket *domain.Bucket, fileDescriptors []*domain.RegularFileDescriptorWithContents) *domain.Revision {
-	var fileInfos []*domain.FileInfo
+func (m *MockStore) CreateRevision(t *testing.T, bucket *intelligentstore.Bucket, fileDescriptors []*intelligentstore.RegularFileDescriptorWithContents) *intelligentstore.Revision {
+	var fileInfos []*intelligentstore.FileInfo
 	for _, fileDescriptor := range fileDescriptors {
 		fileInfos = append(fileInfos, fileDescriptor.Descriptor.GetFileInfo())
 	}
@@ -53,20 +53,20 @@ func (m *MockStore) CreateRevision(t *testing.T, bucket *domain.Bucket, fileDesc
 	tx, err := m.Store.TransactionDAL.CreateTransaction(bucket, fileInfos)
 	require.Nil(t, err)
 
-	fileDescriptorMap := make(map[domain.RelativePath]*domain.RegularFileDescriptorWithContents)
+	fileDescriptorMap := make(map[intelligentstore.RelativePath]*intelligentstore.RegularFileDescriptorWithContents)
 	for _, fileDescriptor := range fileDescriptors {
 		fileDescriptorMap[fileDescriptor.Descriptor.GetFileInfo().RelativePath] = fileDescriptor
 	}
 
-	var relativePathsWithHashes []*domain.RelativePathWithHash
+	var relativePathsWithHashes []*intelligentstore.RelativePathWithHash
 	relativePathsRequired := tx.GetRelativePathsRequired()
 	for _, relativePathRequired := range relativePathsRequired {
 		descriptor := fileDescriptorMap[relativePathRequired]
-		relativePathWithHash := domain.NewRelativePathWithHash(descriptor.Descriptor.RelativePath, descriptor.Descriptor.Hash)
+		relativePathWithHash := intelligentstore.NewRelativePathWithHash(descriptor.Descriptor.RelativePath, descriptor.Descriptor.Hash)
 		relativePathsWithHashes = append(relativePathsWithHashes, relativePathWithHash)
 	}
 
-	mapOfHashes := make(map[domain.Hash]*domain.RegularFileDescriptorWithContents)
+	mapOfHashes := make(map[intelligentstore.Hash]*intelligentstore.RegularFileDescriptorWithContents)
 	for _, descriptorWithContents := range fileDescriptors {
 		mapOfHashes[descriptorWithContents.Descriptor.Hash] = descriptorWithContents
 	}

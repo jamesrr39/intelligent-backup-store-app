@@ -4,17 +4,17 @@ import (
 	"log"
 	"path/filepath"
 
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	"github.com/spf13/afero"
 )
 
-type HashRelativePathMap map[domain.Hash][]domain.RelativePath
+type HashRelativePathMap map[intelligentstore.Hash][]intelligentstore.RelativePath
 
-func (m HashRelativePathMap) ToSlice() []*domain.RelativePathWithHash {
-	var relativePathsWithHashes []*domain.RelativePathWithHash
+func (m HashRelativePathMap) ToSlice() []*intelligentstore.RelativePathWithHash {
+	var relativePathsWithHashes []*intelligentstore.RelativePathWithHash
 	for hash, relativePaths := range m {
 		for _, relativePath := range relativePaths {
-			relativePathWithHash := &domain.RelativePathWithHash{
+			relativePathWithHash := &intelligentstore.RelativePathWithHash{
 				RelativePath: relativePath,
 				Hash:         hash,
 			}
@@ -24,7 +24,7 @@ func (m HashRelativePathMap) ToSlice() []*domain.RelativePathWithHash {
 	return relativePathsWithHashes
 }
 
-func BuildRelativePathsWithHashes(fs afero.Fs, backupFromLocation string, requiredRelativePaths []domain.RelativePath) (HashRelativePathMap, error) {
+func BuildRelativePathsWithHashes(fs afero.Fs, backupFromLocation string, requiredRelativePaths []intelligentstore.RelativePath) (HashRelativePathMap, error) {
 	hashRelativePathMap := make(HashRelativePathMap)
 	log.Printf("required relative paths: %s\n", requiredRelativePaths)
 	for _, requiredRelativePath := range requiredRelativePaths {
@@ -32,7 +32,7 @@ func BuildRelativePathsWithHashes(fs afero.Fs, backupFromLocation string, requir
 		if nil != err {
 			return nil, err
 		}
-		hash, err := domain.NewHash(file)
+		hash, err := intelligentstore.NewHash(file)
 		if nil != err {
 			return nil, err
 		}

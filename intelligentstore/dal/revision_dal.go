@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	"github.com/pkg/errors"
 )
 
@@ -25,7 +25,7 @@ func NewRevisionDAL(
 
 // GetFilesInRevision gets a list of files in this revision
 // TODO don't require bucket
-func (r *RevisionDAL) GetFilesInRevision(bucket *domain.Bucket, revision *domain.Revision) ([]domain.FileDescriptor, error) {
+func (r *RevisionDAL) GetFilesInRevision(bucket *intelligentstore.Bucket, revision *intelligentstore.Revision) ([]intelligentstore.FileDescriptor, error) {
 	filePath := filepath.Join(
 		r.bucketPath(bucket),
 		"versions",
@@ -36,7 +36,7 @@ func (r *RevisionDAL) GetFilesInRevision(bucket *domain.Bucket, revision *domain
 	}
 	defer revisionDataFile.Close()
 
-	var filesInVersion []domain.FileDescriptor
+	var filesInVersion []intelligentstore.FileDescriptor
 	err = gob.NewDecoder(revisionDataFile).Decode(&filesInVersion)
 	if nil != err {
 		return nil, err
@@ -46,9 +46,9 @@ func (r *RevisionDAL) GetFilesInRevision(bucket *domain.Bucket, revision *domain
 }
 
 func (r *RevisionDAL) GetFileContentsInRevision(
-	bucket *domain.Bucket,
-	revision *domain.Revision,
-	relativePath domain.RelativePath) (io.ReadCloser, error) {
+	bucket *intelligentstore.Bucket,
+	revision *intelligentstore.Revision,
+	relativePath intelligentstore.RelativePath) (io.ReadCloser, error) {
 
 	fileDescriptors, err := r.GetFilesInRevision(bucket, revision)
 	if nil != err {
@@ -60,18 +60,18 @@ func (r *RevisionDAL) GetFileContentsInRevision(
 			fileType := fileDescriptor.GetFileInfo().Type
 
 			switch fileType {
-			case domain.FileTypeRegular:
-				fd, ok := fileDescriptor.(*domain.RegularFileDescriptor)
+			case intelligentstore.FileTypeRegular:
+				fd, ok := fileDescriptor.(*intelligentstore.RegularFileDescriptor)
 				if !ok {
 					return nil, errors.New("bad type assertion (expected RegularFileDescriptor)")
 				}
 				return r.GetObjectByHash(fd.Hash)
-			case domain.FileTypeSymlink:
-				fd, ok := fileDescriptor.(*domain.SymlinkFileDescriptor)
+			case intelligentstore.FileTypeSymlink:
+				fd, ok := fileDescriptor.(*intelligentstore.SymlinkFileDescriptor)
 				if !ok {
 					return nil, errors.New("bad type assertion (expected SymlinkFileDescriptor)")
 				}
-				return r.GetFileContentsInRevision(bucket, revision, domain.NewRelativePath(fd.Dest))
+				return r.GetFileContentsInRevision(bucket, revision, intelligentstore.NewRelativePath(fd.Dest))
 			default:
 				return nil, fmt.Errorf("get contents of file type %d (%s) unsupported", fileType, fileType)
 			}
