@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/jamesrr39/goutil/fswalker"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	"github.com/spf13/afero"
@@ -20,10 +21,23 @@ func (m FileInfoMap) ToSlice() []*intelligentstore.FileInfo {
 	return fileInfos
 }
 
+type aferoFsWithReadDir struct {
+	afero.Fs
+}
+
+func (a aferoFsWithReadDir) ReadDir(path string) ([]os.FileInfo, error) {
+	return afero.ReadDir(a, path)
+}
+
+func (a aferoFsWithReadDir) Readlink(path string) (string, error) {
+	// TODO: tests?
+	return os.Readlink(path)
+}
+
 func BuildFileInfosMap(fs afero.Fs, linkReader LinkReader, backupFromLocation string, excludeMatcher *excludesmatcher.ExcludesMatcher) (FileInfoMap, error) {
 	fileInfosMap := make(FileInfoMap)
 
-	err := afero.Walk(fs, backupFromLocation, func(path string, osFileInfo os.FileInfo, err error) error {
+	walkFunc := func(path string, osFileInfo os.FileInfo, err error) error {
 		if nil != err {
 			return err
 		}
@@ -36,11 +50,11 @@ func BuildFileInfosMap(fs afero.Fs, linkReader LinkReader, backupFromLocation st
 
 		relativePath := fullPathToRelative(backupFromLocation, path)
 
-		shouldBeExcluded := excludeMatcher.Matches(relativePath)
-		if shouldBeExcluded {
-			log.Printf("skipping '%s'\n", path)
-			return nil
-		}
+		// shouldBeExcluded := excludeMatcher.Matches(string(relativePath))
+		// if shouldBeExcluded {
+		// 	log.Printf("skipping '%s'\n", path)
+		// 	return nil
+		// }
 
 		fileType := intelligentstore.FileTypeRegular
 
@@ -58,7 +72,15 @@ func BuildFileInfosMap(fs afero.Fs, linkReader LinkReader, backupFromLocation st
 
 		fileInfosMap[relativePath] = fileInfo
 		return nil
-	})
+	}
+
+	options := fswalker.WalkOptions{
+		Fs:             aferoFsWithReadDir{fs},
+		ExcludeMatcher: excludeMatcher,
+	}
+
+	err := fswalker.Walk(backupFromLocation, walkFunc, options)
+
 	if nil != err {
 		return nil, err
 	}
