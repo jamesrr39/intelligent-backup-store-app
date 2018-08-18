@@ -17,6 +17,10 @@ var (
 	ErrStoreNotInitedYet          = errors.New("IntelligentStore not initialised yet. Use init to create a new store")
 )
 
+// type Fs interface {
+// 	WriteFile(filePath string, data []byte, permissions int32) error
+// }
+
 // IntelligentStoreDAL represents the object to interact with the underlying storage
 type IntelligentStoreDAL struct {
 	StoreBasePath string

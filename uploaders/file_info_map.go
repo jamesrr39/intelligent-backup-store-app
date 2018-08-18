@@ -11,6 +11,8 @@ import (
 	"github.com/spf13/afero"
 )
 
+const MaxFileSizeBytes = 1024 * 1024 * 512
+
 type FileInfoMap map[intelligentstore.RelativePath]*intelligentstore.FileInfo
 
 func (m FileInfoMap) ToSlice() []*intelligentstore.FileInfo {
@@ -42,13 +44,16 @@ func BuildFileInfosMap(fs afero.Fs, linkReader LinkReader, backupFromLocation st
 			return err
 		}
 
-		log.Printf("%s: %b\n", path, osFileInfo.Mode()&os.ModeSymlink)
-
 		if osFileInfo.IsDir() {
 			return nil
 		}
 
 		relativePath := fullPathToRelative(backupFromLocation, path)
+
+		if osFileInfo.Size() > MaxFileSizeBytes {
+			log.Printf("WARNING: Skipping file as it's too large %q. (Size: %dB, max allowed: %dB)\n", relativePath, osFileInfo.Size(), MaxFileSizeBytes)
+			return nil
+		}
 
 		// shouldBeExcluded := excludeMatcher.Matches(string(relativePath))
 		// if shouldBeExcluded {
@@ -65,8 +70,6 @@ func BuildFileInfosMap(fs afero.Fs, linkReader LinkReader, backupFromLocation st
 			}
 			fileType = intelligentstore.FileTypeSymlink
 		}
-
-		log.Printf("mode: %b\n", osFileInfo.Mode())
 
 		fileInfo := intelligentstore.NewFileInfo(fileType, relativePath, osFileInfo.ModTime(), osFileInfo.Size(), osFileInfo.Mode())
 

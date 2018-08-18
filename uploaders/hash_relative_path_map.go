@@ -26,7 +26,7 @@ func (m HashRelativePathMap) ToSlice() []*intelligentstore.RelativePathWithHash 
 
 func BuildRelativePathsWithHashes(fs afero.Fs, backupFromLocation string, requiredRelativePaths []intelligentstore.RelativePath) (HashRelativePathMap, error) {
 	hashRelativePathMap := make(HashRelativePathMap)
-	log.Printf("required relative paths: %s\n", requiredRelativePaths)
+	log.Printf("%d relative paths required\n", len(requiredRelativePaths))
 	for _, requiredRelativePath := range requiredRelativePaths {
 		file, err := fs.Open(filepath.Join(backupFromLocation, string(requiredRelativePath)))
 		if nil != err {

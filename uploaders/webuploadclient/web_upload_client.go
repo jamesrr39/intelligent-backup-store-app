@@ -26,6 +26,7 @@ type WebUploadClient struct {
 	excludeMatcher *excludesmatcher.ExcludesMatcher
 	fs             afero.Fs
 	linkReader     uploaders.LinkReader
+	backupDryRun   bool
 }
 
 // NewWebUploadClient creates a new WebUploadClient
@@ -34,6 +35,7 @@ func NewWebUploadClient(
 	bucketName,
 	folderPath string,
 	excludeMatcher *excludesmatcher.ExcludesMatcher,
+	backupDryRun bool,
 ) *WebUploadClient {
 
 	return &WebUploadClient{
@@ -43,6 +45,7 @@ func NewWebUploadClient(
 		excludeMatcher,
 		afero.NewOsFs(),
 		uploaders.OsFsLinkReader,
+		backupDryRun,
 	}
 }
 
@@ -90,6 +93,10 @@ func (c *WebUploadClient) UploadToStore() error {
 	requiredHashes, err := c.fetchRequiredHashes(revisionVersion, hashRelativePathMap.ToSlice())
 	if nil != err {
 		return err
+	}
+
+	if c.backupDryRun {
+		return nil
 	}
 
 	for _, requiredHash := range requiredHashes {
@@ -298,7 +305,7 @@ func (c *WebUploadClient) backupFile(revisionStr intelligentstore.RevisionVersio
 
 	marshalledFile, err := proto.Marshal(protoBufFile)
 	if nil != err {
-		return errors.Wrapf(err, "couldn't marshall file at %s to protobuf", relativePath)
+		return errors.Wrapf(err, "couldn't marshal file at %s to protobuf", relativePath)
 	}
 
 	uploadURL := fmt.Sprintf("%s/api/buckets/%s/upload/%d/file",

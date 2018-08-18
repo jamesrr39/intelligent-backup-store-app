@@ -84,108 +84,8 @@ func (dal *TransactionDAL) CreateTransaction(bucket *intelligentstore.Bucket, fi
 	return tx, nil
 }
 
-//
-// // TODO: test for >4GB file
-// func (dal *TransactionDAL) BackupFile(transaction *domain.Transaction, fileName string, sourceFile io.Reader) error {
-// 	fileName = strings.TrimPrefix(fileName, string(filepath.Separator))
-//
-// 	for _, fileInfo := range transaction.fileInfosMissingSymlinks {
-// 		relativePaths = append(relativePaths, fileInfo.RelativePath)
-// 	}
-// 	return relativePaths
-// }
-
-// // ProcessUploadHashesAndGetRequiredHashes takes the list of relative paths and hashes, and figures out which hashes need to be uploaded
-// // FIXME: better name
-// func (transaction *TransactionDAL) ProcessUploadHashesAndGetRequiredHashes(relativePathsWithHashes []*domain.RelativePathWithHash) ([]domain.Hash, error) {
-// 	if err := transaction.checkStage(TransactionStageAwaitingFileHashes); nil != err {
-// 		return nil, err
-// 	}
-//
-// 	for _, relativePathWithHash := range relativePathsWithHashes {
-// 		fileInfo := transaction.fileInfosMissingHashes[relativePathWithHash.RelativePath]
-// 		if nil == fileInfo {
-// 			return nil, fmt.Errorf("file info not required for upload for '%s'", relativePathWithHash.RelativePath)
-// 		}
-//
-// 		fileDescriptor := NewRegularFileDescriptor(
-// 			NewFileInfo(
-// 				FileTypeRegular,
-// 				relativePathWithHash.RelativePath,
-// 				fileInfo.ModTime,
-// 				fileInfo.Size,
-// 				fileInfo.FileMode,
-// 			),
-// 			relativePathWithHash.Hash,
-// 		)
-//
-// 		transaction.addDescriptorToTransaction(fileDescriptor)
-// 	}
-//
-// 	transaction.stage = TransactionStageReadyToUploadFiles
-//
-// 	return transaction.GetHashesForRequiredContent(), nil
-// }
-
 // TODO: test for >4GB file
 func (dal *TransactionDAL) BackupFile(transaction *intelligentstore.Transaction, sourceFile io.Reader) error {
-	// if err := transaction.CheckStage(domain.TransactionStageReadyToUploadFiles); nil != err {
-	// 	return err
-	// }
-	//
-	// sourceAsBytes, err := ioutil.ReadAll(sourceFile)
-	// if nil != err {
-	// 	return err
-	// }
-	//
-	// hash, err := domain.NewHash(bytes.NewBuffer(sourceAsBytes))
-	// if nil != err {
-	// 	return err
-	// }
-	//
-	// if !transaction.IsFileScheduledForUploadAlready[hash] {
-	// 	return ErrFileNotRequiredForTransaction
-	// }
-	//
-	// filePath := filepath.Join(
-	// 	dal.StoreBasePath,
-	// 	".backup_data",
-	// 	"objects",
-	// 	hash.FirstChunk(),
-	// 	hash.Remainder())
-	//
-	// _, err = dal.fs.Stat(filePath)
-	// if nil != err {
-	// 	if !os.IsNotExist(err) {
-	// 		// permissions issue or something.
-	// 		return err
-	// 	}
-	// 	// file doesn't exist in store already. Write it to store.
-	//
-	// 	err := dal.fs.MkdirAll(filepath.Dir(filePath), 0700)
-	// 	if nil != err {
-	// 		return err
-	// 	}
-	//
-	// 	err = afero.WriteFile(dal.fs, filePath, sourceAsBytes, 0700)
-	// 	if nil != err {
-	// 		return err
-	// 	}
-	// } else {
-	// 	existingFile, err := dal.fs.Open(filePath)
-	// 	if nil != err {
-	// 		return fmt.Errorf("couldn't open existing file in store at '%s'. Error: %s", filePath, err)
-	// 	}
-	// 	defer existingFile.Close()
-	// }
-	//
-	// domain.NewRegularFileDescriptor(fileInfo, hash)
-	//
-	// transaction.FilesInVersion = append(
-	// 	transaction.FilesInVersion,
-	// 	domain.NewRegularFileDescriptor(hash, domain.NewRelativePath(fileName)))
-	//
-	// return nil
 
 	if err := transaction.CheckStage(intelligentstore.TransactionStageReadyToUploadFiles); nil != err {
 		return err
@@ -214,6 +114,7 @@ func (dal *TransactionDAL) BackupFile(transaction *intelligentstore.Transaction,
 
 	fs := dal.IntelligentStoreDAL.fs
 
+	// file doesn't exist in store yet
 	_, err = fs.Stat(filePath)
 	if nil != err {
 		if !os.IsNotExist(err) {
@@ -227,17 +128,11 @@ func (dal *TransactionDAL) BackupFile(transaction *intelligentstore.Transaction,
 			return err
 		}
 
-		err = afero.WriteFile(fs, filePath, sourceAsBytes, 0700)
+		// err = ioutil.WriteFile(filePath, sourceAsBytes, 0600)
+		err = afero.WriteFile(fs, filePath, sourceAsBytes, 0600)
 		if nil != err {
 			return err
 		}
-	} else {
-		// file already exists. Do a byte by byte comparision to make sure there isn't a collision
-		existingFile, err := fs.Open(filePath)
-		if nil != err {
-			return fmt.Errorf("couldn't open existing file in store at '%s'. Error: %s", filePath, err)
-		}
-		defer existingFile.Close()
 	}
 
 	transaction.Mu.Lock()

@@ -61,6 +61,7 @@ func Test_UploadToStore(t *testing.T) {
 		excludeMatcher,
 		fs,
 		mockLinkReader,
+		false,
 	}
 
 	err = uploader.UploadToStore()

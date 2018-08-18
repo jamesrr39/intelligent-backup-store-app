@@ -2,9 +2,11 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 
@@ -19,8 +21,49 @@ import (
 	kingpin "gopkg.in/alecthomas/kingpin.v2"
 )
 
+func recordMemStats(filePath string) (io.Closer, error) {
+
+	w, err := os.Create(filePath)
+	if err != nil {
+		return nil, err
+	}
+	_, err = w.Write([]byte("Time|Heap Alloc|Cumulative Total Alloc|Sys\n"))
+	if err != nil {
+		return nil, err
+	}
+
+	go func() {
+		for {
+			func() {
+				time.Sleep(time.Second)
+				now := time.Now()
+
+				var memStats runtime.MemStats
+				runtime.ReadMemStats(&memStats)
+				line := fmt.Sprintf("%s|%d|%d|%d", now.Format("15:04:05"), memStats.Alloc, memStats.TotalAlloc, memStats.Sys)
+				_, err := w.Write([]byte(line + "\n"))
+				if err != nil {
+					log.Printf("couldn't write to mem stats file. Error: %q\n", err)
+					return
+				}
+			}()
+		}
+	}()
+
+	return w, nil
+}
+
 //go:generate swagger generate spec
 func main() {
+
+	// pprof
+	// pprofFile, err := os.Create("./pprof_" + time.Now().Format(time.ANSIC))
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+	// pprof.StartCPUProfile(pprofFile)
+	// defer pprof.StopCPUProfile()
+
 	initCommand := kingpin.Command("init", "create a new store")
 	initStoreLocation := initCommand.Arg("store location", "location of the store").Default(".").String()
 	initCommand.Action(func(ctx *kingpin.ParseContext) error {
@@ -58,6 +101,8 @@ func main() {
 	backupStoreLocation := backupIntoCommand.Arg("store location", "location of the store").Required().String()
 	backupBucketName := backupIntoCommand.Arg("bucket name", "name of the bucket to back up into").Required().String()
 	backupFromLocation := backupIntoCommand.Arg("backup from location", "location to backup from").Default(".").String()
+	backupDryRun := backupIntoCommand.Flag("dry-run", "Don't actually copy files or create a revision").Default("False").Bool()
+	profileFilePath := backupIntoCommand.Flag("profile", "file to write the profile to").String()
 	backupExcludesMatcherLocation := backupIntoCommand.Flag("exclude", "path to a file with glob-style patterns to exclude files").Default("").String()
 	backupIntoCommand.Action(func(ctx *kingpin.ParseContext) error {
 		excludeMatcher := &excludesmatcher.ExcludesMatcher{}
@@ -74,15 +119,27 @@ func main() {
 			}
 		}
 
+		if profileFilePath != nil && *profileFilePath != "" {
+			log.Printf("recording profile to %q\n", *profileFilePath)
+			memFile, err := recordMemStats(*profileFilePath)
+			if err != nil {
+				return err
+			}
+
+			defer memFile.Close()
+		} else {
+			log.Printf("not recording profile (flag was %v)\n", profileFilePath)
+		}
+
 		var uploaderClient uploaders.Uploader
 		if strings.HasPrefix(*backupStoreLocation, "http://") || strings.HasPrefix(*backupStoreLocation, "https://") {
-			uploaderClient = webuploadclient.NewWebUploadClient(*backupStoreLocation, *backupBucketName, *backupFromLocation, excludeMatcher)
+			uploaderClient = webuploadclient.NewWebUploadClient(*backupStoreLocation, *backupBucketName, *backupFromLocation, excludeMatcher, *backupDryRun)
 		} else {
 			backupStore, err := dal.NewIntelligentStoreConnToExisting(*backupStoreLocation)
 			if nil != err {
 				return err
 			}
-			uploaderClient = localupload.NewLocalUploader(backupStore, *backupBucketName, *backupFromLocation, excludeMatcher)
+			uploaderClient = localupload.NewLocalUploader(backupStore, *backupBucketName, *backupFromLocation, excludeMatcher, *backupDryRun)
 		}
 
 		return uploaderClient.UploadToStore()
@@ -218,5 +275,4 @@ func main() {
 	})
 
 	kingpin.Parse()
-
 }

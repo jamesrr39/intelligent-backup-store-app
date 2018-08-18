@@ -72,6 +72,7 @@ func Test_UploadToStore(t *testing.T) {
 		excludeMatcher,
 		fs,
 		mockLinkReader,
+		false,
 	}
 
 	err = uploadClient.UploadToStore()
@@ -113,6 +114,7 @@ func Test_NewWebUploadClient(t *testing.T) {
 		"docs",
 		"/docs",
 		matcher,
+		false,
 	)
 
 	assert.Equal(t, afero.NewOsFs(), client.fs)

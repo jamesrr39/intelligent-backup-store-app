@@ -21,6 +21,7 @@ type LocalUploader struct {
 	excludeMatcher     *excludesmatcher.ExcludesMatcher
 	fs                 afero.Fs
 	linkReader         uploaders.LinkReader
+	backupDryRun       bool
 }
 
 // NewLocalUploader connects to the upload store and returns a LocalUploader
@@ -29,6 +30,7 @@ func NewLocalUploader(
 	backupBucketName,
 	backupFromLocation string,
 	excludeMatcher *excludesmatcher.ExcludesMatcher,
+	backupDryRun bool,
 ) *LocalUploader {
 
 	return &LocalUploader{
@@ -38,6 +40,7 @@ func NewLocalUploader(
 		excludeMatcher,
 		afero.NewOsFs(),
 		uploaders.OsFsLinkReader,
+		backupDryRun,
 	}
 }
 
@@ -62,7 +65,7 @@ func (uploader *LocalUploader) UploadToStore() error {
 
 	requiredRelativePaths := tx.GetRelativePathsRequired()
 
-	log.Printf("%d paths required: %s\n", len(requiredRelativePaths), requiredRelativePaths)
+	log.Printf("%d paths required\n", len(requiredRelativePaths))
 
 	var requiredRelativePathsForHashes []intelligentstore.RelativePath
 	var symlinksWithRelativePath []*intelligentstore.SymlinkWithRelativePath
@@ -99,17 +102,17 @@ func (uploader *LocalUploader) UploadToStore() error {
 		return err
 	}
 
-	// transactionDAL := intelligentstore.NewTransactionDAL(backupStore)
-	//
-	// for _, filePath := range filePathsToUpload {
-
 	requiredHashes, err := tx.ProcessUploadHashesAndGetRequiredHashes(hashRelativePathMap.ToSlice())
 	if nil != err {
 		return err
 	}
 	log.Printf("%d hashes required\n", len(requiredHashes))
 
-	for _, requiredHash := range requiredHashes {
+	if uploader.backupDryRun {
+		return nil
+	}
+
+	for index, requiredHash := range requiredHashes {
 		relativePath := hashRelativePathMap[requiredHash]
 		if 0 == len(relativePath) {
 			return errors.Errorf("couldn't find any paths for hash: '%s'", requiredHash)
@@ -119,7 +122,13 @@ func (uploader *LocalUploader) UploadToStore() error {
 		if nil != err {
 			return err
 		}
+
+		if (index+1)%10 == 0 {
+			log.Printf("uploaded %d files. %d remaining\n", (index + 1), len(requiredHashes)-(index+1))
+		}
 	}
+
+	log.Println("finished uploading all files")
 
 	err = uploader.backupStoreDAL.TransactionDAL.Commit(tx)
 	if nil != err {
@@ -142,7 +151,7 @@ func (uploader *LocalUploader) uploadFile(tx *intelligentstore.Transaction, rela
 	// relativeFilePath := fullPathToRelative(uploader.backupFromLocation, filePath)
 	err = uploader.backupStoreDAL.TransactionDAL.BackupFile(tx, file)
 	if nil != err {
-		return err
+		return errors.Wrap(err, filePath)
 	}
 
 	return nil
