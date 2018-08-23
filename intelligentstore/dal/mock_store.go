@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal/storefs"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
-	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 )
 
@@ -18,24 +18,23 @@ const FileMode755 os.FileMode = (1 << 8) + (1 << 7) + (1 << 6) + (1 << 5) + (1 <
 
 type MockStore struct {
 	Store *IntelligentStoreDAL
-	Path  string
-	Fs    afero.Fs
+	Fs    storefs.Fs
 }
 
 func MockNowProvider() time.Time {
 	return time.Date(2000, 1, 2, 3, 4, 5, 6, time.UTC)
 }
 
-func NewMockStore(t *testing.T, nowFunc nowProvider, fs afero.Fs) *MockStore {
-	path := "/test-store"
+func NewMockStore(t *testing.T, nowFunc nowProvider, fs storefs.Fs) *MockStore {
+	pathToBase := "/test-store"
 
-	err := fs.Mkdir(path, 0700)
+	err := fs.Mkdir(pathToBase, 0700)
 	require.Nil(t, err)
 
-	store, err := CreateTestStoreAndNewConn(path, nowFunc, fs)
+	store, err := CreateTestStoreAndNewConn(pathToBase, nowFunc, fs)
 	require.Nil(t, err)
 
-	return &MockStore{store, path, fs}
+	return &MockStore{store, fs}
 }
 
 func (m *MockStore) CreateBucket(t *testing.T, bucketName string) *intelligentstore.Bucket {

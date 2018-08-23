@@ -6,14 +6,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal/storefs"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
-	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func Test_newIntelligentStoreConnToExisting(t *testing.T) {
-	fs := afero.NewMemMapFs()
+	fs := storefs.NewMockFs()
 	err := fs.MkdirAll("/ab", 0700)
 	require.Nil(t, err)
 
@@ -30,14 +30,14 @@ func Test_newIntelligentStoreConnToExisting(t *testing.T) {
 
 	// try to connect to a file
 	require.Nil(t, fs.MkdirAll("/bad", 0700))
-	require.Nil(t, afero.WriteFile(fs, "/bad/.backup_data", []byte("abc"), 0700))
+	require.Nil(t, fs.WriteFile("/bad/.backup_data", []byte("abc"), 0700))
 
 	_, err = newIntelligentStoreConnToExisting("/bad", MockNowProvider, fs)
 	assert.Equal(t, ErrStoreDirectoryNotDirectory, err)
 }
 
 func Test_createIntelligentStoreAndNewConn(t *testing.T) {
-	fs := afero.NewMemMapFs()
+	fs := storefs.NewMockFs()
 
 	store, err := CreateTestStoreAndNewConn("/ab", MockNowProvider, fs)
 	require.Nil(t, store)
@@ -46,7 +46,7 @@ func Test_createIntelligentStoreAndNewConn(t *testing.T) {
 	err = fs.MkdirAll("/ab", 0700)
 	require.Nil(t, err)
 
-	err = afero.WriteFile(fs, "/ab/myfile.txt", []byte("test data"), 0600)
+	err = fs.WriteFile("/ab/myfile.txt", []byte("test data"), 0600)
 	require.Nil(t, err)
 
 	store, err = CreateTestStoreAndNewConn("/ab", MockNowProvider, fs)
@@ -55,7 +55,8 @@ func Test_createIntelligentStoreAndNewConn(t *testing.T) {
 }
 
 func Test_GetBucketByName(t *testing.T) {
-	mockStore := NewMockStore(t, MockNowProvider, afero.NewMemMapFs())
+	fs := storefs.NewMockFs()
+	mockStore := NewMockStore(t, MockNowProvider, fs)
 
 	bucket, err := mockStore.Store.BucketDAL.CreateBucket("test bucket")
 	require.Nil(t, err)
@@ -69,7 +70,8 @@ func Test_GetBucketByName(t *testing.T) {
 }
 
 func Test_CreateBucket(t *testing.T) {
-	mockStore := NewMockStore(t, MockNowProvider, afero.NewMemMapFs())
+	fs := storefs.NewMockFs()
+	mockStore := NewMockStore(t, MockNowProvider, fs)
 
 	bucket1, err := mockStore.Store.BucketDAL.CreateBucket("test bucket")
 	require.Nil(t, err)
@@ -87,7 +89,8 @@ func Test_CreateBucket(t *testing.T) {
 }
 
 func Test_GetObjectByHash(t *testing.T) {
-	mockStore := NewMockStore(t, MockNowProvider, afero.NewMemMapFs())
+	fs := storefs.NewMockFs()
+	mockStore := NewMockStore(t, MockNowProvider, fs)
 	bucket, err := mockStore.Store.BucketDAL.CreateBucket("docs")
 	require.Nil(t, err)
 
@@ -131,7 +134,8 @@ func Test_GetObjectByHash(t *testing.T) {
 }
 
 func Test_GetLockInformation(t *testing.T) {
-	mockStore := NewMockStore(t, MockNowProvider, afero.NewMemMapFs())
+	fs := storefs.NewMockFs()
+	mockStore := NewMockStore(t, MockNowProvider, fs)
 	bucket := mockStore.CreateBucket(t, "docs")
 
 	lock, err := mockStore.Store.LockDAL.GetLockInformation()
@@ -158,7 +162,8 @@ func Test_GetLockInformation(t *testing.T) {
 }
 
 func Test_Search(t *testing.T) {
-	store := NewMockStore(t, MockNowProvider, afero.NewMemMapFs())
+	fs := storefs.NewMockFs()
+	store := NewMockStore(t, MockNowProvider, fs)
 	bucket := store.CreateBucket(t, "docs")
 
 	revision := store.CreateRevision(t, bucket, []*intelligentstore.RegularFileDescriptorWithContents{

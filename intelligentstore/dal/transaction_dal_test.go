@@ -5,14 +5,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal/storefs"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
-	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func Test_BackupFile(t *testing.T) {
-	mockStore := NewMockStore(t, MockNowProvider, afero.NewMemMapFs())
+	fs := storefs.NewMockFs()
+	mockStore := NewMockStore(t, MockNowProvider, fs)
 	bucket := mockStore.CreateBucket(t, "docs")
 
 	descriptor := intelligentstore.NewRegularFileDescriptorWithContents(
@@ -81,7 +82,8 @@ func Test_ProcessUploadHashesAndGetRequiredHashes(t *testing.T) {
 		[]byte(bFileContents),
 	)
 
-	mockStore := NewMockStore(t, MockNowProvider, afero.NewMemMapFs())
+	fs := storefs.NewMockFs()
+	mockStore := NewMockStore(t, MockNowProvider, fs)
 	bucket := mockStore.CreateBucket(t, "docs")
 
 	fileInfos := []*intelligentstore.FileInfo{
@@ -134,7 +136,8 @@ func Test_Commit(t *testing.T) {
 	)
 	require.Nil(t, err)
 
-	mockStore := NewMockStore(t, MockNowProvider, afero.NewMemMapFs())
+	fs := storefs.NewMockFs()
+	mockStore := NewMockStore(t, MockNowProvider, fs)
 	bucket := mockStore.CreateBucket(t, "docs")
 
 	fileInfos := []*intelligentstore.FileInfo{
@@ -185,7 +188,8 @@ func Test_ProcessSymlinks(t *testing.T) {
 		),
 		"a.txt")
 
-	mockStore := NewMockStore(t, MockNowProvider, afero.NewMemMapFs())
+	fs := storefs.NewMockFs()
+	mockStore := NewMockStore(t, MockNowProvider, fs)
 	bucket := mockStore.CreateBucket(t, "docs")
 
 	fileInfos := []*intelligentstore.FileInfo{

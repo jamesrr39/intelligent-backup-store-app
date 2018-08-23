@@ -12,7 +12,6 @@ import (
 
 	"github.com/jamesrr39/goutil/dirtraversal"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
-	"github.com/spf13/afero"
 )
 
 var (
@@ -96,9 +95,7 @@ var ErrNoRevisionsForBucket = errors.New("no revisions for this bucket yet")
 // error could be either ErrNoRevisionsForBucket or an FS-related error.
 func (dal *BucketDAL) GetLatestRevision(bucket *intelligentstore.Bucket) (*intelligentstore.Revision, error) {
 	versionsDirPath := filepath.Join(dal.bucketPath(bucket), "versions")
-	versionsFileInfos, err := afero.ReadDir(
-		dal.IntelligentStoreDAL.fs,
-		versionsDirPath)
+	versionsFileInfos, err := dal.IntelligentStoreDAL.fs.ReadDir(versionsDirPath)
 	if nil != err {
 		return nil, err
 	}
@@ -132,8 +129,7 @@ func (dal *BucketDAL) GetLatestRevision(bucket *intelligentstore.Bucket) (*intel
 func (dal *BucketDAL) GetRevisions(bucket *intelligentstore.Bucket) ([]*intelligentstore.Revision, error) {
 	versionsFolderPath := filepath.Join(dal.bucketPath(bucket), "versions")
 
-	versionsFileInfos, err := afero.ReadDir(
-		dal.IntelligentStoreDAL.fs, versionsFolderPath)
+	versionsFileInfos, err := dal.IntelligentStoreDAL.fs.ReadDir(versionsFolderPath)
 	if nil != err {
 		return nil, err
 	}
@@ -237,7 +233,7 @@ func (s *BucketDAL) CreateBucket(bucketName string) (*intelligentstore.Bucket, e
 		return nil, err
 	}
 
-	err = afero.WriteFile(s.fs, s.getBucketsInformationPath(), byteBuffer.Bytes(), 0600)
+	err = s.fs.WriteFile(s.getBucketsInformationPath(), byteBuffer.Bytes(), 0600)
 	if nil != err {
 		return nil, err
 	}

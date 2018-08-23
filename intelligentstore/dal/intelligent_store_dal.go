@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal/storefs"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	"github.com/pkg/errors"
-	"github.com/spf13/afero"
 )
 
 var (
@@ -25,29 +25,46 @@ var (
 type IntelligentStoreDAL struct {
 	StoreBasePath string
 	nowProvider
-	fs             afero.Fs
+	fs             storefs.Fs
 	BucketDAL      *BucketDAL
 	RevisionDAL    *RevisionDAL
 	TransactionDAL *TransactionDAL
 	LockDAL        *LockDAL
 	UserDAL        *UserDAL
+	TempStoreDAL   *TempStoreDAL
 }
 
 func NewIntelligentStoreConnToExisting(pathToBase string) (*IntelligentStoreDAL, error) {
-	return newIntelligentStoreConnToExisting(pathToBase, prodNowProvider, afero.NewOsFs())
-}
+	fs := storefs.NewOsFs()
 
-func newIntelligentStoreConnToExisting(pathToBase string, nowFunc nowProvider, fs afero.Fs) (*IntelligentStoreDAL, error) {
-	fileInfo, err := fs.Stat(filepath.Join(pathToBase, ".backup_data"))
-	if nil != err {
-		if os.IsNotExist(err) {
-			return nil, ErrStoreNotInitedYet
-		}
+	err := checkStoreExists(pathToBase, fs)
+	if err != nil {
 		return nil, err
 	}
 
+	return newIntelligentStoreConnToExisting(pathToBase, prodNowProvider, fs)
+}
+
+func checkStoreExists(pathToBase string, fs storefs.Fs) error {
+	fileInfo, err := fs.Stat(filepath.Join(pathToBase, ".backup_data"))
+	if nil != err {
+		if os.IsNotExist(err) {
+			return ErrStoreNotInitedYet
+		}
+		return err
+	}
+
 	if !fileInfo.IsDir() {
-		return nil, ErrStoreDirectoryNotDirectory
+		return ErrStoreDirectoryNotDirectory
+	}
+
+	return nil
+}
+
+func newIntelligentStoreConnToExisting(pathToBase string, nowFunc nowProvider, fs storefs.Fs) (*IntelligentStoreDAL, error) {
+	err := createStoreFoldersAndFiles(pathToBase, fs)
+	if err != nil {
+		return nil, err
 	}
 
 	storeDAL := &IntelligentStoreDAL{
@@ -55,30 +72,34 @@ func newIntelligentStoreConnToExisting(pathToBase string, nowFunc nowProvider, f
 		nowProvider:   nowFunc,
 		fs:            fs,
 	}
+
 	storeDAL.BucketDAL = &BucketDAL{storeDAL}
 	storeDAL.RevisionDAL = &RevisionDAL{storeDAL, storeDAL.BucketDAL}
 	storeDAL.TransactionDAL = &TransactionDAL{storeDAL}
 	storeDAL.LockDAL = &LockDAL{storeDAL}
 	storeDAL.UserDAL = &UserDAL{storeDAL}
+	storeDAL.TempStoreDAL = NewTempStoreDAL(pathToBase, fs)
 	return storeDAL, nil
 }
 
 func CreateIntelligentStoreAndNewConn(pathToBase string) (*IntelligentStoreDAL, error) {
-	return createIntelligentStoreAndNewConn(pathToBase, prodNowProvider, afero.NewOsFs())
+	fs := storefs.NewOsFs()
+
+	return newIntelligentStoreConnToExisting(pathToBase, prodNowProvider, fs)
 }
 
-func CreateTestStoreAndNewConn(pathToBase string, nowFunc nowProvider, fs afero.Fs) (*IntelligentStoreDAL, error) {
-	return createIntelligentStoreAndNewConn(pathToBase, nowFunc, fs)
+func CreateTestStoreAndNewConn(pathToBase string, nowFunc nowProvider, fs storefs.Fs) (*IntelligentStoreDAL, error) {
+	return newIntelligentStoreConnToExisting(pathToBase, nowFunc, fs)
 }
 
-func createIntelligentStoreAndNewConn(pathToBase string, nowFunc nowProvider, fs afero.Fs) (*IntelligentStoreDAL, error) {
-	fileInfos, err := afero.ReadDir(fs, pathToBase)
+func createStoreFoldersAndFiles(pathToBase string, fs storefs.Fs) error {
+	fileInfos, err := fs.ReadDir(pathToBase)
 	if nil != err {
-		return nil, fmt.Errorf("couldn't get a file listing for '%s'. Error: '%s'", pathToBase, err)
+		return fmt.Errorf("couldn't get a file listing for '%s'. Error: '%s'", pathToBase, err)
 	}
 
 	if 0 != len(fileInfos) {
-		return nil, fmt.Errorf(
+		return fmt.Errorf(
 			"'%s' is not an empty folder. Creating a new store requires an empty folder. Please create a new folder and create the store in there",
 			pathToBase)
 	}
@@ -86,24 +107,24 @@ func createIntelligentStoreAndNewConn(pathToBase string, nowFunc nowProvider, fs
 	versionsFolderPath := filepath.Join(pathToBase, ".backup_data", "buckets")
 	err = fs.MkdirAll(versionsFolderPath, 0700)
 	if nil != err {
-		return nil, errors.Wrapf(err,
+		return errors.Wrapf(err,
 			"couldn't create data folder for backup versions at '%s'",
 			versionsFolderPath)
 	}
 
 	err = fs.MkdirAll(filepath.Join(pathToBase, ".backup_data", "store_metadata"), 0700)
 	if nil != err {
-		return nil, err
+		return err
 	}
 
-	err = afero.WriteFile(fs, filepath.Join(pathToBase, ".backup_data", "store_metadata", "users-data.json"), []byte("[]"), 0600)
+	err = fs.WriteFile(filepath.Join(pathToBase, ".backup_data", "store_metadata", "users-data.json"), []byte("[]"), 0600)
 	if nil != err {
-		return nil, err
+		return err
 	}
 
-	err = afero.WriteFile(fs, filepath.Join(pathToBase, ".backup_data", "store_metadata", "buckets-data.json"), []byte("[]"), 0600)
+	err = fs.WriteFile(filepath.Join(pathToBase, ".backup_data", "store_metadata", "buckets-data.json"), []byte("[]"), 0600)
 	if nil != err {
-		return nil, errors.Wrapf(err,
+		return errors.Wrapf(err,
 			"couldn't create data file for buckets at '%s'",
 			versionsFolderPath)
 	}
@@ -111,24 +132,22 @@ func createIntelligentStoreAndNewConn(pathToBase string, nowFunc nowProvider, fs
 	objectsFolderPath := filepath.Join(pathToBase, ".backup_data", "objects")
 	err = fs.MkdirAll(objectsFolderPath, 0700)
 	if nil != err {
-		return nil, fmt.Errorf("couldn't create data folder for backup objects at '%s'. Error: '%s'", objectsFolderPath, err)
+		return fmt.Errorf("couldn't create data folder for backup objects at '%s'. Error: '%s'", objectsFolderPath, err)
 	}
 
 	locksFolderPath := filepath.Join(pathToBase, ".backup_data", "locks")
 	err = fs.MkdirAll(locksFolderPath, 0700)
 	if nil != err {
-		return nil, fmt.Errorf("couldn't create locks folder at '%s'. Error: '%s'", locksFolderPath, err)
+		return fmt.Errorf("couldn't create locks folder at '%s'. Error: '%s'", locksFolderPath, err)
 	}
 
-	return newIntelligentStoreConnToExisting(pathToBase, nowFunc, fs)
-	//
-	// storeDAL := &IntelligentStoreDAL{
-	// 	StoreBasePath: pathToBase,
-	// 	nowProvider:   nowFunc,
-	// 	fs:            fs,
-	// }
-	// storeDAL.BucketDAL = &BucketDAL{storeDAL}
-	// return storeDAL, nil
+	tmpFolderPath := filepath.Join(pathToBase, ".backup_data", "tmp")
+	err = fs.MkdirAll(tmpFolderPath, 0700)
+	if nil != err {
+		return fmt.Errorf("couldn't create tmp folder at '%s'. Error: '%s'", tmpFolderPath, err)
+	}
+
+	return nil
 }
 
 func (s *IntelligentStoreDAL) GetObjectByHash(hash intelligentstore.Hash) (io.ReadCloser, error) {

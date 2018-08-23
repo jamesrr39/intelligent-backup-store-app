@@ -3,14 +3,15 @@ package dal
 import (
 	"testing"
 
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal/storefs"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
-	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func Test_CreateUser(t *testing.T) {
-	mockStore := NewMockStore(t, MockNowProvider, afero.NewMemMapFs())
+	fs := storefs.NewMockFs()
+	mockStore := NewMockStore(t, MockNowProvider, fs)
 
 	_, err := mockStore.Store.UserDAL.CreateUser(intelligentstore.NewUser(1, "test öäø user", "testpassword"))
 	assert.Equal(t, "tried to create a user with ID 1 (expected 0)", err.Error())

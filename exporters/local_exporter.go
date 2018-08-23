@@ -3,13 +3,12 @@ package exporters
 import (
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal/storefs"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
-	"github.com/spf13/afero"
 )
 
 const FilesExportSubDir = "files"
@@ -20,8 +19,7 @@ type LocalExporter struct {
 	RevisionVersion *intelligentstore.RevisionVersion // nil = latest version
 	ExportDir       string
 	Matcher         excludesmatcher.Matcher
-	fs              afero.Fs
-	symlinker       func(oldName, newName string) error
+	fs              storefs.Fs
 }
 
 func NewLocalExporter(store *dal.IntelligentStoreDAL, bucketName string, exportDir string, revisionVersion *intelligentstore.RevisionVersion, matcher excludesmatcher.Matcher) *LocalExporter {
@@ -31,8 +29,7 @@ func NewLocalExporter(store *dal.IntelligentStoreDAL, bucketName string, exportD
 		RevisionVersion: revisionVersion,
 		ExportDir:       exportDir,
 		Matcher:         matcher,
-		fs:              afero.NewOsFs(),
-		symlinker:       os.Symlink,
+		fs:              storefs.NewOsFs(),
 	}
 }
 
@@ -94,13 +91,13 @@ func (exporter *LocalExporter) writeFileToFs(fileDescriptor intelligentstore.Fil
 		}
 		defer reader.Close()
 
-		err = afero.WriteReader(exporter.fs, filePath, reader)
-		if nil != err {
-			return fmt.Errorf("couldn't write the export file to '%s'. Error: %s", filePath, err)
+		err = exporter.createNewFileAndCopy(reader, filePath)
+		if err != nil {
+			return err
 		}
 	case intelligentstore.FileTypeSymlink:
 		symlinkFileDescriptor := fileDescriptor.(*intelligentstore.SymlinkFileDescriptor)
-		err = exporter.symlinker(symlinkFileDescriptor.Dest, filePath)
+		err = exporter.fs.Symlink(symlinkFileDescriptor.Dest, filePath)
 		if nil != err {
 			return fmt.Errorf("couldn't create the symlink at '%s'. Error: %s", filePath, err)
 		}
@@ -115,5 +112,20 @@ func (exporter *LocalExporter) writeFileToFs(fileDescriptor intelligentstore.Fil
 	if nil != err {
 		return fmt.Errorf("couldn't chmod exported file at '%s'. Error: %s", filePath, err)
 	}
+	return nil
+}
+
+func (exporter *LocalExporter) createNewFileAndCopy(reader io.Reader, filePath string) error {
+	newFile, err := exporter.fs.Create(filePath)
+	if nil != err {
+		return fmt.Errorf("couldn't create the export file at '%s'. Error: %s", filePath, err)
+	}
+	defer newFile.Close()
+
+	_, err = io.Copy(newFile, reader)
+	if nil != err {
+		return fmt.Errorf("couldn't write the export file to '%s'. Error: %s", filePath, err)
+	}
+
 	return nil
 }

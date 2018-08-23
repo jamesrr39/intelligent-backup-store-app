@@ -1,11 +1,9 @@
 package dal
 
 import (
-	"bytes"
 	"encoding/gob"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -13,7 +11,6 @@ import (
 	"github.com/jamesrr39/goutil/dirtraversal"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	"github.com/pkg/errors"
-	"github.com/spf13/afero"
 )
 
 var ErrFileNotRequiredForTransaction = errors.New("hash is not scheduled for upload, or has already been uploaded")
@@ -91,12 +88,18 @@ func (dal *TransactionDAL) BackupFile(transaction *intelligentstore.Transaction,
 		return err
 	}
 
-	sourceAsBytes, err := ioutil.ReadAll(sourceFile)
+	tempFile, err := dal.IntelligentStoreDAL.TempStoreDAL.CreateTempFile()
+	if nil != err {
+		return err
+	}
+	defer tempFile.Close()
+
+	_, err = io.Copy(tempFile, sourceFile)
 	if nil != err {
 		return err
 	}
 
-	hash, err := intelligentstore.NewHash(bytes.NewBuffer(sourceAsBytes))
+	hash, err := intelligentstore.NewHash(tempFile)
 	if nil != err {
 		return err
 	}
@@ -128,8 +131,7 @@ func (dal *TransactionDAL) BackupFile(transaction *intelligentstore.Transaction,
 			return err
 		}
 
-		// err = ioutil.WriteFile(filePath, sourceAsBytes, 0600)
-		err = afero.WriteFile(fs, filePath, sourceAsBytes, 0600)
+		err = fs.Rename(tempFile.FilePath, filePath)
 		if nil != err {
 			return err
 		}

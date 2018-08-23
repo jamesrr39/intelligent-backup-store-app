@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal/storefs"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
-	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 )
 
@@ -42,7 +42,7 @@ func CreateOsFsTestStore(t *testing.T) *OsFsTestStore {
 	err = os.MkdirAll(storePath, 0700)
 	require.Nil(t, err)
 
-	store, err := dal.CreateTestStoreAndNewConn(storePath, MockNowProvider, afero.NewOsFs())
+	store, err := dal.CreateTestStoreAndNewConn(storePath, MockNowProvider, storefs.NewOsFs())
 	require.Nil(t, err)
 
 	return &OsFsTestStore{store, tempdir, filepath.Join(tempdir, "sources"), filepath.Join(tempdir, "outDir")}
