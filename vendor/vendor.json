@@ -209,6 +209,18 @@
 			"revisionTime": "2016-12-17T20:04:45Z"
 		},
 		{
+			"checksumSHA1": "fV97ryTfS2E+uL7jBjhX8tO1I7k=",
+			"path": "github.com/rakyll/statik",
+			"revision": "19b88da8fc15428620782ba18f68423130e7ac7d",
+			"revisionTime": "2018-08-03T00:42:13Z"
+		},
+		{
+			"checksumSHA1": "++Uxr4F++QrnFEbBlQsJ3VuQoNM=",
+			"path": "github.com/rakyll/statik/fs",
+			"revision": "19b88da8fc15428620782ba18f68423130e7ac7d",
+			"revisionTime": "2018-08-03T00:42:13Z"
+		},
+		{
 			"checksumSHA1": "lBehULzb2/kIK3wZ0gz2yNmHq9s=",
 			"path": "github.com/spf13/afero",
 			"revision": "9be650865eab0c12963d8753212f4f9c66cdcf12",
@@ -249,6 +261,10 @@
 			"path": "gopkg.in/alecthomas/kingpin.v2",
 			"revision": "e9044be3ab2a8e11d4e1f418d12f0790d57e8d70",
 			"revisionTime": "2016-08-29T10:30:05Z"
+		},
+		{
+			"path": "vendor/github.com/rakyll/statik",
+			"revision": ""
 		}
 	],
 	"rootPath": "github.com/jamesrr39/intelligent-backup-store-app"

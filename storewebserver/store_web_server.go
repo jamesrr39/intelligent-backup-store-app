@@ -24,7 +24,7 @@ func NewStoreWebServer(store *dal.IntelligentStoreDAL) *StoreWebServer {
 
 	bucketsHandler := NewBucketService(store)
 	router.PathPrefix("/api/buckets/").Handler(http.StripPrefix("/api/buckets", bucketsHandler))
-	router.PathPrefix("/").Handler(http.StripPrefix("/", http.FileServer(http.Dir("storewebserver/static")))) // TODO dev mode & production packaging
+	router.PathPrefix("/").Handler(http.StripPrefix("/", NewClientHandler()))
 
 	return storeHandler
 }

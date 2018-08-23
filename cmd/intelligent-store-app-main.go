@@ -55,15 +55,6 @@ func recordMemStats(filePath string) (io.Closer, error) {
 
 //go:generate swagger generate spec
 func main() {
-
-	// pprof
-	// pprofFile, err := os.Create("./pprof_" + time.Now().Format(time.ANSIC))
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-	// pprof.StartCPUProfile(pprofFile)
-	// defer pprof.StopCPUProfile()
-
 	initCommand := kingpin.Command("init", "create a new store")
 	initStoreLocation := initCommand.Arg("store location", "location of the store").Default(".").String()
 	initCommand.Action(func(ctx *kingpin.ParseContext) error {
