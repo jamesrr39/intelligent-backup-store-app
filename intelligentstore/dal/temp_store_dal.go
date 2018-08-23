@@ -2,7 +2,6 @@ package dal
 
 import (
 	"io"
-	"os"
 	"path/filepath"
 	"strconv"
 	"sync/atomic"
@@ -11,10 +10,8 @@ import (
 )
 
 type TempFile struct {
-	file     *os.File
+	io.ReadWriteCloser
 	FilePath string
-	io.Writer
-	io.ReadCloser
 }
 
 type TempStoreDAL struct {
@@ -37,5 +34,5 @@ func (dal *TempStoreDAL) CreateTempFile() (*TempFile, error) {
 		return nil, err
 	}
 
-	return &TempFile{file: file, FilePath: filePath}, nil
+	return &TempFile{file, filePath}, nil
 }

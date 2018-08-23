@@ -14,8 +14,6 @@ import (
 const FileMode600 os.FileMode = (1 << 8) + (1 << 7)
 const FileMode755 os.FileMode = (1 << 8) + (1 << 7) + (1 << 6) + (1 << 5) + (1 << 3) + (1 << 2) + (1 << 0)
 
-// TODO: test build only
-
 type MockStore struct {
 	Store *IntelligentStoreDAL
 	Fs    storefs.Fs
@@ -25,7 +23,7 @@ func MockNowProvider() time.Time {
 	return time.Date(2000, 1, 2, 3, 4, 5, 6, time.UTC)
 }
 
-func NewMockStore(t *testing.T, nowFunc nowProvider, fs storefs.Fs) *MockStore {
+func NewMockStore(t *testing.T, nowFunc NowProvider, fs storefs.Fs) *MockStore {
 	pathToBase := "/test-store"
 
 	err := fs.Mkdir(pathToBase, 0700)

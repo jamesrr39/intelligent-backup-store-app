@@ -3,20 +3,24 @@ package storefs
 import (
 	"io/ioutil"
 	"os"
+
+	"github.com/spf13/afero"
 )
 
+type File afero.File
+
 type Fs interface {
-	Create(name string) (*os.File, error)
+	Create(name string) (File, error)
 	Remove(path string) error
 	RemoveAll(path string) error
 	Stat(path string) (os.FileInfo, error)
 	ReadDir(dirname string) ([]os.FileInfo, error)
 	Mkdir(path string, perm os.FileMode) error
 	MkdirAll(path string, perm os.FileMode) error
-	Open(path string) (*os.File, error)
+	Open(path string) (File, error)
 	WriteFile(path string, data []byte, perm os.FileMode) error
 	Rename(old, new string) error
-	OpenFile(name string, flag int, perm os.FileMode) (*os.File, error)
+	OpenFile(name string, flag int, perm os.FileMode) (File, error)
 	Symlink(oldName, newName string) error
 	Chmod(name string, mode os.FileMode) error
 }
@@ -27,7 +31,7 @@ func NewOsFs() *OsFs {
 	return &OsFs{}
 }
 
-func (fs *OsFs) Create(name string) (*os.File, error) {
+func (fs *OsFs) Create(name string) (File, error) {
 	return os.Create(name)
 }
 func (fs *OsFs) Remove(path string) error {
@@ -50,10 +54,10 @@ func (fs *OsFs) MkdirAll(path string, perm os.FileMode) error {
 	return os.MkdirAll(path, perm)
 }
 
-func (fs *OsFs) Open(name string) (*os.File, error) {
+func (fs *OsFs) Open(name string) (File, error) {
 	return os.Open(name)
 }
-func (fs *OsFs) OpenFile(name string, flag int, perm os.FileMode) (*os.File, error) {
+func (fs *OsFs) OpenFile(name string, flag int, perm os.FileMode) (File, error) {
 	return os.OpenFile(name, flag, perm)
 }
 

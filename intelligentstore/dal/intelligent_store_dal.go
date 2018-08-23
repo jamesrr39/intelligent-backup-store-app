@@ -23,8 +23,8 @@ var (
 
 // IntelligentStoreDAL represents the object to interact with the underlying storage
 type IntelligentStoreDAL struct {
-	StoreBasePath string
-	nowProvider
+	StoreBasePath  string
+	nowProvider    NowProvider
 	fs             storefs.Fs
 	BucketDAL      *BucketDAL
 	RevisionDAL    *RevisionDAL
@@ -61,7 +61,7 @@ func checkStoreExists(pathToBase string, fs storefs.Fs) error {
 	return nil
 }
 
-func newIntelligentStoreConnToExisting(pathToBase string, nowFunc nowProvider, fs storefs.Fs) (*IntelligentStoreDAL, error) {
+func newIntelligentStoreConnToExisting(pathToBase string, nowFunc NowProvider, fs storefs.Fs) (*IntelligentStoreDAL, error) {
 	err := createStoreFoldersAndFiles(pathToBase, fs)
 	if err != nil {
 		return nil, err
@@ -88,7 +88,7 @@ func CreateIntelligentStoreAndNewConn(pathToBase string) (*IntelligentStoreDAL, 
 	return newIntelligentStoreConnToExisting(pathToBase, prodNowProvider, fs)
 }
 
-func CreateTestStoreAndNewConn(pathToBase string, nowFunc nowProvider, fs storefs.Fs) (*IntelligentStoreDAL, error) {
+func CreateTestStoreAndNewConn(pathToBase string, nowFunc NowProvider, fs storefs.Fs) (*IntelligentStoreDAL, error) {
 	return newIntelligentStoreConnToExisting(pathToBase, nowFunc, fs)
 }
 
