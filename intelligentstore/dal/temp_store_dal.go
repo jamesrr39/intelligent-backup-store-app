@@ -20,8 +20,20 @@ type TempStoreDAL struct {
 }
 
 func NewTempStoreDAL(
-	storeBasePath string, fs storefs.Fs) *TempStoreDAL {
-	return &TempStoreDAL{0, filepath.Join(storeBasePath, "tmp"), fs}
+	storeBasePath string, fs storefs.Fs) (*TempStoreDAL, error) {
+	tempStoreDAL := &TempStoreDAL{0, filepath.Join(storeBasePath, BackupDataFolderName, "tmp"), fs}
+
+	err := tempStoreDAL.Clear()
+	if err != nil {
+		return nil, err
+	}
+
+	err = fs.Mkdir(tempStoreDAL.basePath, 0700)
+	if err != nil {
+		return nil, err
+	}
+
+	return tempStoreDAL, nil
 }
 
 func (dal *TempStoreDAL) CreateTempFileFromReader(reader io.Reader) (*TempFile, error) {
@@ -32,6 +44,7 @@ func (dal *TempStoreDAL) CreateTempFileFromReader(reader io.Reader) (*TempFile, 
 	if err != nil {
 		return nil, err
 	}
+	defer file.Close()
 
 	_, err = io.Copy(file, reader)
 	if err != nil {
@@ -39,6 +52,10 @@ func (dal *TempStoreDAL) CreateTempFileFromReader(reader io.Reader) (*TempFile, 
 	}
 
 	return &TempFile{filePath}, nil
+}
+
+func (dal *TempStoreDAL) Clear() error {
+	return dal.fs.RemoveAll(dal.basePath)
 }
 
 func (dal *TempStoreDAL) OpenTempFile(tempFile *TempFile) (io.ReadCloser, error) {

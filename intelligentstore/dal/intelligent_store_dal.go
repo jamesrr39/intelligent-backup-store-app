@@ -17,6 +17,10 @@ var (
 	ErrStoreNotInitedYet          = errors.New("IntelligentStore not initialised yet. Use init to create a new store")
 )
 
+const (
+	BackupDataFolderName = ".backup_data"
+)
+
 // type Fs interface {
 // 	WriteFile(filePath string, data []byte, permissions int32) error
 // }
@@ -41,7 +45,7 @@ func NewIntelligentStoreConnToExisting(pathToBase string) (*IntelligentStoreDAL,
 }
 
 func checkStoreExists(pathToBase string, fs storefs.Fs) error {
-	fileInfo, err := fs.Stat(filepath.Join(pathToBase, ".backup_data"))
+	fileInfo, err := fs.Stat(filepath.Join(pathToBase, BackupDataFolderName))
 	if nil != err {
 		if os.IsNotExist(err) {
 			return ErrStoreNotInitedYet
@@ -73,7 +77,10 @@ func newIntelligentStoreConnToExisting(pathToBase string, nowFunc NowProvider, f
 	storeDAL.TransactionDAL = &TransactionDAL{storeDAL}
 	storeDAL.LockDAL = &LockDAL{storeDAL}
 	storeDAL.UserDAL = &UserDAL{storeDAL}
-	storeDAL.TempStoreDAL = NewTempStoreDAL(pathToBase, fs)
+	storeDAL.TempStoreDAL, err = NewTempStoreDAL(pathToBase, fs)
+	if err != nil {
+		return nil, err
+	}
 	return storeDAL, nil
 }
 
@@ -108,7 +115,7 @@ func createStoreFoldersAndFiles(pathToBase string, fs storefs.Fs) error {
 			pathToBase)
 	}
 
-	versionsFolderPath := filepath.Join(pathToBase, ".backup_data", "buckets")
+	versionsFolderPath := filepath.Join(pathToBase, BackupDataFolderName, "buckets")
 	err = fs.MkdirAll(versionsFolderPath, 0700)
 	if nil != err {
 		return errors.Wrapf(err,
@@ -116,46 +123,40 @@ func createStoreFoldersAndFiles(pathToBase string, fs storefs.Fs) error {
 			versionsFolderPath)
 	}
 
-	err = fs.MkdirAll(filepath.Join(pathToBase, ".backup_data", "store_metadata"), 0700)
+	err = fs.MkdirAll(filepath.Join(pathToBase, BackupDataFolderName, "store_metadata"), 0700)
 	if nil != err {
 		return err
 	}
 
-	err = fs.WriteFile(filepath.Join(pathToBase, ".backup_data", "store_metadata", "users-data.json"), []byte("[]"), 0600)
+	err = fs.WriteFile(filepath.Join(pathToBase, BackupDataFolderName, "store_metadata", "users-data.json"), []byte("[]"), 0600)
 	if nil != err {
 		return err
 	}
 
-	err = fs.WriteFile(filepath.Join(pathToBase, ".backup_data", "store_metadata", "buckets-data.json"), []byte("[]"), 0600)
+	err = fs.WriteFile(filepath.Join(pathToBase, BackupDataFolderName, "store_metadata", "buckets-data.json"), []byte("[]"), 0600)
 	if nil != err {
 		return errors.Wrapf(err,
 			"couldn't create data file for buckets at '%s'",
 			versionsFolderPath)
 	}
 
-	objectsFolderPath := filepath.Join(pathToBase, ".backup_data", "objects")
+	objectsFolderPath := filepath.Join(pathToBase, BackupDataFolderName, "objects")
 	err = fs.MkdirAll(objectsFolderPath, 0700)
 	if nil != err {
 		return fmt.Errorf("couldn't create data folder for backup objects at '%s'. Error: '%s'", objectsFolderPath, err)
 	}
 
-	locksFolderPath := filepath.Join(pathToBase, ".backup_data", "locks")
+	locksFolderPath := filepath.Join(pathToBase, BackupDataFolderName, "locks")
 	err = fs.MkdirAll(locksFolderPath, 0700)
 	if nil != err {
 		return fmt.Errorf("couldn't create locks folder at '%s'. Error: '%s'", locksFolderPath, err)
-	}
-
-	tmpFolderPath := filepath.Join(pathToBase, ".backup_data", "tmp")
-	err = fs.MkdirAll(tmpFolderPath, 0700)
-	if nil != err {
-		return fmt.Errorf("couldn't create tmp folder at '%s'. Error: '%s'", tmpFolderPath, err)
 	}
 
 	return nil
 }
 
 func (s *IntelligentStoreDAL) GetObjectByHash(hash intelligentstore.Hash) (io.ReadCloser, error) {
-	objectPath := filepath.Join(s.StoreBasePath, ".backup_data", "objects", hash.FirstChunk(), hash.Remainder())
+	objectPath := filepath.Join(s.StoreBasePath, BackupDataFolderName, "objects", hash.FirstChunk(), hash.Remainder())
 	return s.fs.Open(objectPath)
 }
 
@@ -194,7 +195,7 @@ func (s *IntelligentStoreDAL) Search(searchTerm string) ([]*intelligentstore.Sea
 }
 
 func (s *IntelligentStoreDAL) IsObjectPresent(hash intelligentstore.Hash) (bool, error) {
-	bucketsDirPath := filepath.Join(s.StoreBasePath, ".backup_data", "objects")
+	bucketsDirPath := filepath.Join(s.StoreBasePath, BackupDataFolderName, "objects")
 
 	filePath := filepath.Join(bucketsDirPath, hash.FirstChunk(), hash.Remainder())
 	_, err := s.fs.Stat(filePath)

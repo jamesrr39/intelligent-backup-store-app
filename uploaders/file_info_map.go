@@ -11,7 +11,7 @@ import (
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 )
 
-const MaxFileSizeBytes = 1024 * 1024 * 512
+const MaxFileSizeBytes = 1024 * 1024 * 1024 * 4
 
 type FileInfoMap map[intelligentstore.RelativePath]*intelligentstore.FileInfo
 
@@ -46,12 +46,6 @@ func BuildFileInfosMap(fs storefs.Fs, backupFromLocation string, excludeMatcher 
 			log.Printf("WARNING: Skipping file as it's too large %q. (Size: %dB, max allowed: %dB)\n", relativePath, osFileInfo.Size(), MaxFileSizeBytes)
 			return nil
 		}
-
-		// shouldBeExcluded := excludeMatcher.Matches(string(relativePath))
-		// if shouldBeExcluded {
-		// 	log.Printf("skipping '%s'\n", path)
-		// 	return nil
-		// }
 
 		fileType := intelligentstore.FileTypeRegular
 
