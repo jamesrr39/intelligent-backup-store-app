@@ -11,6 +11,7 @@ type MockFs struct {
 	RemoveFunc    func(path string) error
 	RemoveAllFunc func(path string) error
 	StatFunc      func(path string) (os.FileInfo, error)
+	ReadFileFunc  func(path string) ([]byte, error)
 	ReadDirFunc   func(dirname string) ([]os.FileInfo, error)
 	MkdirFunc     func(path string, perm os.FileMode) error
 	MkdirAllFunc  func(path string, perm os.FileMode) error
@@ -20,6 +21,7 @@ type MockFs struct {
 	OpenFileFunc  func(name string, flag int, perm os.FileMode) (File, error)
 	ChmodFunc     func(name string, mode os.FileMode) error
 	SymlinkFunc   func(oldname, newname string) error
+	ReadlinkFunc  func(path string) (string, error)
 }
 
 func NewMockFs() MockFs {
@@ -32,6 +34,9 @@ func NewMockFs() MockFs {
 	mockFs.RemoveFunc = aferoFs.Remove
 	mockFs.RemoveAllFunc = aferoFs.RemoveAll
 	mockFs.StatFunc = aferoFs.Stat
+	mockFs.ReadFileFunc = func(path string) ([]byte, error) {
+		return afero.ReadFile(aferoFs, path)
+	}
 	mockFs.ReadDirFunc = func(dirname string) ([]os.FileInfo, error) {
 		return afero.ReadDir(aferoFs, dirname)
 	}
@@ -64,6 +69,9 @@ func (fs MockFs) RemoveAll(path string) error {
 func (fs MockFs) Stat(path string) (os.FileInfo, error) {
 	return fs.StatFunc(path)
 }
+func (fs MockFs) ReadFile(path string) ([]byte, error) {
+	return fs.ReadFileFunc(path)
+}
 func (fs MockFs) ReadDir(path string) ([]os.FileInfo, error) {
 	return fs.ReadDirFunc(path)
 }
@@ -93,4 +101,7 @@ func (fs MockFs) Symlink(oldName, newName string) error {
 }
 func (fs MockFs) Chmod(name string, mode os.FileMode) error {
 	return fs.ChmodFunc(name, mode)
+}
+func (fs MockFs) Readlink(path string) (string, error) {
+	return fs.ReadlinkFunc(path)
 }

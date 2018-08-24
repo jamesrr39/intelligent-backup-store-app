@@ -10,12 +10,12 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal/storefs"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	protofiles "github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/protobufs/proto_files"
 	"github.com/jamesrr39/intelligent-backup-store-app/uploaders"
 	"github.com/pkg/errors"
-	"github.com/spf13/afero"
 )
 
 // WebUploadClient represents an http client for uploading files to an IntelligentStore
@@ -24,8 +24,7 @@ type WebUploadClient struct {
 	bucketName     string
 	folderPath     string
 	excludeMatcher *excludesmatcher.ExcludesMatcher
-	fs             afero.Fs
-	linkReader     uploaders.LinkReader
+	fs             storefs.Fs
 	backupDryRun   bool
 }
 
@@ -43,8 +42,7 @@ func NewWebUploadClient(
 		bucketName,
 		folderPath,
 		excludeMatcher,
-		afero.NewOsFs(),
-		uploaders.OsFsLinkReader,
+		storefs.NewOsFs(),
 		backupDryRun,
 	}
 }
@@ -53,7 +51,7 @@ func NewWebUploadClient(
 func (c *WebUploadClient) UploadToStore() error {
 	// FIXME abort if error
 
-	fileInfosMap, err := uploaders.BuildFileInfosMap(c.fs, c.linkReader, c.folderPath, c.excludeMatcher)
+	fileInfosMap, err := uploaders.BuildFileInfosMap(c.fs, c.folderPath, c.excludeMatcher)
 	if nil != err {
 		return err
 	}
@@ -122,7 +120,7 @@ func (c *WebUploadClient) uploadSymlinks(revisionVersion intelligentstore.Revisi
 
 		filePath := filepath.Join(c.folderPath, string(fileInfo.RelativePath))
 
-		dest, err := c.linkReader(filePath)
+		dest, err := c.fs.Readlink(filePath)
 		if nil != err {
 			return fmt.Errorf("couldn't read link for %s. Error: %s", filePath, err)
 		}
@@ -292,7 +290,7 @@ func (c *WebUploadClient) backupFile(revisionStr intelligentstore.RevisionVersio
 	log.Printf("BACKING UP %s\n", relativePath)
 
 	client := http.Client{Timeout: time.Hour}
-	fileContents, err := afero.ReadFile(c.fs, filepath.Join(
+	fileContents, err := c.fs.ReadFile(filepath.Join(
 		c.folderPath,
 		string(relativePath)))
 	if nil != err {

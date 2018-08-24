@@ -6,9 +6,9 @@ import (
 	"strings"
 
 	"github.com/jamesrr39/goutil/fswalker"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal/storefs"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
-	"github.com/spf13/afero"
 )
 
 const MaxFileSizeBytes = 1024 * 1024 * 512
@@ -23,20 +23,12 @@ func (m FileInfoMap) ToSlice() []*intelligentstore.FileInfo {
 	return fileInfos
 }
 
-type aferoFsWithReadDir struct {
-	afero.Fs
-}
+func BuildFileInfosMap(fs storefs.Fs, backupFromLocation string, excludeMatcher *excludesmatcher.ExcludesMatcher) (FileInfoMap, error) {
+	_, err := fs.Stat(backupFromLocation)
+	if err != nil {
+		return nil, err
+	}
 
-func (a aferoFsWithReadDir) ReadDir(path string) ([]os.FileInfo, error) {
-	return afero.ReadDir(a, path)
-}
-
-func (a aferoFsWithReadDir) Readlink(path string) (string, error) {
-	// TODO: tests?
-	return os.Readlink(path)
-}
-
-func BuildFileInfosMap(fs afero.Fs, linkReader LinkReader, backupFromLocation string, excludeMatcher *excludesmatcher.ExcludesMatcher) (FileInfoMap, error) {
 	fileInfosMap := make(FileInfoMap)
 
 	walkFunc := func(path string, osFileInfo os.FileInfo, err error) error {
@@ -78,11 +70,11 @@ func BuildFileInfosMap(fs afero.Fs, linkReader LinkReader, backupFromLocation st
 	}
 
 	options := fswalker.WalkOptions{
-		Fs:             aferoFsWithReadDir{fs},
+		Fs:             fs,
 		ExcludeMatcher: excludeMatcher,
 	}
 
-	err := fswalker.Walk(backupFromLocation, walkFunc, options)
+	err = fswalker.Walk(backupFromLocation, walkFunc, options)
 
 	if nil != err {
 		return nil, err

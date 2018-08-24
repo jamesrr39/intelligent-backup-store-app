@@ -2,17 +2,16 @@ package webuploadclient
 
 import (
 	"bytes"
-	"errors"
 	"log"
 	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal/storefs"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	"github.com/jamesrr39/intelligent-backup-store-app/storewebserver"
-	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -31,18 +30,18 @@ func Test_UploadToStore(t *testing.T) {
 		&testfile{"folder1/c.txt", "file 1/c"},
 	}
 
-	fs := afero.NewMemMapFs()
+	fs := storefs.NewMockFs()
 	err := fs.MkdirAll("/docs/folder1", 0700)
 	require.Nil(t, err)
 
 	for _, testFile := range testFiles {
-		err = afero.WriteFile(fs, "/docs/"+string(testFile.path), []byte(testFile.contents), 0600)
+		err = fs.WriteFile("/docs/"+string(testFile.path), []byte(testFile.contents), 0600)
 		require.Nil(t, err)
 	}
 
-	err = afero.WriteFile(fs, "/docs/excludefile.txt", []byte("file 1/c"), 0600)
+	err = fs.WriteFile("/docs/excludefile.txt", []byte("file 1/c"), 0600)
 	require.Nil(t, err)
-	err = afero.WriteFile(fs, "/docs/excludeme/a.txt", []byte("file 1/c"), 0600)
+	err = fs.WriteFile("/docs/excludeme/a.txt", []byte("file 1/c"), 0600)
 	require.Nil(t, err)
 
 	excludeMatcher, err := excludesmatcher.NewExcludesMatcherFromReader(
@@ -50,7 +49,7 @@ func Test_UploadToStore(t *testing.T) {
 	require.Nil(t, err)
 
 	// set up remote store server
-	remoteStore := dal.NewMockStore(t, mockTimeProvider, afero.NewMemMapFs())
+	remoteStore := dal.NewMockStore(t, mockTimeProvider, storefs.NewMockFs())
 
 	bucket := remoteStore.CreateBucket(t, "docs")
 
@@ -60,10 +59,6 @@ func Test_UploadToStore(t *testing.T) {
 
 	log.Printf("store URL: %s\n", storeServer.URL)
 
-	mockLinkReader := func(path string) (string, error) {
-		return "", errors.New("not implemented")
-	}
-
 	// create client and upload
 	uploadClient := &WebUploadClient{
 		storeServer.URL,
@@ -71,7 +66,6 @@ func Test_UploadToStore(t *testing.T) {
 		"/docs",
 		excludeMatcher,
 		fs,
-		mockLinkReader,
 		false,
 	}
 
@@ -117,7 +111,7 @@ func Test_NewWebUploadClient(t *testing.T) {
 		false,
 	)
 
-	assert.Equal(t, afero.NewOsFs(), client.fs)
+	assert.Equal(t, storefs.NewOsFs(), client.fs)
 }
 
 func mockTimeProvider() time.Time {

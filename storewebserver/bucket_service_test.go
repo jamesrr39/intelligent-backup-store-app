@@ -14,9 +14,9 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/spf13/afero"
 
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal/storefs"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -29,7 +29,7 @@ func testNowProvider() time.Time {
 }
 
 func Test_handleGetAllBuckets(t *testing.T) {
-	mockStore := dal.NewMockStore(t, testNowProvider, afero.NewMemMapFs())
+	mockStore := dal.NewMockStore(t, testNowProvider, storefs.NewMockFs())
 	bucketService := NewBucketService(mockStore.Store)
 
 	requestURL := &url.URL{Path: "/"}
@@ -72,7 +72,7 @@ func Test_handleGetRevision(t *testing.T) {
 		intelligentstore.NewRegularFileDescriptorWithContents(t, "folder-1/c.txt", time.Unix(0, 0), dal.FileMode600, []byte("file 1/c")),
 	}
 
-	store := dal.NewMockStore(t, testNowProvider, afero.NewMemMapFs())
+	store := dal.NewMockStore(t, testNowProvider, storefs.NewMockFs())
 	bucket := store.CreateBucket(t, "docs")
 
 	store.CreateRevision(t, bucket, testFiles)
@@ -125,7 +125,7 @@ func Test_handleGetRevision(t *testing.T) {
 }
 
 func Test_handleCreateRevision(t *testing.T) {
-	store := dal.NewMockStore(t, testNowProvider, afero.NewMemMapFs())
+	store := dal.NewMockStore(t, testNowProvider, storefs.NewMockFs())
 	store.CreateBucket(t, "docs")
 
 	aFileText := "test file a"
@@ -172,7 +172,7 @@ func Test_handleCreateRevision(t *testing.T) {
 }
 
 func Test_handleUploadFile(t *testing.T) {
-	store := dal.NewMockStore(t, testNowProvider, afero.NewMemMapFs())
+	store := dal.NewMockStore(t, testNowProvider, storefs.NewMockFs())
 	store.CreateBucket(t, "docs")
 
 	aFileText := "my file a.txt"
@@ -292,7 +292,7 @@ func Test_handleUploadFile(t *testing.T) {
 }
 
 func Test_handleCommitTransaction(t *testing.T) {
-	store := dal.NewMockStore(t, testNowProvider, afero.NewMemMapFs())
+	store := dal.NewMockStore(t, testNowProvider, storefs.NewMockFs())
 	bucket := store.CreateBucket(t, "docs")
 
 	bucketService := NewBucketService(store.Store)
@@ -402,7 +402,7 @@ func Test_handleCommitTransaction(t *testing.T) {
 }
 
 func Test_handleGetFileContents(t *testing.T) {
-	mockStore := dal.NewMockStore(t, testNowProvider, afero.NewMemMapFs())
+	mockStore := dal.NewMockStore(t, testNowProvider, storefs.NewMockFs())
 	bucket := mockStore.CreateBucket(t, "docs")
 
 	bucketService := NewBucketService(mockStore.Store)

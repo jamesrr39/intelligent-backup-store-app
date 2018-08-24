@@ -6,11 +6,11 @@ import (
 	"strings"
 
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal/storefs"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	"github.com/jamesrr39/intelligent-backup-store-app/uploaders"
 	"github.com/pkg/errors"
-	"github.com/spf13/afero"
 )
 
 // LocalUploader represents an object for performing an upload over a local FS
@@ -19,8 +19,7 @@ type LocalUploader struct {
 	backupBucketName   string
 	backupFromLocation string
 	excludeMatcher     *excludesmatcher.ExcludesMatcher
-	fs                 afero.Fs
-	linkReader         uploaders.LinkReader
+	fs                 storefs.Fs
 	backupDryRun       bool
 }
 
@@ -38,8 +37,7 @@ func NewLocalUploader(
 		backupBucketName,
 		backupFromLocation,
 		excludeMatcher,
-		afero.NewOsFs(),
-		uploaders.OsFsLinkReader,
+		storefs.NewOsFs(),
 		backupDryRun,
 	}
 }
@@ -51,7 +49,7 @@ func (uploader *LocalUploader) UploadToStore() error {
 		// FIXME: handle abort tx on err
 	}()
 
-	fileInfosMap, err := uploaders.BuildFileInfosMap(uploader.fs, uploader.linkReader, uploader.backupFromLocation, uploader.excludeMatcher)
+	fileInfosMap, err := uploaders.BuildFileInfosMap(uploader.fs, uploader.backupFromLocation, uploader.excludeMatcher)
 	if nil != err {
 		return err
 	}
@@ -78,7 +76,7 @@ func (uploader *LocalUploader) UploadToStore() error {
 		case intelligentstore.FileTypeRegular:
 			requiredRelativePathsForHashes = append(requiredRelativePathsForHashes, requiredRelativePath)
 		case intelligentstore.FileTypeSymlink:
-			dest, err := uploader.linkReader(filepath.Join(uploader.backupFromLocation, string(fileInfo.RelativePath)))
+			dest, err := uploader.fs.Readlink(filepath.Join(uploader.backupFromLocation, string(fileInfo.RelativePath)))
 			if nil != err {
 				return err
 			}

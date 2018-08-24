@@ -2,14 +2,14 @@ package localupload
 
 import (
 	"bytes"
-	"errors"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal/storefs"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
-	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -28,31 +28,27 @@ func Test_UploadToStore(t *testing.T) {
 		&testfile{"folder1/c.txt", "file 1/c"},
 	}
 
-	fs := afero.NewMemMapFs()
+	fs := storefs.NewMockFs()
 	err := fs.MkdirAll("/docs/folder1", 0700)
 	require.Nil(t, err)
 
 	for _, testFile := range testFiles {
-		err = afero.WriteFile(fs, string("/docs/"+testFile.path), []byte(testFile.contents), 0600)
+		err = fs.WriteFile(fmt.Sprintf("/docs/%s", testFile.path), []byte(testFile.contents), 0600)
 		require.Nil(t, err)
 	}
 
-	err = afero.WriteFile(fs, "/docs/excludefile.txt", []byte("file 1/c"), 0600)
+	err = fs.WriteFile("/docs/excludefile.txt", []byte("file 1/c"), 0600)
 	require.Nil(t, err)
-	err = afero.WriteFile(fs, "/docs/excludeme/a.txt", []byte("file 1/c"), 0600)
+	err = fs.WriteFile("/docs/excludeme/a.txt", []byte("file 1/c"), 0600)
 	require.Nil(t, err)
 
 	excludeMatcher, err := excludesmatcher.NewExcludesMatcherFromReader(
 		bytes.NewBuffer([]byte("\nexclude*\n")))
 	require.Nil(t, err)
 
-	store := dal.NewMockStore(t, dal.MockNowProvider, afero.NewMemMapFs())
+	store := dal.NewMockStore(t, dal.MockNowProvider, storefs.NewMockFs())
 
 	store.CreateBucket(t, "docs")
-
-	mockLinkReader := func(path string) (string, error) {
-		return "", errors.New("not implemented")
-	}
 
 	uploader := &LocalUploader{
 		store.Store,
@@ -60,7 +56,6 @@ func Test_UploadToStore(t *testing.T) {
 		"/docs",
 		excludeMatcher,
 		fs,
-		mockLinkReader,
 		false,
 	}
 
