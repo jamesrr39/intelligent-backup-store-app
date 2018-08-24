@@ -88,18 +88,18 @@ func (dal *TransactionDAL) BackupFile(transaction *intelligentstore.Transaction,
 		return err
 	}
 
-	tempFile, err := dal.IntelligentStoreDAL.TempStoreDAL.CreateTempFile()
-	if nil != err {
-		return err
-	}
-	defer tempFile.Close()
-
-	_, err = io.Copy(tempFile, sourceFile)
+	tempFile, err := dal.IntelligentStoreDAL.TempStoreDAL.CreateTempFileFromReader(sourceFile)
 	if nil != err {
 		return err
 	}
 
-	hash, err := intelligentstore.NewHash(tempFile)
+	hashTempFileReader, err := dal.IntelligentStoreDAL.TempStoreDAL.OpenTempFile(tempFile)
+	if nil != err {
+		return err
+	}
+	defer hashTempFileReader.Close()
+
+	hash, err := intelligentstore.NewHash(hashTempFileReader)
 	if nil != err {
 		return err
 	}

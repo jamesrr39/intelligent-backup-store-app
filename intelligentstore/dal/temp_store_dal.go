@@ -10,7 +10,6 @@ import (
 )
 
 type TempFile struct {
-	io.ReadWriteCloser
 	FilePath string
 }
 
@@ -25,7 +24,7 @@ func NewTempStoreDAL(
 	return &TempStoreDAL{0, filepath.Join(storeBasePath, "tmp"), fs}
 }
 
-func (dal *TempStoreDAL) CreateTempFile() (*TempFile, error) {
+func (dal *TempStoreDAL) CreateTempFileFromReader(reader io.Reader) (*TempFile, error) {
 	newID := atomic.AddUint64(&dal.latestID, 1)
 	dal.latestID = newID
 	filePath := filepath.Join(dal.basePath, strconv.FormatUint(newID, 10))
@@ -34,5 +33,14 @@ func (dal *TempStoreDAL) CreateTempFile() (*TempFile, error) {
 		return nil, err
 	}
 
-	return &TempFile{file, filePath}, nil
+	_, err = io.Copy(file, reader)
+	if err != nil {
+		return nil, err
+	}
+
+	return &TempFile{filePath}, nil
+}
+
+func (dal *TempStoreDAL) OpenTempFile(tempFile *TempFile) (io.ReadCloser, error) {
+	return dal.fs.Open(tempFile.FilePath)
 }

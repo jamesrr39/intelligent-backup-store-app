@@ -37,11 +37,6 @@ type IntelligentStoreDAL struct {
 func NewIntelligentStoreConnToExisting(pathToBase string) (*IntelligentStoreDAL, error) {
 	fs := storefs.NewOsFs()
 
-	err := checkStoreExists(pathToBase, fs)
-	if err != nil {
-		return nil, err
-	}
-
 	return newIntelligentStoreConnToExisting(pathToBase, prodNowProvider, fs)
 }
 
@@ -62,7 +57,7 @@ func checkStoreExists(pathToBase string, fs storefs.Fs) error {
 }
 
 func newIntelligentStoreConnToExisting(pathToBase string, nowFunc NowProvider, fs storefs.Fs) (*IntelligentStoreDAL, error) {
-	err := createStoreFoldersAndFiles(pathToBase, fs)
+	err := checkStoreExists(pathToBase, fs)
 	if err != nil {
 		return nil, err
 	}
@@ -85,10 +80,19 @@ func newIntelligentStoreConnToExisting(pathToBase string, nowFunc NowProvider, f
 func CreateIntelligentStoreAndNewConn(pathToBase string) (*IntelligentStoreDAL, error) {
 	fs := storefs.NewOsFs()
 
-	return newIntelligentStoreConnToExisting(pathToBase, prodNowProvider, fs)
+	return createStoreAndNewConn(pathToBase, prodNowProvider, fs)
 }
 
 func CreateTestStoreAndNewConn(pathToBase string, nowFunc NowProvider, fs storefs.Fs) (*IntelligentStoreDAL, error) {
+	return createStoreAndNewConn(pathToBase, nowFunc, fs)
+}
+
+func createStoreAndNewConn(pathToBase string, nowFunc NowProvider, fs storefs.Fs) (*IntelligentStoreDAL, error) {
+	err := createStoreFoldersAndFiles(pathToBase, fs)
+	if err != nil {
+		return nil, err
+	}
+
 	return newIntelligentStoreConnToExisting(pathToBase, nowFunc, fs)
 }
 

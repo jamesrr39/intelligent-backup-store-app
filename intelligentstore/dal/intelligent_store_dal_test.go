@@ -39,6 +39,7 @@ func Test_newIntelligentStoreConnToExisting(t *testing.T) {
 func Test_createIntelligentStoreAndNewConn(t *testing.T) {
 	fs := storefs.NewMockFs()
 
+	// test directory not existing yet
 	store, err := CreateTestStoreAndNewConn("/ab", MockNowProvider, fs)
 	require.Nil(t, store)
 	assert.Equal(t, "couldn't get a file listing for '/ab'. Error: 'open /ab: file does not exist'", err.Error())
