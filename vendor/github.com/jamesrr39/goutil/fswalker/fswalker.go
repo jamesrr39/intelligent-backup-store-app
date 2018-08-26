@@ -52,7 +52,6 @@ func walk(rootPath, path string, walkFunc filepath.WalkFunc, options WalkOptions
 	relativePath := strings.TrimPrefix(strings.TrimPrefix(path, rootPath), string(filepath.Separator))
 
 	if options.ExcludeMatcher.Matches(relativePath) {
-		log.Printf("skipping %q\n", path) // TODO remove
 		return nil
 	}
 
@@ -64,7 +63,6 @@ func walk(rootPath, path string, walkFunc filepath.WalkFunc, options WalkOptions
 
 	if fileInfo.IsDir() {
 		if options.ExcludeMatcher.MatchesDir(relativePath) {
-			log.Printf("skipping dir: %q\n", path) // TODO remove
 			return nil
 		}
 

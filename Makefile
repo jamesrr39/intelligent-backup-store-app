@@ -2,10 +2,10 @@
 clean:
 	rm -rf build
 
-.PHONY: build
+.PHONY: build_prod_linux_x86_64
 build_prod_linux_x86_64: clean
 	go run vendor/github.com/rakyll/statik/statik.go -src=storewebserver/static -dest=build/client
-	env GOOS=linux GOARCH=amd64 go build -tags "prod" -o build/bin/intelligent-store cmd/intelligent-store-app-main.go
+	env GOOS=linux GOARCH=amd64 go build -tags "prod" -o build/bin/linux_amd64/intelligent-store cmd/intelligent-store-app-main.go
 
 .PHONY: test
 test:
