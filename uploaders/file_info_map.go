@@ -6,12 +6,13 @@ import (
 	"strings"
 
 	"github.com/jamesrr39/goutil/fswalker"
+	"github.com/jamesrr39/goutil/humanise"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal/storefs"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 )
 
-const MaxFileSizeBytes = 1024 * 1024 * 1024 * 4
+const WarnOverFileSizeBytes = 1024 * 1024 * 1024 * 4
 
 type FileInfoMap map[intelligentstore.RelativePath]*intelligentstore.FileInfo
 
@@ -42,9 +43,8 @@ func BuildFileInfosMap(fs storefs.Fs, backupFromLocation string, excludeMatcher 
 
 		relativePath := fullPathToRelative(backupFromLocation, path)
 
-		if osFileInfo.Size() > MaxFileSizeBytes {
-			log.Printf("WARNING: Skipping file as it's too large %q. (Size: %dB, max allowed: %dB)\n", relativePath, osFileInfo.Size(), MaxFileSizeBytes)
-			return nil
+		if osFileInfo.Size() > WarnOverFileSizeBytes {
+			log.Printf("WARNING: large file found at %q. (Size: %s)\n", relativePath, humanise.HumaniseBytes(osFileInfo.Size()))
 		}
 
 		fileType := intelligentstore.FileTypeRegular
