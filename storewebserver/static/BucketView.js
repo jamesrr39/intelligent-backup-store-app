@@ -83,7 +83,7 @@ define([
 
     var onRevisionChange = function(event){
       var newTimestamp = $(event.currentTarget).val();
-      window.location = "#/buckets/docs/" + newTimestamp + "/" + rootDir;
+      window.location = "#/buckets/" + encodeURIComponent(bucketName) + "/" + newTimestamp + "/" + rootDir;
     };
 
     return {
