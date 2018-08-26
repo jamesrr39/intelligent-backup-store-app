@@ -8,7 +8,7 @@ type SymlinkFileDescriptor struct {
 }
 
 func init() {
-	gob.Register(&SymlinkFileDescriptor{})
+	gob.Register(&SymlinkFileDescriptor{}) // Kept for old gob encoded revisions, newer definitions migrated to JSON
 }
 
 func NewSymlinkFileDescriptor(fileInfo *FileInfo, dest string) *SymlinkFileDescriptor {

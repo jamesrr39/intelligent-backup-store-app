@@ -14,6 +14,7 @@ import (
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
+	"github.com/jamesrr39/intelligent-backup-store-app/migrations"
 	"github.com/jamesrr39/intelligent-backup-store-app/storewebserver"
 	"github.com/jamesrr39/intelligent-backup-store-app/uploaders"
 	"github.com/jamesrr39/intelligent-backup-store-app/uploaders/localupload"
@@ -263,6 +264,12 @@ func main() {
 		}
 
 		return nil
+	})
+
+	runMigrationsCommand := kingpin.Command("run-migrations", "run schema-altering migrations")
+	runMigrationsStoreLocation := runMigrationsCommand.Arg("store location", "location of the store").Default(".").String()
+	runMigrationsCommand.Action(func(ctx *kingpin.ParseContext) error {
+		return migrations.Run1(*runMigrationsStoreLocation)
 	})
 
 	kingpin.Parse()

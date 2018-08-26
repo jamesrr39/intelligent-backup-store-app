@@ -1,29 +1,16 @@
-package main
+package migrations
 
 import (
-	"encoding/gob"
 	"encoding/json"
 	"io/ioutil"
-	"log"
 	"os"
 	"path/filepath"
 
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
-	kingpin "gopkg.in/alecthomas/kingpin.v2"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
 )
 
-// migrates file lists to JSON
-func main() {
-	storeLocation := kingpin.Arg("store-location", "location of the store").Required().String()
-	kingpin.Parse()
-
-	err := run(*storeLocation)
-	if err != nil {
-		log.Fatalln(err)
-	}
-}
-
-func run(storeLocation string) error {
+// migrates file lists from gob to JSON
+func Run1(storeLocation string) error {
 	err := filepath.Walk(filepath.Join(storeLocation, ".backup_data", "buckets"), func(path string, fileInfo os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -39,8 +26,7 @@ func run(storeLocation string) error {
 		}
 		defer file.Close()
 
-		var descriptors []intelligentstore.FileDescriptor
-		err = gob.NewDecoder(file).Decode(&descriptors)
+		descriptors, err := dal.Legacy__GetFilesInGobEncodedRevision(file)
 		if err != nil {
 			return err
 		}

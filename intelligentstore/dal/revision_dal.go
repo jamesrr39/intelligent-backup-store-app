@@ -2,6 +2,7 @@ package dal
 
 import (
 	"encoding/gob"
+	"encoding/json"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -24,25 +25,58 @@ func NewRevisionDAL(
 }
 
 // GetFilesInRevision gets a list of files in this revision
-// TODO don't require bucket
 func (r *RevisionDAL) GetFilesInRevision(bucket *intelligentstore.Bucket, revision *intelligentstore.Revision) ([]intelligentstore.FileDescriptor, error) {
 	filePath := filepath.Join(
 		r.bucketPath(bucket),
 		"versions",
 		strconv.FormatInt(int64(revision.VersionTimestamp), 10))
-	revisionDataFile, err := r.fs.Open(filePath)
+	revisionDataBytes, err := r.fs.ReadFile(filePath)
 	if nil != err {
 		return nil, fmt.Errorf("couldn't open revision data file at '%s'. Error: '%s'", filePath, err)
 	}
-	defer revisionDataFile.Close()
 
-	var filesInVersion []intelligentstore.FileDescriptor
-	err = gob.NewDecoder(revisionDataFile).Decode(&filesInVersion)
-	if nil != err {
+	filesInVersion, err := readFilesInRevisionJSON(revisionDataBytes)
+	if err != nil {
 		return nil, err
 	}
 
 	return filesInVersion, nil
+}
+
+func readFilesInRevisionJSON(b []byte) (intelligentstore.FileDescriptors, error) {
+	var fdBytes []json.RawMessage
+	err := json.Unmarshal(b, &fdBytes)
+	if err != nil {
+		return nil, err
+	}
+
+	var descriptors []intelligentstore.FileDescriptor
+
+	for _, fdJSON := range fdBytes {
+		var fileInfo intelligentstore.FileInfo
+		err = json.Unmarshal(fdJSON, &fileInfo)
+		if err != nil {
+			return nil, err
+		}
+
+		var objToUnmarshalTo intelligentstore.FileDescriptor
+		switch fileInfo.Type {
+		case intelligentstore.FileTypeRegular:
+			objToUnmarshalTo = &intelligentstore.RegularFileDescriptor{}
+		case intelligentstore.FileTypeSymlink:
+			objToUnmarshalTo = &intelligentstore.SymlinkFileDescriptor{}
+		default:
+			return nil, fmt.Errorf("unrecognised file descriptor type. JSON: %q", string(fdJSON))
+		}
+		err = json.Unmarshal(fdJSON, &objToUnmarshalTo)
+		if err != nil {
+			return nil, err
+		}
+
+		descriptors = append(descriptors, objToUnmarshalTo)
+	}
+
+	return descriptors, nil
 }
 
 func (r *RevisionDAL) GetFileContentsInRevision(
@@ -79,4 +113,14 @@ func (r *RevisionDAL) GetFileContentsInRevision(
 	}
 
 	return nil, ErrNoFileWithThisRelativePathInRevision
+}
+
+func Legacy__GetFilesInGobEncodedRevision(revisionDataFile io.Reader) ([]intelligentstore.FileDescriptor, error) {
+	var filesInVersion []intelligentstore.FileDescriptor
+	err := gob.NewDecoder(revisionDataFile).Decode(&filesInVersion)
+	if nil != err {
+		return nil, err
+	}
+
+	return filesInVersion, nil
 }

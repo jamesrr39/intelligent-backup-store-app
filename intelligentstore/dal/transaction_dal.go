@@ -1,7 +1,7 @@
 package dal
 
 import (
-	"encoding/gob"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -210,7 +210,7 @@ func (dal *TransactionDAL) Commit(transaction *intelligentstore.Transaction) err
 	}
 	defer versionContentsFile.Close()
 
-	err = gob.NewEncoder(versionContentsFile).Encode(transaction.FilesInVersion)
+	err = json.NewEncoder(versionContentsFile).Encode(transaction.FilesInVersion)
 	if nil != err {
 		return err
 	}

@@ -16,7 +16,7 @@ type RegularFileDescriptor struct {
 }
 
 func init() {
-	gob.Register(&RegularFileDescriptor{})
+	gob.Register(&RegularFileDescriptor{}) // Kept for old gob encoded revisions, newer definitions migrated to JSON
 }
 
 // NewRegularFileDescriptor creates an instance of File.
