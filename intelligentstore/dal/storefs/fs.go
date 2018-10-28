@@ -1,13 +1,28 @@
 package storefs
 
 import (
+	"io"
 	"io/ioutil"
 	"os"
-
-	"github.com/spf13/afero"
 )
 
-type File afero.File
+// afero's interface for a File
+type File interface {
+	io.Closer
+	io.Reader
+	io.ReaderAt
+	io.Seeker
+	io.Writer
+	io.WriterAt
+
+	Name() string
+	Readdir(count int) ([]os.FileInfo, error)
+	Readdirnames(n int) ([]string, error)
+	Stat() (os.FileInfo, error)
+	Sync() error
+	Truncate(size int64) error
+	WriteString(s string) (ret int, err error)
+}
 
 type Fs interface {
 	Create(name string) (File, error)
