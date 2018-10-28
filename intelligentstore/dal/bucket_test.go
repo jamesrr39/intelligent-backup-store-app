@@ -5,14 +5,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal/storefs"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal/storefs/mockfs"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func Test_bucketPath(t *testing.T) {
-	fs := storefs.NewMockFs()
+	fs := mockfs.NewMockFs()
 	mockStoreDAL := NewMockStore(t, MockNowProvider, fs)
 
 	bucket := intelligentstore.NewBucket(0, "test bucket")
@@ -40,7 +40,7 @@ func Test_isValidBucketName(t *testing.T) {
 }
 
 func Test_GetLatestRevision(t *testing.T) {
-	fs := storefs.NewMockFs()
+	fs := mockfs.NewMockFs()
 	store := NewMockStore(t, MockNowProvider, fs)
 
 	bucket := store.CreateBucket(t, "docs")
@@ -92,7 +92,7 @@ func Test_GetRevisions(t *testing.T) {
 		return mockNow
 	}
 
-	fs := storefs.NewMockFs()
+	fs := mockfs.NewMockFs()
 	store := NewMockStore(t, mockNowProvider, fs)
 
 	bucket := store.CreateBucket(t, "docs")

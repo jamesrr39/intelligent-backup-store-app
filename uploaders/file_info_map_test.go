@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal/storefs"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal/storefs/mockfs"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	"github.com/stretchr/testify/assert"
@@ -21,7 +21,7 @@ func Test_fullPathToRelative(t *testing.T) {
 }
 
 func Test_BuildFileInfosMap(t *testing.T) {
-	fs := storefs.NewMockFs()
+	fs := mockfs.NewMockFs()
 	excludes, err := excludesmatcher.NewExcludesMatcherFromReader(bytes.NewBuffer([]byte("exclude-me.txt")))
 	require.Nil(t, err)
 

@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal/storefs"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal/storefs/mockfs"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	"github.com/stretchr/testify/assert"
@@ -28,7 +28,7 @@ func Test_UploadToStore(t *testing.T) {
 		&testfile{"folder1/c.txt", "file 1/c"},
 	}
 
-	fs := storefs.NewMockFs()
+	fs := mockfs.NewMockFs()
 	err := fs.MkdirAll("/docs/folder1", 0700)
 	require.Nil(t, err)
 
@@ -46,7 +46,7 @@ func Test_UploadToStore(t *testing.T) {
 		bytes.NewBuffer([]byte("\nexclude*\n")))
 	require.Nil(t, err)
 
-	store := dal.NewMockStore(t, dal.MockNowProvider, storefs.NewMockFs())
+	store := dal.NewMockStore(t, dal.MockNowProvider, mockfs.NewMockFs())
 
 	store.CreateBucket(t, "docs")
 

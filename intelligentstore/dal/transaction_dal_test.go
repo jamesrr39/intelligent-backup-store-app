@@ -5,14 +5,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal/storefs"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal/storefs/mockfs"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func Test_BackupFile(t *testing.T) {
-	fs := storefs.NewMockFs()
+	fs := mockfs.NewMockFs()
 	mockStore := NewMockStore(t, MockNowProvider, fs)
 	bucket := mockStore.CreateBucket(t, "docs")
 
@@ -82,7 +82,7 @@ func Test_ProcessUploadHashesAndGetRequiredHashes(t *testing.T) {
 		[]byte(bFileContents),
 	)
 
-	fs := storefs.NewMockFs()
+	fs := mockfs.NewMockFs()
 	mockStore := NewMockStore(t, MockNowProvider, fs)
 	bucket := mockStore.CreateBucket(t, "docs")
 
@@ -136,7 +136,7 @@ func Test_Commit(t *testing.T) {
 	)
 	require.Nil(t, err)
 
-	fs := storefs.NewMockFs()
+	fs := mockfs.NewMockFs()
 	mockStore := NewMockStore(t, MockNowProvider, fs)
 	bucket := mockStore.CreateBucket(t, "docs")
 
@@ -188,7 +188,7 @@ func Test_ProcessSymlinks(t *testing.T) {
 		),
 		"a.txt")
 
-	fs := storefs.NewMockFs()
+	fs := mockfs.NewMockFs()
 	mockStore := NewMockStore(t, MockNowProvider, fs)
 	bucket := mockStore.CreateBucket(t, "docs")
 

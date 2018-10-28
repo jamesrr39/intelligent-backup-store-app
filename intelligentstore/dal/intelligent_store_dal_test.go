@@ -6,14 +6,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal/storefs"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal/storefs/mockfs"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func Test_newIntelligentStoreConnToExisting(t *testing.T) {
-	fs := storefs.NewMockFs()
+	fs := mockfs.NewMockFs()
 	err := fs.MkdirAll("/ab", 0700)
 	require.Nil(t, err)
 
@@ -37,7 +37,7 @@ func Test_newIntelligentStoreConnToExisting(t *testing.T) {
 }
 
 func Test_createIntelligentStoreAndNewConn(t *testing.T) {
-	fs := storefs.NewMockFs()
+	fs := mockfs.NewMockFs()
 
 	// test directory not existing yet
 	store, err := CreateTestStoreAndNewConn("/ab", MockNowProvider, fs)
@@ -56,7 +56,7 @@ func Test_createIntelligentStoreAndNewConn(t *testing.T) {
 }
 
 func Test_GetBucketByName(t *testing.T) {
-	fs := storefs.NewMockFs()
+	fs := mockfs.NewMockFs()
 	mockStore := NewMockStore(t, MockNowProvider, fs)
 
 	bucket, err := mockStore.Store.BucketDAL.CreateBucket("test bucket")
@@ -71,7 +71,7 @@ func Test_GetBucketByName(t *testing.T) {
 }
 
 func Test_CreateBucket(t *testing.T) {
-	fs := storefs.NewMockFs()
+	fs := mockfs.NewMockFs()
 	mockStore := NewMockStore(t, MockNowProvider, fs)
 
 	bucket1, err := mockStore.Store.BucketDAL.CreateBucket("test bucket")
@@ -90,7 +90,7 @@ func Test_CreateBucket(t *testing.T) {
 }
 
 func Test_GetObjectByHash(t *testing.T) {
-	fs := storefs.NewMockFs()
+	fs := mockfs.NewMockFs()
 	mockStore := NewMockStore(t, MockNowProvider, fs)
 	bucket, err := mockStore.Store.BucketDAL.CreateBucket("docs")
 	require.Nil(t, err)
@@ -135,7 +135,7 @@ func Test_GetObjectByHash(t *testing.T) {
 }
 
 func Test_GetLockInformation(t *testing.T) {
-	fs := storefs.NewMockFs()
+	fs := mockfs.NewMockFs()
 	mockStore := NewMockStore(t, MockNowProvider, fs)
 	bucket := mockStore.CreateBucket(t, "docs")
 
@@ -163,7 +163,7 @@ func Test_GetLockInformation(t *testing.T) {
 }
 
 func Test_Search(t *testing.T) {
-	fs := storefs.NewMockFs()
+	fs := mockfs.NewMockFs()
 	store := NewMockStore(t, MockNowProvider, fs)
 	bucket := store.CreateBucket(t, "docs")
 

@@ -3,14 +3,14 @@ package dal
 import (
 	"testing"
 
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal/storefs"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal/storefs/mockfs"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func Test_CreateUser(t *testing.T) {
-	fs := storefs.NewMockFs()
+	fs := mockfs.NewMockFs()
 	mockStore := NewMockStore(t, MockNowProvider, fs)
 
 	_, err := mockStore.Store.UserDAL.CreateUser(intelligentstore.NewUser(1, "test öäø user", "testpassword"))

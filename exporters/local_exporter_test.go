@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal/storefs"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal/storefs/mockfs"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/storetest"
@@ -17,7 +17,7 @@ import (
 )
 
 func Test_Export(t *testing.T) {
-	testStore := dal.NewMockStore(t, dal.MockNowProvider, storefs.NewMockFs())
+	testStore := dal.NewMockStore(t, dal.MockNowProvider, mockfs.NewMockFs())
 
 	bucket := storetest.CreateBucket(t, testStore.Store, "docs")
 
@@ -79,7 +79,7 @@ func Test_Export(t *testing.T) {
 }
 
 func Test_writeFileToFs(t *testing.T) {
-	testStore := dal.NewMockStore(t, dal.MockNowProvider, storefs.NewMockFs())
+	testStore := dal.NewMockStore(t, dal.MockNowProvider, mockfs.NewMockFs())
 
 	exporter := &LocalExporter{
 		Store:           testStore.Store,
@@ -123,7 +123,7 @@ func Test_writeFileToFs(t *testing.T) {
 }
 
 func Test_writeFileToFs_UnknownFile(t *testing.T) {
-	testStore := dal.NewMockStore(t, dal.MockNowProvider, storefs.NewMockFs())
+	testStore := dal.NewMockStore(t, dal.MockNowProvider, mockfs.NewMockFs())
 
 	exporter := &LocalExporter{
 		Store:           testStore.Store,

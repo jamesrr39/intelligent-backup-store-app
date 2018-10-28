@@ -1,13 +1,14 @@
-package storefs
+package mockfs
 
 import (
 	"os"
 
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal/storefs"
 	"github.com/spf13/afero"
 )
 
 type MockFs struct {
-	CreateFunc    func(name string) (File, error)
+	CreateFunc    func(name string) (storefs.File, error)
 	RemoveFunc    func(path string) error
 	RemoveAllFunc func(path string) error
 	StatFunc      func(path string) (os.FileInfo, error)
@@ -15,10 +16,10 @@ type MockFs struct {
 	ReadDirFunc   func(dirname string) ([]os.FileInfo, error)
 	MkdirFunc     func(path string, perm os.FileMode) error
 	MkdirAllFunc  func(path string, perm os.FileMode) error
-	OpenFunc      func(path string) (File, error)
+	OpenFunc      func(path string) (storefs.File, error)
 	WriteFileFunc func(path string, data []byte, perm os.FileMode) error
 	RenameFunc    func(old, new string) error
-	OpenFileFunc  func(name string, flag int, perm os.FileMode) (File, error)
+	OpenFileFunc  func(name string, flag int, perm os.FileMode) (storefs.File, error)
 	ChmodFunc     func(name string, mode os.FileMode) error
 	SymlinkFunc   func(oldname, newname string) error
 	ReadlinkFunc  func(path string) (string, error)
@@ -28,7 +29,7 @@ func NewMockFs() MockFs {
 	mockFs := MockFs{}
 	aferoFs := afero.NewMemMapFs()
 
-	mockFs.CreateFunc = func(name string) (File, error) {
+	mockFs.CreateFunc = func(name string) (storefs.File, error) {
 		return aferoFs.Create(name)
 	}
 	mockFs.RemoveFunc = aferoFs.Remove
@@ -42,14 +43,14 @@ func NewMockFs() MockFs {
 	}
 	mockFs.MkdirFunc = aferoFs.Mkdir
 	mockFs.MkdirAllFunc = aferoFs.MkdirAll
-	mockFs.OpenFunc = func(name string) (File, error) {
+	mockFs.OpenFunc = func(name string) (storefs.File, error) {
 		return aferoFs.Open(name)
 	}
 	mockFs.WriteFileFunc = func(path string, data []byte, perm os.FileMode) error {
 		return afero.WriteFile(aferoFs, path, data, perm)
 	}
 	mockFs.RenameFunc = aferoFs.Rename
-	mockFs.OpenFileFunc = func(name string, flag int, perm os.FileMode) (File, error) {
+	mockFs.OpenFileFunc = func(name string, flag int, perm os.FileMode) (storefs.File, error) {
 		return aferoFs.OpenFile(name, flag, perm)
 	}
 	mockFs.ChmodFunc = aferoFs.Chmod
@@ -57,7 +58,7 @@ func NewMockFs() MockFs {
 	return mockFs
 }
 
-func (fs MockFs) Create(name string) (File, error) {
+func (fs MockFs) Create(name string) (storefs.File, error) {
 	return fs.CreateFunc(name)
 }
 func (fs MockFs) Remove(path string) error {
@@ -83,10 +84,10 @@ func (fs MockFs) MkdirAll(path string, perm os.FileMode) error {
 	return fs.MkdirAllFunc(path, perm)
 }
 
-func (fs MockFs) Open(name string) (File, error) {
+func (fs MockFs) Open(name string) (storefs.File, error) {
 	return fs.OpenFunc(name)
 }
-func (fs MockFs) OpenFile(name string, flag int, perm os.FileMode) (File, error) {
+func (fs MockFs) OpenFile(name string, flag int, perm os.FileMode) (storefs.File, error) {
 	return fs.OpenFileFunc(name, flag, perm)
 }
 
