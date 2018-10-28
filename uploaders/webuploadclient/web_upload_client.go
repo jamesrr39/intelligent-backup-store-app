@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal/storefs"
+	"github.com/jamesrr39/goutil/gofs"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	protofiles "github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/protobufs/proto_files"
@@ -24,7 +24,7 @@ type WebUploadClient struct {
 	bucketName     string
 	folderPath     string
 	excludeMatcher *excludesmatcher.ExcludesMatcher
-	fs             storefs.Fs
+	fs             gofs.Fs
 	backupDryRun   bool
 }
 
@@ -42,7 +42,7 @@ func NewWebUploadClient(
 		bucketName,
 		folderPath,
 		excludeMatcher,
-		storefs.NewOsFs(),
+		gofs.NewOsFs(),
 		backupDryRun,
 	}
 }

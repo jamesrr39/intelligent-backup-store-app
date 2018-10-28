@@ -15,8 +15,8 @@ import (
 
 	"github.com/golang/protobuf/proto"
 
+	"github.com/jamesrr39/goutil/gofs/mockfs"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal/storefs/mockfs"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 

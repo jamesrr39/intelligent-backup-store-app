@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"sync/atomic"
 
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal/storefs"
+	"github.com/jamesrr39/goutil/gofs"
 )
 
 type TempFile struct {
@@ -16,11 +16,11 @@ type TempFile struct {
 type TempStoreDAL struct {
 	latestID uint64
 	basePath string
-	fs       storefs.Fs
+	fs       gofs.Fs
 }
 
 func NewTempStoreDAL(
-	storeBasePath string, fs storefs.Fs) (*TempStoreDAL, error) {
+	storeBasePath string, fs gofs.Fs) (*TempStoreDAL, error) {
 	tempStoreDAL := &TempStoreDAL{0, filepath.Join(storeBasePath, BackupDataFolderName, "tmp"), fs}
 
 	err := tempStoreDAL.Clear()

@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal/storefs"
+	"github.com/jamesrr39/goutil/gofs"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	"github.com/pkg/errors"
 )
@@ -29,7 +29,7 @@ const (
 type IntelligentStoreDAL struct {
 	StoreBasePath  string
 	nowProvider    NowProvider
-	fs             storefs.Fs
+	fs             gofs.Fs
 	BucketDAL      *BucketDAL
 	RevisionDAL    *RevisionDAL
 	TransactionDAL *TransactionDAL
@@ -39,12 +39,12 @@ type IntelligentStoreDAL struct {
 }
 
 func NewIntelligentStoreConnToExisting(pathToBase string) (*IntelligentStoreDAL, error) {
-	fs := storefs.NewOsFs()
+	fs := gofs.NewOsFs()
 
 	return newIntelligentStoreConnToExisting(pathToBase, prodNowProvider, fs)
 }
 
-func checkStoreExists(pathToBase string, fs storefs.Fs) error {
+func checkStoreExists(pathToBase string, fs gofs.Fs) error {
 	fileInfo, err := fs.Stat(filepath.Join(pathToBase, BackupDataFolderName))
 	if nil != err {
 		if os.IsNotExist(err) {
@@ -60,7 +60,7 @@ func checkStoreExists(pathToBase string, fs storefs.Fs) error {
 	return nil
 }
 
-func newIntelligentStoreConnToExisting(pathToBase string, nowFunc NowProvider, fs storefs.Fs) (*IntelligentStoreDAL, error) {
+func newIntelligentStoreConnToExisting(pathToBase string, nowFunc NowProvider, fs gofs.Fs) (*IntelligentStoreDAL, error) {
 	err := checkStoreExists(pathToBase, fs)
 	if err != nil {
 		return nil, err
@@ -85,16 +85,16 @@ func newIntelligentStoreConnToExisting(pathToBase string, nowFunc NowProvider, f
 }
 
 func CreateIntelligentStoreAndNewConn(pathToBase string) (*IntelligentStoreDAL, error) {
-	fs := storefs.NewOsFs()
+	fs := gofs.NewOsFs()
 
 	return createStoreAndNewConn(pathToBase, prodNowProvider, fs)
 }
 
-func CreateTestStoreAndNewConn(pathToBase string, nowFunc NowProvider, fs storefs.Fs) (*IntelligentStoreDAL, error) {
+func CreateTestStoreAndNewConn(pathToBase string, nowFunc NowProvider, fs gofs.Fs) (*IntelligentStoreDAL, error) {
 	return createStoreAndNewConn(pathToBase, nowFunc, fs)
 }
 
-func createStoreAndNewConn(pathToBase string, nowFunc NowProvider, fs storefs.Fs) (*IntelligentStoreDAL, error) {
+func createStoreAndNewConn(pathToBase string, nowFunc NowProvider, fs gofs.Fs) (*IntelligentStoreDAL, error) {
 	err := createStoreFoldersAndFiles(pathToBase, fs)
 	if err != nil {
 		return nil, err
@@ -103,7 +103,7 @@ func createStoreAndNewConn(pathToBase string, nowFunc NowProvider, fs storefs.Fs
 	return newIntelligentStoreConnToExisting(pathToBase, nowFunc, fs)
 }
 
-func createStoreFoldersAndFiles(pathToBase string, fs storefs.Fs) error {
+func createStoreFoldersAndFiles(pathToBase string, fs gofs.Fs) error {
 	fileInfos, err := fs.ReadDir(pathToBase)
 	if nil != err {
 		return fmt.Errorf("couldn't get a file listing for '%s'. Error: '%s'", pathToBase, err)

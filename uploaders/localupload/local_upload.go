@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/jamesrr39/goutil/gofs"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal/storefs"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	"github.com/jamesrr39/intelligent-backup-store-app/uploaders"
@@ -19,7 +19,7 @@ type LocalUploader struct {
 	backupBucketName   string
 	backupFromLocation string
 	excludeMatcher     *excludesmatcher.ExcludesMatcher
-	fs                 storefs.Fs
+	fs                 gofs.Fs
 	backupDryRun       bool
 }
 
@@ -37,7 +37,7 @@ func NewLocalUploader(
 		backupBucketName,
 		backupFromLocation,
 		excludeMatcher,
-		storefs.NewOsFs(),
+		gofs.NewOsFs(),
 		backupDryRun,
 	}
 }

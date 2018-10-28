@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"github.com/jamesrr39/goutil/fswalker"
+	"github.com/jamesrr39/goutil/gofs"
 	"github.com/jamesrr39/goutil/humanise"
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal/storefs"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 )
@@ -24,7 +24,7 @@ func (m FileInfoMap) ToSlice() []*intelligentstore.FileInfo {
 	return fileInfos
 }
 
-func BuildFileInfosMap(fs storefs.Fs, backupFromLocation string, excludeMatcher *excludesmatcher.ExcludesMatcher) (FileInfoMap, error) {
+func BuildFileInfosMap(fs gofs.Fs, backupFromLocation string, excludeMatcher *excludesmatcher.ExcludesMatcher) (FileInfoMap, error) {
 	_, err := fs.Stat(backupFromLocation)
 	if err != nil {
 		return nil, err

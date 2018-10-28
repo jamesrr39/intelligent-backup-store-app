@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal/storefs"
+	"github.com/jamesrr39/goutil/gofs"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	"github.com/stretchr/testify/require"
 )
@@ -16,14 +16,14 @@ const FileMode755 os.FileMode = (1 << 8) + (1 << 7) + (1 << 6) + (1 << 5) + (1 <
 
 type MockStore struct {
 	Store *IntelligentStoreDAL
-	Fs    storefs.Fs
+	Fs    gofs.Fs
 }
 
 func MockNowProvider() time.Time {
 	return time.Date(2000, 1, 2, 3, 4, 5, 6, time.UTC)
 }
 
-func NewMockStore(t *testing.T, nowFunc NowProvider, fs storefs.Fs) *MockStore {
+func NewMockStore(t *testing.T, nowFunc NowProvider, fs gofs.Fs) *MockStore {
 	pathToBase := "/test-store"
 
 	err := fs.Mkdir(pathToBase, 0700)

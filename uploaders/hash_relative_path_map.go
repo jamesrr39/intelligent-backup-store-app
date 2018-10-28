@@ -4,7 +4,7 @@ import (
 	"log"
 	"path/filepath"
 
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal/storefs"
+	"github.com/jamesrr39/goutil/gofs"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 )
 
@@ -24,7 +24,7 @@ func (m HashRelativePathMap) ToSlice() []*intelligentstore.RelativePathWithHash 
 	return relativePathsWithHashes
 }
 
-func BuildRelativePathsWithHashes(fs storefs.Fs, backupFromLocation string, requiredRelativePaths []intelligentstore.RelativePath) (HashRelativePathMap, error) {
+func BuildRelativePathsWithHashes(fs gofs.Fs, backupFromLocation string, requiredRelativePaths []intelligentstore.RelativePath) (HashRelativePathMap, error) {
 	hashRelativePathMap := make(HashRelativePathMap)
 	log.Printf("%d relative paths required\n", len(requiredRelativePaths))
 	for _, requiredRelativePath := range requiredRelativePaths {

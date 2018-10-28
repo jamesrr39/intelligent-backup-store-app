@@ -196,6 +196,18 @@
 			"revisionTime": "2018-07-04T21:38:34Z"
 		},
 		{
+			"checksumSHA1": "kKrgv0WoCbs/yLpWd2xqNpJHJd4=",
+			"path": "github.com/jamesrr39/goutil/gofs",
+			"revision": "cc5f1f5a0be69845846e1422366822c6933aaa23",
+			"revisionTime": "2018-10-28T10:14:16Z"
+		},
+		{
+			"checksumSHA1": "vSO9YTxzOtFlSLXtwaptC7QF0bU=",
+			"path": "github.com/jamesrr39/goutil/gofs/mockfs",
+			"revision": "cc5f1f5a0be69845846e1422366822c6933aaa23",
+			"revisionTime": "2018-10-28T10:14:16Z"
+		},
+		{
 			"checksumSHA1": "QcAy0NLUd92+l9KiNHIMccMYLXE=",
 			"path": "github.com/jamesrr39/goutil/humanise",
 			"revision": "eef48524bd8aca4e054517db8bc370b479c26847",

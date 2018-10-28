@@ -1,4 +1,4 @@
-package storefs
+package gofs
 
 import (
 	"io"
