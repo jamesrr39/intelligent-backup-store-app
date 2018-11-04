@@ -1,6 +1,7 @@
 package exporters
 
 import (
+	"compress/gzip"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -85,7 +86,7 @@ func (exporter *LocalExporter) writeFileToFs(fileDescriptor intelligentstore.Fil
 	case intelligentstore.FileTypeRegular:
 		regularFileDescriptor := fileDescriptor.(*intelligentstore.RegularFileDescriptor)
 		var reader io.ReadCloser
-		reader, err = exporter.Store.GetObjectByHash(regularFileDescriptor.Hash)
+		reader, err = exporter.Store.GetGzippedObjectByHash(regularFileDescriptor.Hash)
 		if nil != err {
 			return fmt.Errorf("couldn't get the file at '%s'. Error: %s", regularFileDescriptor.RelativePath, err)
 		}
@@ -122,7 +123,13 @@ func (exporter *LocalExporter) createNewFileAndCopy(reader io.Reader, filePath s
 	}
 	defer newFile.Close()
 
-	_, err = io.Copy(newFile, reader)
+	gzippedReader, err := gzip.NewReader(reader)
+	if err != nil {
+		return err
+	}
+	defer gzippedReader.Close()
+
+	_, err = io.Copy(newFile, gzippedReader)
 	if nil != err {
 		return fmt.Errorf("couldn't write the export file to '%s'. Error: %s", filePath, err)
 	}

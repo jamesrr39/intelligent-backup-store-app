@@ -1,6 +1,7 @@
 package dal
 
 import (
+	"compress/gzip"
 	"fmt"
 	"io"
 	"os"
@@ -155,10 +156,78 @@ func createStoreFoldersAndFiles(pathToBase string, fs gofs.Fs) error {
 	return nil
 }
 
-func (s *IntelligentStoreDAL) GetObjectByHash(hash intelligentstore.Hash) (io.ReadCloser, error) {
-	objectPath := filepath.Join(s.StoreBasePath, BackupDataFolderName, "objects", hash.FirstChunk(), hash.Remainder())
+func (s *IntelligentStoreDAL) GetGzippedObjectByHash(hash intelligentstore.Hash) (io.ReadCloser, error) {
+	objectPath := filepath.Join(s.StoreBasePath, BackupDataFolderName, "objects", hash.FirstChunk(), hash.Remainder()+".gz")
 	return s.fs.Open(objectPath)
 }
+
+func (s *IntelligentStoreDAL) GetObjectByHash(hash intelligentstore.Hash) (io.ReadCloser, error) {
+	var err error
+
+	gzippedFile, err := s.GetGzippedObjectByHash(hash)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err != nil {
+			gzippedFile.Close()
+		}
+	}()
+
+	gzipReader, err := gzip.NewReader(gzippedFile)
+	if err != nil {
+		return nil, err
+	}
+
+	closeFunc := func() error {
+		gzipReaderErr := gzipReader.Close()
+		gzippedFileErr := gzippedFile.Close()
+		if gzipReaderErr != nil {
+			if gzippedFileErr != nil {
+				return fmt.Errorf("failed to close gzip reader and original file. Errors: gzip Reader error: %q. original file error: %q", gzipReaderErr, gzippedFileErr)
+			}
+			return gzipReaderErr
+		}
+
+		if gzippedFileErr != nil {
+			return gzipReaderErr
+		}
+
+		return nil
+	}
+
+	return readCloser{gzipReader, closeFunc}, nil
+}
+
+type readCloser struct {
+	io.Reader
+	closeFunc func() error
+}
+
+func (rc readCloser) Close() error {
+	return rc.closeFunc()
+}
+
+//
+// func (s *IntelligentStoreDAL) GetObjectByHash(hash intelligentstore.Hash) (io.ReadCloser, error) {
+// 	var err error
+// 	gzipedReadCloser, err := s.GetGzippedObjectByHash(hash)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	defer func() {
+// 		if err != nil {
+// 			gzipedReadCloser.Close()
+// 		}
+// 	}()
+//
+// 	reader, err := gzip.NewReader(gzipedReadCloser)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+//
+// 	return reader, nil
+// }
 
 // Search looks for the searchTerm in any of the file paths in the store
 func (s *IntelligentStoreDAL) Search(searchTerm string) ([]*intelligentstore.SearchResult, error) {
@@ -197,7 +266,7 @@ func (s *IntelligentStoreDAL) Search(searchTerm string) ([]*intelligentstore.Sea
 func (s *IntelligentStoreDAL) IsObjectPresent(hash intelligentstore.Hash) (bool, error) {
 	bucketsDirPath := filepath.Join(s.StoreBasePath, BackupDataFolderName, "objects")
 
-	filePath := filepath.Join(bucketsDirPath, hash.FirstChunk(), hash.Remainder())
+	filePath := filepath.Join(bucketsDirPath, hash.FirstChunk(), hash.Remainder()+".gz")
 	_, err := s.fs.Stat(filePath)
 	if nil != err {
 		if os.IsNotExist(err) {

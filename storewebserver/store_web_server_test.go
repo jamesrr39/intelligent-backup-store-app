@@ -62,7 +62,7 @@ func Test_handleSearch(t *testing.T) {
 	storeHandler.ServeHTTP(w2, r2)
 
 	require.Equal(t, 400, w2.Code)
-	assert.Equal(t, "no search term specified (use URL query parameter `searchTerm`)", string(w2.Body.Bytes()))
+	assert.Equal(t, "no search term specified (use URL query parameter `searchTerm`)\n", string(w2.Body.Bytes()))
 
 	// good request, no results
 
@@ -77,5 +77,5 @@ func Test_handleSearch(t *testing.T) {
 	storeHandler.ServeHTTP(w3, r3)
 
 	require.Equal(t, 200, w3.Code)
-	assert.Equal(t, "[]", string(w3.Body.Bytes()))
+	assert.Equal(t, "[]\n", string(w3.Body.Bytes()))
 }

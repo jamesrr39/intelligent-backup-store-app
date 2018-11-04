@@ -54,7 +54,7 @@ func Test_GetLatestRevision(t *testing.T) {
 		intelligentstore.NewRelativePath(file.Name),
 		time.Unix(0, 0),
 		FileMode600,
-		bytes.NewBuffer([]byte(file.Contents)),
+		bytes.NewReader([]byte(file.Contents)),
 	)
 	require.Nil(t, err)
 
@@ -68,7 +68,7 @@ func Test_GetLatestRevision(t *testing.T) {
 	require.Nil(t, err)
 	require.Len(t, requiredHashes, 1)
 
-	err = store.Store.TransactionDAL.BackupFile(tx, bytes.NewBuffer([]byte(file.Contents)))
+	err = store.Store.TransactionDAL.BackupFile(tx, bytes.NewReader([]byte(file.Contents)))
 	require.Nil(t, err)
 
 	err = store.Store.TransactionDAL.Commit(tx)
@@ -105,7 +105,7 @@ func Test_GetRevisions(t *testing.T) {
 		intelligentstore.NewRelativePath(aTxtFile.Name),
 		time.Unix(0, 0),
 		FileMode600,
-		bytes.NewBuffer([]byte(aTxtFile.Contents)),
+		bytes.NewReader([]byte(aTxtFile.Contents)),
 	)
 	require.Nil(t, err)
 
@@ -118,7 +118,7 @@ func Test_GetRevisions(t *testing.T) {
 	_, err = tx1.ProcessUploadHashesAndGetRequiredHashes(relativePathsWithHashes)
 	require.Nil(t, err)
 
-	err = store.Store.TransactionDAL.BackupFile(tx1, bytes.NewBuffer([]byte(aTxtFile.Contents)))
+	err = store.Store.TransactionDAL.BackupFile(tx1, bytes.NewReader([]byte(aTxtFile.Contents)))
 	require.Nil(t, err)
 
 	err = store.Store.TransactionDAL.Commit(tx1)
@@ -136,7 +136,7 @@ func Test_GetRevisions(t *testing.T) {
 		intelligentstore.NewRelativePath(bTxtFile.Name),
 		time.Unix(0, 0),
 		FileMode600,
-		bytes.NewBuffer([]byte(bTxtFile.Contents)))
+		bytes.NewReader([]byte(bTxtFile.Contents)))
 	require.Nil(t, err)
 
 	fileInfos := []*intelligentstore.FileInfo{
@@ -154,7 +154,7 @@ func Test_GetRevisions(t *testing.T) {
 	_, err = tx2.ProcessUploadHashesAndGetRequiredHashes(relativePathsWithHashes2)
 	require.Nil(t, err)
 
-	err = store.Store.TransactionDAL.BackupFile(tx2, bytes.NewBuffer([]byte(bTxtFile.Contents)))
+	err = store.Store.TransactionDAL.BackupFile(tx2, bytes.NewReader([]byte(bTxtFile.Contents)))
 	require.Nil(t, err)
 
 	err = store.Store.TransactionDAL.Commit(tx2)

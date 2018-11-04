@@ -72,7 +72,7 @@ func (m *MockStore) CreateRevision(t *testing.T, bucket *intelligentstore.Bucket
 	require.Nil(t, err)
 
 	for _, hash := range hashes {
-		backupFileErr := m.Store.TransactionDAL.BackupFile(tx, bytes.NewBuffer(mapOfHashes[hash].Contents))
+		backupFileErr := m.Store.TransactionDAL.BackupFile(tx, bytes.NewReader(mapOfHashes[hash].Contents))
 		require.Nil(t, backupFileErr)
 	}
 

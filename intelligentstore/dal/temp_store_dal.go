@@ -1,6 +1,7 @@
 package dal
 
 import (
+	"compress/gzip"
 	"io"
 	"path/filepath"
 	"strconv"
@@ -19,6 +20,7 @@ type TempStoreDAL struct {
 	fs       gofs.Fs
 }
 
+// TODO is this used any more
 func NewTempStoreDAL(
 	storeBasePath string, fs gofs.Fs) (*TempStoreDAL, error) {
 	tempStoreDAL := &TempStoreDAL{0, filepath.Join(storeBasePath, BackupDataFolderName, "tmp"), fs}
@@ -46,10 +48,15 @@ func (dal *TempStoreDAL) CreateTempFileFromReader(reader io.Reader) (*TempFile, 
 	}
 	defer file.Close()
 
-	_, err = io.Copy(file, reader)
+	writer := gzip.NewWriter(file)
+	defer writer.Close()
+
+	_, err = io.Copy(writer, reader)
 	if err != nil {
 		return nil, err
 	}
+
+	writer.Flush()
 
 	return &TempFile{filePath}, nil
 }

@@ -22,40 +22,20 @@ import (
 	kingpin "gopkg.in/alecthomas/kingpin.v2"
 )
 
-func recordMemStats(filePath string) (io.Closer, error) {
-
-	w, err := os.Create(filePath)
-	if err != nil {
-		return nil, err
-	}
-	_, err = w.Write([]byte("Time|Heap Alloc|Cumulative Total Alloc|Sys\n"))
-	if err != nil {
-		return nil, err
-	}
-
-	go func() {
-		for {
-			func() {
-				time.Sleep(time.Second)
-				now := time.Now()
-
-				var memStats runtime.MemStats
-				runtime.ReadMemStats(&memStats)
-				line := fmt.Sprintf("%s|%d|%d|%d", now.Format("15:04:05"), memStats.Alloc, memStats.TotalAlloc, memStats.Sys)
-				_, err := w.Write([]byte(line + "\n"))
-				if err != nil {
-					log.Printf("couldn't write to mem stats file. Error: %q\n", err)
-					return
-				}
-			}()
-		}
-	}()
-
-	return w, nil
-}
-
 //go:generate swagger generate spec
 func main() {
+	setupInitCommand()
+	setupInitBucketCommand()
+	setupStartWebappCommand()
+	setupExportCommand()
+	setupListBucketRevisionsCommand()
+	setupListBucketsCommand()
+	setupBackupIntoCommand()
+
+	kingpin.Parse()
+}
+
+func setupInitCommand() {
 	initCommand := kingpin.Command("init", "create a new store")
 	initStoreLocation := initCommand.Arg("store location", "location of the store").Default(".").String()
 	initCommand.Action(func(ctx *kingpin.ParseContext) error {
@@ -67,7 +47,9 @@ func main() {
 		fmt.Printf("Created a new store at '%s'\n", store.StoreBasePath)
 		return nil
 	})
+}
 
+func setupInitBucketCommand() {
 	initBucketCommand := kingpin.Command("create-bucket", "create a new bucket")
 	initBucketStoreLocation := initBucketCommand.Arg("store location", "location of the store").Required().String()
 	initBucketBucketName := initBucketCommand.Arg("bucket name", "name of the bucket").Required().String()
@@ -88,7 +70,9 @@ func main() {
 		log.Printf("created bucket '%s'\n", *initBucketBucketName)
 		return nil
 	})
+}
 
+func setupBackupIntoCommand() {
 	backupIntoCommand := kingpin.Command("backup-to", "backup a new version of the folder into the store")
 	backupStoreLocation := backupIntoCommand.Arg("store location", "location of the store").Required().String()
 	backupBucketName := backupIntoCommand.Arg("bucket name", "name of the bucket to back up into").Required().String()
@@ -120,7 +104,7 @@ func main() {
 
 			defer memFile.Close()
 		} else {
-			log.Printf("not recording profile (flag was %v)\n", profileFilePath)
+			log.Println("not recording profile")
 		}
 
 		var uploaderClient uploaders.Uploader
@@ -136,7 +120,9 @@ func main() {
 
 		return uploaderClient.UploadToStore()
 	})
+}
 
+func setupListBucketsCommand() {
 	listBucketsCommand := kingpin.Command("list-buckets", "produce a listing of all the buckets and the last backup time")
 	listBucketsStoreLocation := listBucketsCommand.Arg("store location", "location of the store").Default(".").String()
 	listBucketsCommand.Action(func(ctx *kingpin.ParseContext) error {
@@ -171,7 +157,9 @@ func main() {
 
 		return nil
 	})
+}
 
+func setupListBucketRevisionsCommand() {
 	listBucketRevisionsCommand := kingpin.Command("list-revisions", "produce a listing of all the revisions in a bucket")
 	listBucketRevisionsStoreLocation := listBucketRevisionsCommand.Arg("store location", "location of the store").Required().String()
 	listBucketRevisionsBucketName := listBucketRevisionsCommand.Arg("bucket name", "name of the bucket to back up into").Required().String()
@@ -200,7 +188,9 @@ func main() {
 		return nil
 
 	})
+}
 
+func setupExportCommand() {
 	exportCommand := kingpin.Command("export", "export files from the store to the local file system")
 	exportCommandStoreLocation := exportCommand.Arg("store location", "location of the store").Required().String()
 	exportCommandBucketName := exportCommand.Arg("bucket name", "name of the bucket to export from").Required().String()
@@ -235,9 +225,10 @@ func main() {
 		}
 
 		return nil
-
 	})
+}
 
+func setupStartWebappCommand() {
 	startWebappCommand := kingpin.Command("start-webapp", "start a webapplication")
 	startWebappStoreLocation := startWebappCommand.Arg("store location", "location of the store").Default(".").String()
 	startWebappAddr := startWebappCommand.Flag("address", "custom address to expose the webapp to. Example: ':8081': expose to everyone on port 8081").Default("localhost:8080").String()
@@ -266,11 +257,51 @@ func main() {
 		return nil
 	})
 
-	runMigrationsCommand := kingpin.Command("run-migrations", "run schema-altering migrations")
+	runMigrationsCommand := kingpin.Command("run-migration", "run one-off migrations")
 	runMigrationsStoreLocation := runMigrationsCommand.Arg("store location", "location of the store").Default(".").String()
+	runMigrationsMigrationName := runMigrationsCommand.Arg("migration name", "name of the migtation you want to run").String()
 	runMigrationsCommand.Action(func(ctx *kingpin.ParseContext) error {
-		return migrations.Run1(*runMigrationsStoreLocation)
-	})
+		migrationMap := map[string]migrations.Migration{
+			"1-gob-to-json-records": migrations.Run1,
+			"2-gzip-files":          migrations.Run2,
+		}
 
-	kingpin.Parse()
+		migration := migrationMap[*runMigrationsMigrationName]
+		if migration == nil {
+			return fmt.Errorf("migration %q not found", *runMigrationsMigrationName)
+		}
+
+		return migration(*runMigrationsStoreLocation)
+	})
+}
+
+func recordMemStats(filePath string) (io.Closer, error) {
+	w, err := os.Create(filePath)
+	if err != nil {
+		return nil, err
+	}
+	_, err = w.Write([]byte("Time|Heap Alloc|Cumulative Total Alloc|Sys\n"))
+	if err != nil {
+		return nil, err
+	}
+
+	go func() {
+		for {
+			func() {
+				time.Sleep(time.Second)
+				now := time.Now()
+
+				var memStats runtime.MemStats
+				runtime.ReadMemStats(&memStats)
+				line := fmt.Sprintf("%s|%d|%d|%d", now.Format("15:04:05"), memStats.Alloc, memStats.TotalAlloc, memStats.Sys)
+				_, err := w.Write([]byte(line + "\n"))
+				if err != nil {
+					log.Printf("couldn't write to mem stats file. Error: %q\n", err)
+					return
+				}
+			}()
+		}
+	}()
+
+	return w, nil
 }

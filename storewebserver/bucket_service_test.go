@@ -455,18 +455,18 @@ func Test_handleGetFileContents(t *testing.T) {
 	_, err = tx.ProcessUploadHashesAndGetRequiredHashes(relativePathsWithHashes)
 	require.Nil(t, err)
 
-	err = mockStore.Store.TransactionDAL.BackupFile(tx, bytes.NewBuffer([]byte(fileContents)))
+	err = mockStore.Store.TransactionDAL.BackupFile(tx, bytes.NewReader([]byte(fileContents)))
 	require.Nil(t, err)
 
 	err = mockStore.Store.TransactionDAL.Commit(tx)
 	require.Nil(t, err)
 
-	file, err := mockStore.Store.GetObjectByHash(descriptor.Hash)
+	file, err := mockStore.Store.GetGzippedObjectByHash(descriptor.Hash)
 	require.Nil(t, err)
 	defer file.Close()
 
 	rRevisionExistsButFileDoesNotExist := &http.Request{
-		Method: "GET",
+		Method: http.MethodGet,
 		URL: &url.URL{
 			Path:     fmt.Sprintf("/docs/%d/file", tx.Revision.VersionTimestamp),
 			RawQuery: fmt.Sprintf("relativePath=notexist_%s", fileName),
@@ -478,7 +478,7 @@ func Test_handleGetFileContents(t *testing.T) {
 	assert.Equal(t, 404, wRevisionExistsButFileDoesNotExist.Code)
 
 	rExists := &http.Request{
-		Method: "GET",
+		Method: http.MethodGet,
 		URL: &url.URL{
 			Path:     fmt.Sprintf("/docs/%d/file", tx.Revision.VersionTimestamp),
 			RawQuery: fmt.Sprintf("relativePath=%s", url.QueryEscape(fileName)),
@@ -488,5 +488,6 @@ func Test_handleGetFileContents(t *testing.T) {
 
 	bucketService.ServeHTTP(wExists, rExists)
 	require.Equal(t, 200, wExists.Code)
-	require.Equal(t, fileContents, string(wExists.Body.Bytes()))
+
+	require.Equal(t, fileContents, wExists.Body.String())
 }

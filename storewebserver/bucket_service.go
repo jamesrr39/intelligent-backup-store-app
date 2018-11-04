@@ -394,7 +394,7 @@ func (s *BucketService) handleUploadFile(w http.ResponseWriter, r *http.Request)
 	}
 
 	err = s.store.TransactionDAL.BackupFile(transaction,
-		bytes.NewBuffer(uploadedFile.Contents))
+		bytes.NewReader(uploadedFile.Contents))
 	if nil != err {
 		errCode := 500
 		if dal.ErrFileNotRequiredForTransaction == err {

@@ -174,18 +174,5 @@ func (transaction *Transaction) addDescriptorToTransaction(fileDescriptor *Regul
 		transaction.IsFileScheduledForUploadAlready[fileDescriptor.Hash] = true
 	}
 
-	// bucketsDirPath := filepath.Join(dal.StoreBasePath, ".backup_data", "objects")
-	//
-	// filePath := filepath.Join(bucketsDirPath, fileDescriptor.Hash.FirstChunk(), fileDescriptor.Hash.Remainder())
-	// _, err := transaction.Revision.bucket.store.fs.Stat(filePath)
-	// if nil != err {
-	// 	if os.IsNotExist(err) {
-	// 		transaction.isFileScheduledForUploadAlready[fileDescriptor.Hash] = true
-	// 		return nil
-	// 	}
-	// 	return fmt.Errorf("couldn't detect if %s is already in the index. Error: %s", fileDescriptor.Hash, err)
-	// }
-
-	// file on disk was successfully stat'ed (and exists)
 	return nil
 }

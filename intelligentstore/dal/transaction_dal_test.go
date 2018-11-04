@@ -34,14 +34,14 @@ func Test_BackupFile(t *testing.T) {
 		"a.txt",
 		time.Unix(0, 0),
 		FileMode600,
-		bytes.NewBuffer([]byte(aFileContents)),
+		bytes.NewReader([]byte(aFileContents)),
 	)
 	require.Nil(t, err)
 
 	tx, err := mockStore.Store.TransactionDAL.CreateTransaction(bucket, []*intelligentstore.FileInfo{goodADescriptor.FileInfo})
 	require.Nil(t, err)
 
-	err = mockStore.Store.TransactionDAL.BackupFile(tx, bytes.NewBuffer([]byte(aFileContents)))
+	err = mockStore.Store.TransactionDAL.BackupFile(tx, bytes.NewReader([]byte(aFileContents)))
 	require.NotNil(t, err)
 	assert.Equal(t, "expected transaction to be in stage 'Ready To Upload Files' but it was in stage 'Awaiting File Hashes'", err.Error())
 
@@ -52,11 +52,11 @@ func Test_BackupFile(t *testing.T) {
 	_, err = tx.ProcessUploadHashesAndGetRequiredHashes(relativePathsWithHashes)
 	require.Nil(t, err)
 
-	err = mockStore.Store.TransactionDAL.BackupFile(tx, bytes.NewBuffer([]byte("bad contents - not in Begin() manifest")))
+	err = mockStore.Store.TransactionDAL.BackupFile(tx, bytes.NewReader([]byte("bad contents - not in Begin() manifest")))
 	require.NotNil(t, err)
 
 	// upload the same file contents at 2 different locations
-	err = mockStore.Store.TransactionDAL.BackupFile(tx, bytes.NewBuffer([]byte(aFileContents)))
+	err = mockStore.Store.TransactionDAL.BackupFile(tx, bytes.NewReader([]byte(aFileContents)))
 	require.Nil(t, err)
 
 	assert.Len(t, tx.FilesInVersion, 1)
@@ -102,7 +102,7 @@ func Test_ProcessUploadHashesAndGetRequiredHashes(t *testing.T) {
 	require.Nil(t, err)
 	require.Len(t, hashes, 2)
 
-	err = mockStore.Store.TransactionDAL.BackupFile(tx, bytes.NewBuffer([]byte(aFileContents)))
+	err = mockStore.Store.TransactionDAL.BackupFile(tx, bytes.NewReader([]byte(aFileContents)))
 	require.Nil(t, err)
 
 	_, err = tx.ProcessUploadHashesAndGetRequiredHashes(relativePathsWithHashes)
@@ -123,7 +123,7 @@ func Test_Commit(t *testing.T) {
 		"a.txt",
 		time.Unix(0, 0),
 		FileMode600, // FIXME should have the symlink bit set
-		bytes.NewBuffer([]byte(aFileContents)),
+		bytes.NewReader([]byte(aFileContents)),
 	)
 	require.Nil(t, err)
 
@@ -132,7 +132,7 @@ func Test_Commit(t *testing.T) {
 		"b.txt",
 		time.Unix(0, 0),
 		FileMode600, // FIXME should have the symlink bit set
-		bytes.NewBuffer([]byte(bFileContents)),
+		bytes.NewReader([]byte(bFileContents)),
 	)
 	require.Nil(t, err)
 
@@ -155,13 +155,13 @@ func Test_Commit(t *testing.T) {
 	_, err = tx.ProcessUploadHashesAndGetRequiredHashes(relativePathsWithHashes)
 	require.Nil(t, err)
 
-	err = mockStore.Store.TransactionDAL.BackupFile(tx, bytes.NewBuffer([]byte(aFileContents)))
+	err = mockStore.Store.TransactionDAL.BackupFile(tx, bytes.NewReader([]byte(aFileContents)))
 	require.Nil(t, err)
 
 	err = mockStore.Store.TransactionDAL.Commit(tx)
 	require.NotNil(t, err) // should error because not all files have been uploaded
 
-	err = mockStore.Store.TransactionDAL.BackupFile(tx, bytes.NewBuffer([]byte(bFileContents)))
+	err = mockStore.Store.TransactionDAL.BackupFile(tx, bytes.NewReader([]byte(bFileContents)))
 	require.Nil(t, err)
 
 	err = mockStore.Store.TransactionDAL.Commit(tx)
@@ -174,7 +174,7 @@ func Test_ProcessSymlinks(t *testing.T) {
 		"a.txt",
 		time.Unix(0, 0),
 		FileMode600,
-		bytes.NewBuffer([]byte(aFileContents)),
+		bytes.NewReader([]byte(aFileContents)),
 	)
 	require.Nil(t, err)
 
@@ -206,7 +206,7 @@ func Test_ProcessSymlinks(t *testing.T) {
 	_, err = tx.ProcessUploadHashesAndGetRequiredHashes(relativePathsWithHashes)
 	require.Nil(t, err)
 
-	err = mockStore.Store.TransactionDAL.BackupFile(tx, bytes.NewBuffer([]byte(aFileContents)))
+	err = mockStore.Store.TransactionDAL.BackupFile(tx, bytes.NewReader([]byte(aFileContents)))
 	require.Nil(t, err)
 
 	err = mockStore.Store.TransactionDAL.Commit(tx)

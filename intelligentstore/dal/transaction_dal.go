@@ -1,6 +1,7 @@
 package dal
 
 import (
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -82,24 +83,19 @@ func (dal *TransactionDAL) CreateTransaction(bucket *intelligentstore.Bucket, fi
 }
 
 // TODO: test for >4GB file
-func (dal *TransactionDAL) BackupFile(transaction *intelligentstore.Transaction, sourceFile io.Reader) error {
+func (dal *TransactionDAL) BackupFile(transaction *intelligentstore.Transaction, sourceFile io.ReadSeeker) error {
 
-	if err := transaction.CheckStage(intelligentstore.TransactionStageReadyToUploadFiles); nil != err {
-		return err
-	}
-
-	tempFile, err := dal.IntelligentStoreDAL.TempStoreDAL.CreateTempFileFromReader(sourceFile)
+	err := transaction.CheckStage(intelligentstore.TransactionStageReadyToUploadFiles)
 	if nil != err {
 		return err
 	}
 
-	hashTempFileReader, err := dal.IntelligentStoreDAL.TempStoreDAL.OpenTempFile(tempFile)
+	hash, err := intelligentstore.NewHash(sourceFile)
 	if nil != err {
 		return err
 	}
-	defer hashTempFileReader.Close()
 
-	hash, err := intelligentstore.NewHash(hashTempFileReader)
+	_, err = sourceFile.Seek(io.SeekStart, 0)
 	if nil != err {
 		return err
 	}
@@ -113,7 +109,7 @@ func (dal *TransactionDAL) BackupFile(transaction *intelligentstore.Transaction,
 		".backup_data",
 		"objects",
 		hash.FirstChunk(),
-		hash.Remainder())
+		hash.Remainder()+".gz")
 
 	fs := dal.IntelligentStoreDAL.fs
 
@@ -125,13 +121,26 @@ func (dal *TransactionDAL) BackupFile(transaction *intelligentstore.Transaction,
 			return err
 		}
 		// file doesn't exist in store already. Write it to store.
-
 		err := fs.MkdirAll(filepath.Dir(filePath), 0700)
 		if nil != err {
 			return err
 		}
 
-		err = fs.Rename(tempFile.FilePath, filePath)
+		newFile, err := fs.Create(filePath)
+		if err != nil {
+			return err
+		}
+		defer newFile.Close()
+
+		gzipWriter := gzip.NewWriter(newFile)
+		defer gzipWriter.Close()
+
+		err = gzipWriter.Flush()
+		if nil != err {
+			return err
+		}
+
+		_, err = io.Copy(gzipWriter, sourceFile)
 		if nil != err {
 			return err
 		}
@@ -144,41 +153,6 @@ func (dal *TransactionDAL) BackupFile(transaction *intelligentstore.Transaction,
 	return nil
 
 }
-
-//
-// // addDescriptorToTransaction adds a descriptor to the transaction
-// func (transaction *TransactionDAL) addDescriptorToTransaction(fileDescriptor *domain.RegularFileDescriptor) error {
-// 	isTryingToTraverse := dirtraversal.IsTryingToTraverseUp(string(fileDescriptor.Hash))
-// 	if isTryingToTraverse {
-// 		return fmt.Errorf("%s is attempting to traverse up the filesystem tree, which is not allowed (and this is not a hash)", fileDescriptor.Hash)
-// 	}
-//
-// 	transaction.FilesInVersion = append(transaction.FilesInVersion, fileDescriptor)
-//
-// 	// check if it's scheduled for upload already
-// 	transaction.mu.Lock()
-// 	defer transaction.mu.Unlock()
-//
-// 	isFileScheduledForUploadAlready := transaction.isFileScheduledForUploadAlready[fileDescriptor.Hash]
-// 	if isFileScheduledForUploadAlready {
-// 		return nil
-// 	}
-//
-// 	bucketsDirPath := filepath.Join(dal.StoreBasePath, ".backup_data", "objects")
-//
-// 	filePath := filepath.Join(bucketsDirPath, fileDescriptor.Hash.FirstChunk(), fileDescriptor.Hash.Remainder())
-// 	_, err := transaction.Revision.bucket.store.fs.Stat(filePath)
-// 	if nil != err {
-// 		if os.IsNotExist(err) {
-// 			transaction.isFileScheduledForUploadAlready[fileDescriptor.Hash] = true
-// 			return nil
-// 		}
-// 		return fmt.Errorf("couldn't detect if %s is already in the index. Error: %s", fileDescriptor.Hash, err)
-// 	}
-//
-// 	// file on disk was successfully stat'ed (and exists)
-// 	return nil
-// }
 
 // Commit closes the transaction and writes the revision data to disk
 func (dal *TransactionDAL) Commit(transaction *intelligentstore.Transaction) error {

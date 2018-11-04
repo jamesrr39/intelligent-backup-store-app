@@ -2,6 +2,8 @@ package dal
 
 import (
 	"bytes"
+	"compress/gzip"
+	"io"
 	"io/ioutil"
 	"testing"
 	"time"
@@ -89,7 +91,7 @@ func Test_CreateBucket(t *testing.T) {
 	assert.Equal(t, ErrBucketNameAlreadyTaken, err)
 }
 
-func Test_GetObjectByHash(t *testing.T) {
+func Test_GetGzippedObjectByHash(t *testing.T) {
 	fs := mockfs.NewMockFs()
 	mockStore := NewMockStore(t, MockNowProvider, fs)
 	bucket, err := mockStore.Store.BucketDAL.CreateBucket("docs")
@@ -100,11 +102,11 @@ func Test_GetObjectByHash(t *testing.T) {
 		"a.txt",
 		time.Unix(0, 0),
 		FileMode600,
-		bytes.NewBuffer([]byte(fileContents)),
+		bytes.NewReader([]byte(fileContents)),
 	)
 	require.Nil(t, err)
 
-	_, err = mockStore.Store.GetObjectByHash(descriptor.Hash)
+	_, err = mockStore.Store.GetGzippedObjectByHash(descriptor.Hash)
 	require.NotNil(t, err)
 
 	fileInfos := []*intelligentstore.FileInfo{descriptor.FileInfo}
@@ -119,19 +121,102 @@ func Test_GetObjectByHash(t *testing.T) {
 	_, err = tx.ProcessUploadHashesAndGetRequiredHashes(relativePathsWithHashes)
 	require.Nil(t, err)
 
-	err = mockStore.Store.TransactionDAL.BackupFile(tx, bytes.NewBuffer([]byte(fileContents)))
+	err = mockStore.Store.TransactionDAL.BackupFile(tx, bytes.NewReader([]byte(fileContents)))
 	require.Nil(t, err)
 
 	err = mockStore.Store.TransactionDAL.Commit(tx)
 	require.Nil(t, err)
 
-	file, err := mockStore.Store.GetObjectByHash(descriptor.Hash)
+	file, err := mockStore.Store.GetGzippedObjectByHash(descriptor.Hash)
 	require.Nil(t, err)
 	defer file.Close()
 
-	b, err := ioutil.ReadAll(file)
+	reader, err := gzip.NewReader(file)
 	require.Nil(t, err)
+
+	b, err := ioutil.ReadAll(reader)
+	require.Nil(t, err)
+
 	require.Equal(t, fileContents, string(b))
+}
+
+func Test_IsObjectPresent(t *testing.T) {
+	fs := mockfs.NewMockFs()
+
+	store, err := createStoreAndNewConn("/", MockNowProvider, fs)
+	require.Nil(t, err)
+
+	bucket, err := store.BucketDAL.CreateBucket("test-bucket")
+	require.Nil(t, err)
+
+	fileContents := []byte("my file contents")
+	descriptor, err := intelligentstore.NewRegularFileDescriptorFromReader("", time.Now(), 0600, bytes.NewReader(fileContents))
+	require.Nil(t, err)
+
+	createRevision(t, store, bucket, []*intelligentstore.RegularFileDescriptor{descriptor}, []io.ReadSeeker{bytes.NewReader(fileContents)})
+
+	isPresent, err := store.IsObjectPresent("abcdefghijkl")
+	require.Nil(t, err)
+	assert.False(t, isPresent)
+
+	isPresent, err = store.IsObjectPresent(descriptor.Hash)
+	require.Nil(t, err)
+	assert.True(t, isPresent)
+}
+
+func createRevision(t *testing.T, store *IntelligentStoreDAL, bucket *intelligentstore.Bucket, descriptors []*intelligentstore.RegularFileDescriptor, fileReadSeekers []io.ReadSeeker) {
+	var fileInfos []*intelligentstore.FileInfo
+	var relativePathsWithHashes []*intelligentstore.RelativePathWithHash
+	for _, descriptor := range descriptors {
+		fileInfos = append(fileInfos, descriptor.GetFileInfo())
+		relativePathsWithHashes = append(relativePathsWithHashes, intelligentstore.NewRelativePathWithHash(descriptor.RelativePath, descriptor.Hash))
+	}
+
+	tx, err := store.TransactionDAL.CreateTransaction(bucket, fileInfos)
+	require.Nil(t, err)
+
+	tx.ProcessUploadHashesAndGetRequiredHashes(relativePathsWithHashes)
+
+	for _, fileReadSeeker := range fileReadSeekers {
+		err = store.TransactionDAL.BackupFile(tx, fileReadSeeker)
+		require.Nil(t, err)
+	}
+
+	err = store.TransactionDAL.Commit(tx)
+	require.Nil(t, err)
+}
+
+func Test_GetObjectByHash(t *testing.T) {
+	bb := bytes.NewBuffer(nil)
+	fileContents := []byte("my file contents")
+	gzipWriter := gzip.NewWriter(bb)
+	defer gzipWriter.Close()
+
+	_, err := gzipWriter.Write(fileContents)
+	require.Nil(t, err)
+	err = gzipWriter.Flush()
+	require.Nil(t, err)
+
+	descriptor, err := intelligentstore.NewRegularFileDescriptorFromReader("", time.Now(), 0600, bytes.NewReader(fileContents))
+	require.Nil(t, err)
+
+	fs := mockfs.NewMockFs()
+
+	store, err := createStoreAndNewConn("/", MockNowProvider, fs)
+	require.Nil(t, err)
+
+	bucket, err := store.BucketDAL.CreateBucket("test-bucket")
+	require.Nil(t, err)
+
+	createRevision(t, store, bucket, []*intelligentstore.RegularFileDescriptor{descriptor}, []io.ReadSeeker{bytes.NewReader(fileContents)})
+
+	object, err := store.GetObjectByHash(descriptor.Hash)
+	require.Nil(t, err)
+
+	rawBytesOut, err := ioutil.ReadAll(object)
+	require.Nil(t, err)
+
+	assert.Equal(t, fileContents, rawBytesOut)
 }
 
 func Test_GetLockInformation(t *testing.T) {

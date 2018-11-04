@@ -23,7 +23,6 @@ func CreateRevision(
 	store *dal.IntelligentStoreDAL,
 	bucket *intelligentstore.Bucket,
 	regularFiles []*intelligentstore.RegularFileDescriptorWithContents,
-	// symlinks []*domain.SymlinkFileDescriptor,
 ) *intelligentstore.Revision {
 
 	var fileInfos []*intelligentstore.FileInfo
@@ -61,7 +60,7 @@ func CreateRevision(
 	require.Nil(t, err)
 
 	for _, hash := range hashes {
-		backupErr := store.TransactionDAL.BackupFile(tx, bytes.NewBuffer(mapOfHashes[hash].Contents))
+		backupErr := store.TransactionDAL.BackupFile(tx, bytes.NewReader(mapOfHashes[hash].Contents))
 		require.Nil(t, backupErr)
 	}
 
