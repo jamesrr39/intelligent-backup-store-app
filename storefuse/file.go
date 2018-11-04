@@ -43,12 +43,17 @@ func (f *File) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.ReadR
 	if nil != err {
 		return err
 	}
+	defer object.Close()
 
-	b, err := ioutil.ReadAll(object)
+	fileBytes, err := ioutil.ReadAll(object) // TODO: better
 	if nil != err {
 		return err
 	}
 
-	resp.Data = b[req.Offset:]
+	amountOfBytesToRead := req.Size
+	if len(fileBytes) < int(req.Offset)+amountOfBytesToRead {
+		amountOfBytesToRead = len(fileBytes) - int(req.Offset)
+	}
+	resp.Data = fileBytes[req.Offset:(req.Offset + int64(amountOfBytesToRead))]
 	return nil
 }
