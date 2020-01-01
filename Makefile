@@ -19,4 +19,6 @@ generate_protobufs:
 all_tests: test
 	go test ./... -run Integration -tags=integration
 
-SUBFOLDER_NAME = /tmp/store-export/$(shell date +%s)
+.PHONY: update_snapshots
+update_snapshots:
+	UPDATE_SNAPSHOTS=1 go test ./...

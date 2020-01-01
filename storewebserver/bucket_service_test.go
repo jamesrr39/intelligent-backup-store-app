@@ -14,6 +14,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/jamesrr39/goutil/gofs/mockfs"
+	"github.com/jamesrr39/goutil/snapshot"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	protofiles "github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/protobufs/proto_files"
@@ -267,11 +268,7 @@ func Test_handleUploadFile(t *testing.T) {
 
 		bucketService.ServeHTTP(wUnwanted, rUnwanted)
 		assert.Equal(t, 400, wUnwanted.Code)
-		assert.Equal(
-			t,
-			dal.ErrFileNotRequiredForTransaction.Error(),
-			strings.TrimSuffix(string(wUnwanted.Body.Bytes()), "\n"),
-		)
+		snapshot.AssertMatchesSnapshot(t, t.Name(), wUnwanted.Body.String())
 	})
 
 	t.Run("already uploaded file", func(t *testing.T) {
@@ -284,11 +281,7 @@ func Test_handleUploadFile(t *testing.T) {
 
 		bucketService.ServeHTTP(wAlreadyUploaded, rAlreadyUploaded)
 		assert.Equal(t, 400, wAlreadyUploaded.Code)
-		assert.Equal(
-			t,
-			dal.ErrFileNotRequiredForTransaction.Error(),
-			strings.TrimSuffix(string(wAlreadyUploaded.Body.Bytes()), "\n"),
-		)
+		snapshot.AssertMatchesSnapshot(t, t.Name(), wAlreadyUploaded.Body.String())
 	})
 }
 
