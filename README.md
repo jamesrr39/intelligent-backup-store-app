@@ -22,3 +22,4 @@ This is the structure of the upload process. The proper nouns are protobuf messa
 ## Design Philosophy
 
 1. Disk space is cheap nowadays, but not unlimited. Some people are using pay-per-GB space. It should be possible to delete old backups, without the overhead of storing the same file twice.
+2. Data should remain recoverable after this program has gone. Therefore information should be stored in text formats, and any additional programs for recovery should be common and easy to find.

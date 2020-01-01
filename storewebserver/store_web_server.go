@@ -1,12 +1,13 @@
 package storewebserver
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 
+	"github.com/go-chi/render"
 	"github.com/gorilla/mux"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 )
 
 // StoreWebServer represents a handler handling requests for a store.
@@ -24,7 +25,7 @@ func NewStoreWebServer(store *dal.IntelligentStoreDAL) *StoreWebServer {
 
 	bucketsHandler := NewBucketService(store)
 	router.PathPrefix("/api/buckets/").Handler(http.StripPrefix("/api/buckets", bucketsHandler))
-	router.PathPrefix("/").Handler(http.StripPrefix("/", http.FileServer(http.Dir("storewebserver/static")))) // TODO dev mode & production packaging
+	router.PathPrefix("/").Handler(http.StripPrefix("/", NewClientHandler()))
 
 	return storeHandler
 }
@@ -32,28 +33,28 @@ func NewStoreWebServer(store *dal.IntelligentStoreDAL) *StoreWebServer {
 func (s *StoreWebServer) handleSearch(w http.ResponseWriter, r *http.Request) {
 	searchTerm := r.URL.Query().Get("searchTerm")
 	if "" == searchTerm {
-		w.WriteHeader(400)
-		w.Write([]byte("no search term specified (use URL query parameter `searchTerm`)"))
+		http.Error(
+			w,
+			"no search term specified (use URL query parameter `searchTerm`)",
+			400,
+		)
 		return
 	}
 
 	// go through all the buckets and all revisions
 	searchResults, err := s.store.Search(searchTerm)
 	if nil != err {
-		w.WriteHeader(500)
-		w.Write([]byte(fmt.Sprintf("couldn't search store. Error: %s", err)))
+		http.Error(
+			w,
+			fmt.Sprintf("couldn't search store. Error: %s", err),
+			500,
+		)
 		return
 	}
 
-	w.Header().Set("content-type", "application/json")
 	if 0 == len(searchResults) {
-		w.Write([]byte("[]"))
-		return
+		searchResults = []*intelligentstore.SearchResult{}
 	}
 
-	err = json.NewEncoder(w).Encode(searchResults)
-	if nil != err {
-		fmt.Fprintf(w, "couldn't serialize search results to JSON. Error: %s", err)
-		return
-	}
+	render.JSON(w, r, searchResults)
 }

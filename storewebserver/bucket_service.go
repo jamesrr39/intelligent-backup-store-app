@@ -12,13 +12,13 @@ import (
 	"os"
 	"sort"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/gorilla/mux"
+	"github.com/jamesrr39/goutil/errorsx"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	protofiles "github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/protobufs/proto_files"
 )
 
@@ -29,7 +29,7 @@ type BucketService struct {
 	openTransactionsMap
 }
 
-type openTransactionsMap map[string]*domain.Transaction
+type openTransactionsMap map[string]*intelligentstore.Transaction
 
 type subDirInfo struct {
 	Name            string `json:"name"`
@@ -63,14 +63,14 @@ func NewBucketService(store *dal.IntelligentStoreDAL) *BucketService {
 }
 
 type bucketSummary struct {
-	Name           string                  `json:"name"`
-	LastRevisionTs *domain.RevisionVersion `json:"lastRevisionTs"`
+	Name           string                            `json:"name"`
+	LastRevisionTs *intelligentstore.RevisionVersion `json:"lastRevisionTs"`
 }
 
 type revisionInfoWithFiles struct {
-	LastRevisionTs domain.RevisionVersion  `json:"revisionTs"`
-	Files          []domain.FileDescriptor `json:"files"`
-	Dirs           []*subDirInfo           `json:"dirs"`
+	LastRevisionTs intelligentstore.RevisionVersion  `json:"revisionTs"`
+	Files          []intelligentstore.FileDescriptor `json:"files"`
+	Dirs           []*subDirInfo                     `json:"dirs"`
 }
 
 // @Title Get Latest Buckets Information
@@ -91,8 +91,8 @@ func (s *BucketService) handleGetAllBuckets(w http.ResponseWriter, r *http.Reque
 	}
 
 	var bucketsSummaries []*bucketSummary
-	var latestRevision *domain.Revision
-	var latestRevisionTs *domain.RevisionVersion
+	var latestRevision *intelligentstore.Revision
+	var latestRevisionTs *intelligentstore.RevisionVersion
 	for _, bucket := range buckets {
 		latestRevision, err = s.store.RevisionDAL.GetLatestRevision(bucket)
 		if nil != err {
@@ -115,7 +115,7 @@ func (s *BucketService) handleGetAllBuckets(w http.ResponseWriter, r *http.Reque
 }
 
 type handleGetBucketResponse struct {
-	Revisions []*domain.Revision `json:"revisions"`
+	Revisions []*intelligentstore.Revision `json:"revisions"`
 }
 
 func (s *BucketService) handleGetBucket(w http.ResponseWriter, r *http.Request) {
@@ -140,7 +140,7 @@ func (s *BucketService) handleGetBucket(w http.ResponseWriter, r *http.Request) 
 	w.Header().Set("content-type", "application/json")
 
 	if 0 == len(revisions) {
-		revisions = make([]*domain.Revision, 0)
+		revisions = make([]*intelligentstore.Revision, 0)
 	}
 
 	sort.Slice(revisions, func(i int, j int) bool {
@@ -157,7 +157,7 @@ func (s *BucketService) handleGetBucket(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
-func (s *BucketService) getRevision(bucketName, revisionTsString string) (*domain.Revision, *HTTPError) {
+func (s *BucketService) getRevision(bucketName, revisionTsString string) (*intelligentstore.Revision, *HTTPError) {
 	bucket, err := s.store.BucketDAL.GetBucketByName(bucketName)
 	if nil != err {
 		if dal.ErrBucketDoesNotExist == err {
@@ -166,7 +166,7 @@ func (s *BucketService) getRevision(bucketName, revisionTsString string) (*domai
 		return nil, NewHTTPError(err, 500)
 	}
 
-	var revision *domain.Revision
+	var revision *intelligentstore.Revision
 	if "latest" == revisionTsString {
 		revision, err = s.store.RevisionDAL.GetLatestRevision(bucket)
 		if dal.ErrNoRevisionsForBucket == err {
@@ -178,7 +178,7 @@ func (s *BucketService) getRevision(bucketName, revisionTsString string) (*domai
 		if nil != err {
 			return nil, NewHTTPError(fmt.Errorf("couldn't convert '%s' to a timestamp. Error: '%s'", revisionTsString, err), 400)
 		}
-		revision, err = s.store.RevisionDAL.GetRevision(bucket, domain.RevisionVersion(revisionTimestamp))
+		revision, err = s.store.RevisionDAL.GetRevision(bucket, intelligentstore.RevisionVersion(revisionTimestamp))
 	}
 	if nil != err {
 		if err == dal.ErrRevisionDoesNotExist {
@@ -202,42 +202,57 @@ func (s *BucketService) handleGetRevision(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	allFiles, err := s.store.RevisionDAL.GetFilesInRevision(revision.Bucket, revision)
+	// allFiles, err := s.store.RevisionDAL.GetFilesInRevision(revision.Bucket, revision)
+	// if nil != err {
+	// 	http.Error(w, err.Error(), 500)
+	// 	return
+	// }
+
+	rootDir := r.URL.Query().Get("rootDir")
+
+	files := []intelligentstore.FileDescriptor{}
+	//
+	// type subDirInfoMap map[string]int64 // map[name]nestedFileCount
+	// dirnames := subDirInfoMap{}         // dirname[nested file count]
+	// for _, file := range allFiles {
+	// 	if !strings.HasPrefix(string(file.GetFileInfo().RelativePath), rootDir) {
+	// 		// not in this root dir
+	// 		continue
+	// 	}
+	//
+	// 	relativeFilePath := intelligentstore.NewRelativePath(
+	// 		strings.TrimPrefix(
+	// 			string(file.GetFileInfo().RelativePath),
+	// 			rootDir))
+	//
+	// 	indexOfSlash := strings.Index(string(relativeFilePath), "/")
+	// 	if indexOfSlash != -1 {
+	// 		// file is inside a dir (not in the root folder)
+	// 		dirnames[string(relativeFilePath)[0:indexOfSlash]]++
+	// 	} else {
+	// 		// file is in the dir we're searching inside
+	// 		files = append(files, file)
+	// 	}
+	// }
+	descriptor, err := s.store.RevisionDAL.GetFilesInRevisionWithPrefix(revision.Bucket, revision, intelligentstore.NewRelativePath(rootDir))
 	if nil != err {
+		if os.IsNotExist(err) {
+			http.Error(w, err.Error(), 404)
+			return
+		}
 		http.Error(w, err.Error(), 500)
 		return
 	}
 
-	rootDir := r.URL.Query().Get("rootDir")
-
-	files := []domain.FileDescriptor{}
-
-	type subDirInfoMap map[string]int64 // map[name]nestedFileCount
-	dirnames := subDirInfoMap{}         // dirname[nested file count]
-	for _, file := range allFiles {
-		if !strings.HasPrefix(string(file.GetFileInfo().RelativePath), rootDir) {
-			// not in this root dir
-			continue
-		}
-
-		relativeFilePath := domain.NewRelativePath(
-			strings.TrimPrefix(
-				string(file.GetFileInfo().RelativePath),
-				rootDir))
-
-		indexOfSlash := strings.Index(string(relativeFilePath), "/")
-		if indexOfSlash != -1 {
-			// file is inside a dir (not in the root folder)
-			dirnames[string(relativeFilePath)[0:indexOfSlash]]++
-		} else {
-			// file is in the dir we're searching inside
-			files = append(files, file)
-		}
+	if descriptor.GetFileInfo().Type == intelligentstore.FileTypeDir {
+		http.Error(w, fmt.Sprintf("this endpoint serves directory listings, but you came to a different file type (%q)", descriptor.GetFileInfo().Type), 400)
+		return
 	}
 
+	dirDescriptor := descriptor.(*intelligentstore.DirectoryFileDescriptor)
 	dirs := []*subDirInfo{}
-	for dirname, nestedFileCount := range dirnames {
-		dirs = append(dirs, &subDirInfo{dirname, nestedFileCount})
+	for dirname, info := range dirDescriptor.ChildFilesMap {
+		dirs = append(dirs, &subDirInfo{dirname, info.SubChildrenCount})
 	}
 
 	data := &revisionInfoWithFiles{revision.VersionTimestamp, files, dirs}
@@ -283,7 +298,7 @@ func (s *BucketService) handleCreateRevision(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	var fileInfos []*domain.FileInfo
+	var fileInfos []*intelligentstore.FileInfo
 
 	for _, fileInfoProto := range openTxRequest.GetFileInfos() {
 
@@ -301,9 +316,9 @@ func (s *BucketService) handleCreateRevision(w http.ResponseWriter, r *http.Requ
 
 		fileInfos = append(
 			fileInfos,
-			domain.NewFileInfo(
+			intelligentstore.NewFileInfo(
 				fileType,
-				domain.NewRelativePath(fileInfoProto.GetRelativePath()),
+				intelligentstore.NewRelativePath(fileInfoProto.GetRelativePath()),
 				time.Unix(fileInfoProto.GetModTime(), 0), // FIXME is this right?
 				fileInfoProto.GetSize(),
 				os.FileMode(fileInfoProto.GetMode()),
@@ -346,14 +361,14 @@ func (s *BucketService) handleCreateRevision(w http.ResponseWriter, r *http.Requ
 	}
 }
 
-func fileTypeProtoToFileType(protoFileType protofiles.FileType) (domain.FileType, error) {
+func fileTypeProtoToFileType(protoFileType protofiles.FileType) (intelligentstore.FileType, error) {
 	switch protoFileType {
 	case protofiles.FileType_REGULAR:
-		return domain.FileTypeRegular, nil
+		return intelligentstore.FileTypeRegular, nil
 	case protofiles.FileType_SYMLINK:
-		return domain.FileTypeSymlink, nil
+		return intelligentstore.FileTypeSymlink, nil
 	default:
-		return domain.FileTypeUnknown, errors.New("didn't recognise proto file type: " + protoFileType.String())
+		return intelligentstore.FileTypeUnknown, errors.New("didn't recognise proto file type: " + protoFileType.String())
 	}
 }
 
@@ -394,10 +409,10 @@ func (s *BucketService) handleUploadFile(w http.ResponseWriter, r *http.Request)
 	}
 
 	err = s.store.TransactionDAL.BackupFile(transaction,
-		bytes.NewBuffer(uploadedFile.Contents))
+		bytes.NewReader(uploadedFile.Contents))
 	if nil != err {
 		errCode := 500
-		if dal.ErrFileNotRequiredForTransaction == err {
+		if errorsx.Cause(err) == dal.ErrFileNotRequiredForTransaction {
 			errCode = 400
 		}
 		http.Error(w, err.Error(), errCode)
@@ -441,7 +456,7 @@ func (s *BucketService) handleGetFileContents(w http.ResponseWriter, r *http.Req
 	bucketName := vars["bucketName"]
 	revisionTsString := vars["revisionTs"]
 
-	relativePath := domain.NewRelativePath(r.URL.Query().Get("relativePath"))
+	relativePath := intelligentstore.NewRelativePath(r.URL.Query().Get("relativePath"))
 	revision, revErr := s.getRevision(bucketName, revisionTsString)
 	if nil != revErr {
 		http.Error(w, revErr.Error(), revErr.StatusCode)
@@ -501,11 +516,11 @@ func (s *BucketService) handleUploadHashes(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	var relativePathsWithHashes []*domain.RelativePathWithHash
+	var relativePathsWithHashes []*intelligentstore.RelativePathWithHash
 	for _, relativePathAndHashProto := range getRequiredHashesRequest.GetRelativePathsAndHashes() {
-		relativePathsWithHashes = append(relativePathsWithHashes, &domain.RelativePathWithHash{
-			RelativePath: domain.NewRelativePath(relativePathAndHashProto.GetRelativePath()),
-			Hash:         domain.Hash(relativePathAndHashProto.GetHash()),
+		relativePathsWithHashes = append(relativePathsWithHashes, &intelligentstore.RelativePathWithHash{
+			RelativePath: intelligentstore.NewRelativePath(relativePathAndHashProto.GetRelativePath()),
+			Hash:         intelligentstore.Hash(relativePathAndHashProto.GetHash()),
 		})
 	}
 
@@ -575,12 +590,12 @@ func (s *BucketService) handleUploadSymlinks(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	var symlinksWithRelativePaths []*domain.SymlinkWithRelativePath
+	var symlinksWithRelativePaths []*intelligentstore.SymlinkWithRelativePath
 	for _, symlinkWithRelativePath := range uploadSymlinksRequest.SymlinksWithRelativePaths {
 		symlinksWithRelativePaths = append(
 			symlinksWithRelativePaths,
-			&domain.SymlinkWithRelativePath{
-				RelativePath: domain.NewRelativePath(symlinkWithRelativePath.GetRelativePath()),
+			&intelligentstore.SymlinkWithRelativePath{
+				RelativePath: intelligentstore.NewRelativePath(symlinkWithRelativePath.GetRelativePath()),
 				Dest:         symlinkWithRelativePath.GetDest(),
 			},
 		)

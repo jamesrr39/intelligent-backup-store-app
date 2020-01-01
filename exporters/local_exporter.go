@@ -1,15 +1,15 @@
 package exporters
 
 import (
+	"compress/gzip"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 
+	"github.com/jamesrr39/goutil/gofs"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
-	"github.com/spf13/afero"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 )
 
 const FilesExportSubDir = "files"
@@ -17,22 +17,20 @@ const FilesExportSubDir = "files"
 type LocalExporter struct {
 	Store           *dal.IntelligentStoreDAL
 	BucketName      string
-	RevisionVersion *domain.RevisionVersion // nil = latest version
+	RevisionVersion *intelligentstore.RevisionVersion // nil = latest version
 	ExportDir       string
 	Matcher         excludesmatcher.Matcher
-	fs              afero.Fs
-	symlinker       func(oldName, newName string) error
+	fs              gofs.Fs
 }
 
-func NewLocalExporter(store *dal.IntelligentStoreDAL, bucketName string, exportDir string, revisionVersion *domain.RevisionVersion, matcher excludesmatcher.Matcher) *LocalExporter {
+func NewLocalExporter(store *dal.IntelligentStoreDAL, bucketName string, exportDir string, revisionVersion *intelligentstore.RevisionVersion, matcher excludesmatcher.Matcher) *LocalExporter {
 	return &LocalExporter{
 		Store:           store,
 		BucketName:      bucketName,
 		RevisionVersion: revisionVersion,
 		ExportDir:       exportDir,
 		Matcher:         matcher,
-		fs:              afero.NewOsFs(),
-		symlinker:       os.Symlink,
+		fs:              gofs.NewOsFs(),
 	}
 }
 
@@ -42,7 +40,7 @@ func (exporter *LocalExporter) Export() error {
 		return err
 	}
 
-	var revision *domain.Revision
+	var revision *intelligentstore.Revision
 	if nil == exporter.RevisionVersion {
 		revision, err = exporter.Store.BucketDAL.GetLatestRevision(bucket)
 	} else {
@@ -77,7 +75,7 @@ func (exporter *LocalExporter) Export() error {
 	return nil
 }
 
-func (exporter *LocalExporter) writeFileToFs(fileDescriptor domain.FileDescriptor) error {
+func (exporter *LocalExporter) writeFileToFs(fileDescriptor intelligentstore.FileDescriptor) error {
 	filePath := filepath.Join(exporter.ExportDir, FilesExportSubDir, string(fileDescriptor.GetFileInfo().RelativePath))
 	dirPath := filepath.Dir(filePath)
 	err := exporter.fs.MkdirAll(dirPath, 0700)
@@ -85,22 +83,22 @@ func (exporter *LocalExporter) writeFileToFs(fileDescriptor domain.FileDescripto
 		return fmt.Errorf("couldn't make the directory for '%s'. Error: %s", dirPath, err)
 	}
 	switch fileDescriptor.GetFileInfo().Type {
-	case domain.FileTypeRegular:
-		regularFileDescriptor := fileDescriptor.(*domain.RegularFileDescriptor)
+	case intelligentstore.FileTypeRegular:
+		regularFileDescriptor := fileDescriptor.(*intelligentstore.RegularFileDescriptor)
 		var reader io.ReadCloser
-		reader, err = exporter.Store.GetObjectByHash(regularFileDescriptor.Hash)
+		reader, err = exporter.Store.GetGzippedObjectByHash(regularFileDescriptor.Hash)
 		if nil != err {
 			return fmt.Errorf("couldn't get the file at '%s'. Error: %s", regularFileDescriptor.RelativePath, err)
 		}
 		defer reader.Close()
 
-		err = afero.WriteReader(exporter.fs, filePath, reader)
-		if nil != err {
-			return fmt.Errorf("couldn't write the export file to '%s'. Error: %s", filePath, err)
+		err = exporter.createNewFileAndCopy(reader, filePath)
+		if err != nil {
+			return err
 		}
-	case domain.FileTypeSymlink:
-		symlinkFileDescriptor := fileDescriptor.(*domain.SymlinkFileDescriptor)
-		err = exporter.symlinker(symlinkFileDescriptor.Dest, filePath)
+	case intelligentstore.FileTypeSymlink:
+		symlinkFileDescriptor := fileDescriptor.(*intelligentstore.SymlinkFileDescriptor)
+		err = exporter.fs.Symlink(symlinkFileDescriptor.Dest, filePath)
 		if nil != err {
 			return fmt.Errorf("couldn't create the symlink at '%s'. Error: %s", filePath, err)
 		}
@@ -115,5 +113,26 @@ func (exporter *LocalExporter) writeFileToFs(fileDescriptor domain.FileDescripto
 	if nil != err {
 		return fmt.Errorf("couldn't chmod exported file at '%s'. Error: %s", filePath, err)
 	}
+	return nil
+}
+
+func (exporter *LocalExporter) createNewFileAndCopy(reader io.Reader, filePath string) error {
+	newFile, err := exporter.fs.Create(filePath)
+	if nil != err {
+		return fmt.Errorf("couldn't create the export file at '%s'. Error: %s", filePath, err)
+	}
+	defer newFile.Close()
+
+	gzippedReader, err := gzip.NewReader(reader)
+	if err != nil {
+		return err
+	}
+	defer gzippedReader.Close()
+
+	_, err = io.Copy(newFile, gzippedReader)
+	if nil != err {
+		return fmt.Errorf("couldn't write the export file to '%s'. Error: %s", filePath, err)
+	}
+
 	return nil
 }

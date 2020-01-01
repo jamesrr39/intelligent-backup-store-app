@@ -8,20 +8,21 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jamesrr39/goutil/gofs/mockfs"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/storetest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func Test_handleSearch(t *testing.T) {
-	store := storetest.NewInMemoryStore(t)
+	store := dal.NewMockStore(t, dal.MockNowProvider, mockfs.NewMockFs())
 	bucket := storetest.CreateBucket(t, store.Store, "docs")
 
-	revision := storetest.CreateRevision(t, store.Store, bucket, []*domain.RegularFileDescriptorWithContents{
-		domain.NewRegularFileDescriptorWithContents(t, domain.NewRelativePath("a/contract.txt"), time.Unix(0, 0), dal.FileMode600, []byte("")),
-		domain.NewRegularFileDescriptorWithContents(t, domain.NewRelativePath("a/something else.txt"), time.Unix(0, 0), dal.FileMode600, []byte("")),
+	revision := storetest.CreateRevision(t, store.Store, bucket, []*intelligentstore.RegularFileDescriptorWithContents{
+		intelligentstore.NewRegularFileDescriptorWithContents(t, intelligentstore.NewRelativePath("a/contract.txt"), time.Unix(0, 0), dal.FileMode600, []byte("")),
+		intelligentstore.NewRegularFileDescriptorWithContents(t, intelligentstore.NewRelativePath("a/something else.txt"), time.Unix(0, 0), dal.FileMode600, []byte("")),
 	})
 
 	storeHandler := NewStoreWebServer(store.Store)
@@ -38,7 +39,7 @@ func Test_handleSearch(t *testing.T) {
 
 	storeHandler.ServeHTTP(w1, r1)
 
-	var results []*domain.SearchResult
+	var results []*intelligentstore.SearchResult
 	err := json.Unmarshal(w1.Body.Bytes(), &results)
 	require.Nil(t, err)
 
@@ -61,7 +62,7 @@ func Test_handleSearch(t *testing.T) {
 	storeHandler.ServeHTTP(w2, r2)
 
 	require.Equal(t, 400, w2.Code)
-	assert.Equal(t, "no search term specified (use URL query parameter `searchTerm`)", string(w2.Body.Bytes()))
+	assert.Equal(t, "no search term specified (use URL query parameter `searchTerm`)\n", string(w2.Body.Bytes()))
 
 	// good request, no results
 
@@ -76,5 +77,5 @@ func Test_handleSearch(t *testing.T) {
 	storeHandler.ServeHTTP(w3, r3)
 
 	require.Equal(t, 200, w3.Code)
-	assert.Equal(t, "[]", string(w3.Body.Bytes()))
+	assert.Equal(t, "[]\n", string(w3.Body.Bytes()))
 }

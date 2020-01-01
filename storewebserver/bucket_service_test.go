@@ -14,13 +14,13 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/spf13/afero"
 
+	"github.com/jamesrr39/goutil/gofs/mockfs"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	protofiles "github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/protobufs/proto_files"
 )
 
@@ -29,7 +29,7 @@ func testNowProvider() time.Time {
 }
 
 func Test_handleGetAllBuckets(t *testing.T) {
-	mockStore := dal.NewMockStore(t, testNowProvider, afero.NewMemMapFs())
+	mockStore := dal.NewMockStore(t, testNowProvider, mockfs.NewMockFs())
 	bucketService := NewBucketService(mockStore.Store)
 
 	requestURL := &url.URL{Path: "/"}
@@ -65,14 +65,14 @@ func Test_handleGetAllBuckets(t *testing.T) {
 
 func Test_handleGetRevision(t *testing.T) {
 	// create the fs, and put some test data in it
-	testFiles := []*domain.RegularFileDescriptorWithContents{
-		domain.NewRegularFileDescriptorWithContents(t, "a.txt", time.Unix(0, 0), dal.FileMode600, []byte("file a")),
-		domain.NewRegularFileDescriptorWithContents(t, "b.txt", time.Unix(0, 0), dal.FileMode600, []byte("file b")),
-		domain.NewRegularFileDescriptorWithContents(t, "folder-1/a.txt", time.Unix(0, 0), dal.FileMode600, []byte("file 1/a")),
-		domain.NewRegularFileDescriptorWithContents(t, "folder-1/c.txt", time.Unix(0, 0), dal.FileMode600, []byte("file 1/c")),
+	testFiles := []*intelligentstore.RegularFileDescriptorWithContents{
+		intelligentstore.NewRegularFileDescriptorWithContents(t, "a.txt", time.Unix(0, 0), dal.FileMode600, []byte("file a")),
+		intelligentstore.NewRegularFileDescriptorWithContents(t, "b.txt", time.Unix(0, 0), dal.FileMode600, []byte("file b")),
+		intelligentstore.NewRegularFileDescriptorWithContents(t, "folder-1/a.txt", time.Unix(0, 0), dal.FileMode600, []byte("file 1/a")),
+		intelligentstore.NewRegularFileDescriptorWithContents(t, "folder-1/c.txt", time.Unix(0, 0), dal.FileMode600, []byte("file 1/c")),
 	}
 
-	store := dal.NewMockStore(t, testNowProvider, afero.NewMemMapFs())
+	store := dal.NewMockStore(t, testNowProvider, mockfs.NewMockFs())
 	bucket := store.CreateBucket(t, "docs")
 
 	store.CreateRevision(t, bucket, testFiles)
@@ -125,11 +125,11 @@ func Test_handleGetRevision(t *testing.T) {
 }
 
 func Test_handleCreateRevision(t *testing.T) {
-	store := dal.NewMockStore(t, testNowProvider, afero.NewMemMapFs())
+	store := dal.NewMockStore(t, testNowProvider, mockfs.NewMockFs())
 	store.CreateBucket(t, "docs")
 
 	aFileText := "test file a"
-	aFileDescriptor, err := domain.NewRegularFileDescriptorFromReader(
+	aFileDescriptor, err := intelligentstore.NewRegularFileDescriptorFromReader(
 		"a.txt",
 		time.Unix(0, 0),
 		dal.FileMode600,
@@ -172,12 +172,12 @@ func Test_handleCreateRevision(t *testing.T) {
 }
 
 func Test_handleUploadFile(t *testing.T) {
-	store := dal.NewMockStore(t, testNowProvider, afero.NewMemMapFs())
+	store := dal.NewMockStore(t, testNowProvider, mockfs.NewMockFs())
 	store.CreateBucket(t, "docs")
 
 	aFileText := "my file a.txt"
-	descriptor, err := domain.NewRegularFileDescriptorFromReader(
-		domain.NewRelativePath("a.txt"),
+	descriptor, err := intelligentstore.NewRegularFileDescriptorFromReader(
+		intelligentstore.NewRelativePath("a.txt"),
 		time.Unix(0, 0),
 		dal.FileMode600,
 		bytes.NewBuffer([]byte(aFileText)),
@@ -292,7 +292,7 @@ func Test_handleUploadFile(t *testing.T) {
 }
 
 func Test_handleCommitTransaction(t *testing.T) {
-	store := dal.NewMockStore(t, testNowProvider, afero.NewMemMapFs())
+	store := dal.NewMockStore(t, testNowProvider, mockfs.NewMockFs())
 	bucket := store.CreateBucket(t, "docs")
 
 	bucketService := NewBucketService(store.Store)
@@ -302,8 +302,8 @@ func Test_handleCommitTransaction(t *testing.T) {
 	require.Len(t, bucketRevisions, 0)
 
 	fileContents := "file contents of a öøæäå"
-	descriptor, err := domain.NewRegularFileDescriptorFromReader(
-		domain.NewRelativePath("my/file a.txt"),
+	descriptor, err := intelligentstore.NewRegularFileDescriptorFromReader(
+		intelligentstore.NewRelativePath("my/file a.txt"),
 		time.Unix(0, 0),
 		dal.FileMode600,
 		bytes.NewBuffer([]byte(fileContents)),
@@ -402,15 +402,15 @@ func Test_handleCommitTransaction(t *testing.T) {
 }
 
 func Test_handleGetFileContents(t *testing.T) {
-	mockStore := dal.NewMockStore(t, testNowProvider, afero.NewMemMapFs())
+	mockStore := dal.NewMockStore(t, testNowProvider, mockfs.NewMockFs())
 	bucket := mockStore.CreateBucket(t, "docs")
 
 	bucketService := NewBucketService(mockStore.Store)
 
 	fileContents := "my file contents"
 	fileName := "folder1/file a.txt"
-	descriptor, err := domain.NewRegularFileDescriptorFromReader(
-		domain.NewRelativePath(fileName),
+	descriptor, err := intelligentstore.NewRegularFileDescriptorFromReader(
+		intelligentstore.NewRelativePath(fileName),
 		time.Unix(0, 0),
 		dal.FileMode600,
 		bytes.NewBuffer([]byte(fileContents)))
@@ -440,13 +440,13 @@ func Test_handleGetFileContents(t *testing.T) {
 	bucketService.ServeHTTP(wRevisionNotExist, rRevisionNotExist)
 	assert.Equal(t, 404, wRevisionNotExist.Code)
 
-	fileInfos := []*domain.FileInfo{descriptor.FileInfo}
+	fileInfos := []*intelligentstore.FileInfo{descriptor.FileInfo}
 
 	tx, err := mockStore.Store.TransactionDAL.CreateTransaction(bucket, fileInfos)
 	require.Nil(t, err)
 
-	relativePathsWithHashes := []*domain.RelativePathWithHash{
-		&domain.RelativePathWithHash{
+	relativePathsWithHashes := []*intelligentstore.RelativePathWithHash{
+		&intelligentstore.RelativePathWithHash{
 			RelativePath: descriptor.RelativePath,
 			Hash:         descriptor.Hash,
 		},
@@ -455,18 +455,18 @@ func Test_handleGetFileContents(t *testing.T) {
 	_, err = tx.ProcessUploadHashesAndGetRequiredHashes(relativePathsWithHashes)
 	require.Nil(t, err)
 
-	err = mockStore.Store.TransactionDAL.BackupFile(tx, bytes.NewBuffer([]byte(fileContents)))
+	err = mockStore.Store.TransactionDAL.BackupFile(tx, bytes.NewReader([]byte(fileContents)))
 	require.Nil(t, err)
 
 	err = mockStore.Store.TransactionDAL.Commit(tx)
 	require.Nil(t, err)
 
-	file, err := mockStore.Store.GetObjectByHash(descriptor.Hash)
+	file, err := mockStore.Store.GetGzippedObjectByHash(descriptor.Hash)
 	require.Nil(t, err)
 	defer file.Close()
 
 	rRevisionExistsButFileDoesNotExist := &http.Request{
-		Method: "GET",
+		Method: http.MethodGet,
 		URL: &url.URL{
 			Path:     fmt.Sprintf("/docs/%d/file", tx.Revision.VersionTimestamp),
 			RawQuery: fmt.Sprintf("relativePath=notexist_%s", fileName),
@@ -478,7 +478,7 @@ func Test_handleGetFileContents(t *testing.T) {
 	assert.Equal(t, 404, wRevisionExistsButFileDoesNotExist.Code)
 
 	rExists := &http.Request{
-		Method: "GET",
+		Method: http.MethodGet,
 		URL: &url.URL{
 			Path:     fmt.Sprintf("/docs/%d/file", tx.Revision.VersionTimestamp),
 			RawQuery: fmt.Sprintf("relativePath=%s", url.QueryEscape(fileName)),
@@ -488,5 +488,6 @@ func Test_handleGetFileContents(t *testing.T) {
 
 	bucketService.ServeHTTP(wExists, rExists)
 	require.Equal(t, 200, wExists.Code)
-	require.Equal(t, fileContents, string(wExists.Body.Bytes()))
+
+	require.Equal(t, fileContents, wExists.Body.String())
 }

@@ -5,16 +5,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
-	"github.com/spf13/afero"
+	"github.com/jamesrr39/goutil/gofs/mockfs"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func Test_bucketPath(t *testing.T) {
-	mockStoreDAL := NewMockStore(t, MockNowProvider, afero.NewMemMapFs())
+	fs := mockfs.NewMockFs()
+	mockStoreDAL := NewMockStore(t, MockNowProvider, fs)
 
-	bucket := domain.NewBucket(0, "test bucket")
+	bucket := intelligentstore.NewBucket(0, "test bucket")
 
 	assert.Equal(t, "/test-store/.backup_data/buckets/0", mockStoreDAL.Store.BucketDAL.bucketPath(bucket))
 }
@@ -39,7 +40,8 @@ func Test_isValidBucketName(t *testing.T) {
 }
 
 func Test_GetLatestRevision(t *testing.T) {
-	store := NewMockStore(t, MockNowProvider, afero.NewMemMapFs())
+	fs := mockfs.NewMockFs()
+	store := NewMockStore(t, MockNowProvider, fs)
 
 	bucket := store.CreateBucket(t, "docs")
 
@@ -48,25 +50,25 @@ func Test_GetLatestRevision(t *testing.T) {
 		Contents: "my text",
 	}
 
-	descriptor, err := domain.NewRegularFileDescriptorFromReader(
-		domain.NewRelativePath(file.Name),
+	descriptor, err := intelligentstore.NewRegularFileDescriptorFromReader(
+		intelligentstore.NewRelativePath(file.Name),
 		time.Unix(0, 0),
 		FileMode600,
-		bytes.NewBuffer([]byte(file.Contents)),
+		bytes.NewReader([]byte(file.Contents)),
 	)
 	require.Nil(t, err)
 
-	tx, err := store.Store.TransactionDAL.CreateTransaction(bucket, []*domain.FileInfo{descriptor.FileInfo})
+	tx, err := store.Store.TransactionDAL.CreateTransaction(bucket, []*intelligentstore.FileInfo{descriptor.FileInfo})
 	require.Nil(t, err)
 
-	relativePathsWithHashes := []*domain.RelativePathWithHash{
-		domain.NewRelativePathWithHash(descriptor.RelativePath, descriptor.Hash),
+	relativePathsWithHashes := []*intelligentstore.RelativePathWithHash{
+		intelligentstore.NewRelativePathWithHash(descriptor.RelativePath, descriptor.Hash),
 	}
 	requiredHashes, err := tx.ProcessUploadHashesAndGetRequiredHashes(relativePathsWithHashes)
 	require.Nil(t, err)
 	require.Len(t, requiredHashes, 1)
 
-	err = store.Store.TransactionDAL.BackupFile(tx, bytes.NewBuffer([]byte(file.Contents)))
+	err = store.Store.TransactionDAL.BackupFile(tx, bytes.NewReader([]byte(file.Contents)))
 	require.Nil(t, err)
 
 	err = store.Store.TransactionDAL.Commit(tx)
@@ -75,13 +77,13 @@ func Test_GetLatestRevision(t *testing.T) {
 	rev, err := store.Store.BucketDAL.GetLatestRevision(bucket)
 	require.Nil(t, err)
 
-	assert.Equal(t, domain.RevisionVersion(946782245), rev.VersionTimestamp)
+	assert.Equal(t, intelligentstore.RevisionVersion(946782245), rev.VersionTimestamp)
 
 	files, err := store.Store.RevisionDAL.GetFilesInRevision(bucket, rev)
 	require.Nil(t, err)
 
 	assert.Len(t, files, 1)
-	assert.Equal(t, domain.RelativePath("a.txt"), files[0].GetFileInfo().RelativePath)
+	assert.Equal(t, intelligentstore.RelativePath("a.txt"), files[0].GetFileInfo().RelativePath)
 }
 
 func Test_GetRevisions(t *testing.T) {
@@ -90,7 +92,8 @@ func Test_GetRevisions(t *testing.T) {
 		return mockNow
 	}
 
-	store := NewMockStore(t, mockNowProvider, afero.NewMemMapFs())
+	fs := mockfs.NewMockFs()
+	store := NewMockStore(t, mockNowProvider, fs)
 
 	bucket := store.CreateBucket(t, "docs")
 
@@ -98,24 +101,24 @@ func Test_GetRevisions(t *testing.T) {
 		Name:     "a.txt",
 		Contents: "my text",
 	}
-	fileDescriptorA, err := domain.NewRegularFileDescriptorFromReader(
-		domain.NewRelativePath(aTxtFile.Name),
+	fileDescriptorA, err := intelligentstore.NewRegularFileDescriptorFromReader(
+		intelligentstore.NewRelativePath(aTxtFile.Name),
 		time.Unix(0, 0),
 		FileMode600,
-		bytes.NewBuffer([]byte(aTxtFile.Contents)),
+		bytes.NewReader([]byte(aTxtFile.Contents)),
 	)
 	require.Nil(t, err)
 
-	tx1, err := store.Store.TransactionDAL.CreateTransaction(bucket, []*domain.FileInfo{fileDescriptorA.FileInfo})
+	tx1, err := store.Store.TransactionDAL.CreateTransaction(bucket, []*intelligentstore.FileInfo{fileDescriptorA.FileInfo})
 	require.Nil(t, err)
 
-	relativePathsWithHashes := []*domain.RelativePathWithHash{
-		domain.NewRelativePathWithHash(fileDescriptorA.RelativePath, fileDescriptorA.Hash),
+	relativePathsWithHashes := []*intelligentstore.RelativePathWithHash{
+		intelligentstore.NewRelativePathWithHash(fileDescriptorA.RelativePath, fileDescriptorA.Hash),
 	}
 	_, err = tx1.ProcessUploadHashesAndGetRequiredHashes(relativePathsWithHashes)
 	require.Nil(t, err)
 
-	err = store.Store.TransactionDAL.BackupFile(tx1, bytes.NewBuffer([]byte(aTxtFile.Contents)))
+	err = store.Store.TransactionDAL.BackupFile(tx1, bytes.NewReader([]byte(aTxtFile.Contents)))
 	require.Nil(t, err)
 
 	err = store.Store.TransactionDAL.Commit(tx1)
@@ -129,14 +132,14 @@ func Test_GetRevisions(t *testing.T) {
 		Contents: "my b text",
 	}
 
-	fileDescriptorB, err := domain.NewRegularFileDescriptorFromReader(
-		domain.NewRelativePath(bTxtFile.Name),
+	fileDescriptorB, err := intelligentstore.NewRegularFileDescriptorFromReader(
+		intelligentstore.NewRelativePath(bTxtFile.Name),
 		time.Unix(0, 0),
 		FileMode600,
-		bytes.NewBuffer([]byte(bTxtFile.Contents)))
+		bytes.NewReader([]byte(bTxtFile.Contents)))
 	require.Nil(t, err)
 
-	fileInfos := []*domain.FileInfo{
+	fileInfos := []*intelligentstore.FileInfo{
 		fileDescriptorA.FileInfo,
 		fileDescriptorB.FileInfo,
 	}
@@ -144,14 +147,14 @@ func Test_GetRevisions(t *testing.T) {
 	tx2, err := store.Store.TransactionDAL.CreateTransaction(bucket, fileInfos)
 	require.Nil(t, err)
 
-	relativePathsWithHashes2 := []*domain.RelativePathWithHash{
-		domain.NewRelativePathWithHash(fileDescriptorB.RelativePath, fileDescriptorB.Hash),
+	relativePathsWithHashes2 := []*intelligentstore.RelativePathWithHash{
+		intelligentstore.NewRelativePathWithHash(fileDescriptorB.RelativePath, fileDescriptorB.Hash),
 	}
 
 	_, err = tx2.ProcessUploadHashesAndGetRequiredHashes(relativePathsWithHashes2)
 	require.Nil(t, err)
 
-	err = store.Store.TransactionDAL.BackupFile(tx2, bytes.NewBuffer([]byte(bTxtFile.Contents)))
+	err = store.Store.TransactionDAL.BackupFile(tx2, bytes.NewReader([]byte(bTxtFile.Contents)))
 	require.Nil(t, err)
 
 	err = store.Store.TransactionDAL.Commit(tx2)

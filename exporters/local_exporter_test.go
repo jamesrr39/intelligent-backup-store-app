@@ -7,27 +7,23 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jamesrr39/goutil/gofs/mockfs"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/storetest"
-	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func testSymlinker(oldName, newName string) error {
-	return nil
-}
-
 func Test_Export(t *testing.T) {
-	testStore := storetest.NewInMemoryStore(t)
+	testStore := dal.NewMockStore(t, dal.MockNowProvider, mockfs.NewMockFs())
 
 	bucket := storetest.CreateBucket(t, testStore.Store, "docs")
 
-	regularFile1 := domain.NewRegularFileDescriptorWithContents(t, "a.txt", time.Unix(0, 0), dal.FileMode600, []byte("file a contents"))
-	regularFile2 := domain.NewRegularFileDescriptorWithContents(t, "folder-1/a.txt", time.Unix(0, 0), dal.FileMode600, []byte("file a contents"))
-	fileDescriptors := []*domain.RegularFileDescriptorWithContents{
+	regularFile1 := intelligentstore.NewRegularFileDescriptorWithContents(t, "a.txt", time.Unix(0, 0), dal.FileMode600, []byte("file a contents"))
+	regularFile2 := intelligentstore.NewRegularFileDescriptorWithContents(t, "folder-1/a.txt", time.Unix(0, 0), dal.FileMode600, []byte("file a contents"))
+	fileDescriptors := []*intelligentstore.RegularFileDescriptorWithContents{
 		regularFile1,
 		regularFile2,
 	}
@@ -40,13 +36,12 @@ func Test_Export(t *testing.T) {
 		RevisionVersion: nil,
 		ExportDir:       "/outDir-1",
 		fs:              testStore.Fs,
-		symlinker:       testSymlinker,
 	}
 
 	err := exporter.Export()
 	require.Nil(t, err)
 
-	contents, err := afero.ReadFile(testStore.Fs, filepath.Join(exporter.ExportDir, FilesExportSubDir, "a.txt"))
+	contents, err := testStore.Fs.ReadFile(filepath.Join(exporter.ExportDir, FilesExportSubDir, "a.txt"))
 	require.Nil(t, err)
 
 	assert.Equal(t, regularFile1.Contents, contents)
@@ -60,7 +55,7 @@ func Test_Export(t *testing.T) {
 	err = exporter.Export()
 	require.Nil(t, err)
 
-	contents, err = afero.ReadFile(testStore.Fs, filepath.Join(exporter.ExportDir, FilesExportSubDir, "a.txt"))
+	contents, err = testStore.Fs.ReadFile(filepath.Join(exporter.ExportDir, FilesExportSubDir, "a.txt"))
 	require.Nil(t, err)
 
 	assert.Equal(t, regularFile1.Contents, contents)
@@ -76,7 +71,7 @@ func Test_Export(t *testing.T) {
 	_, err = testStore.Fs.Stat(aFilePath)
 	require.True(t, os.IsNotExist(err))
 
-	contents, err = afero.ReadFile(testStore.Fs, filepath.Join(exporter.ExportDir, FilesExportSubDir, "folder-1", "a.txt"))
+	contents, err = testStore.Fs.ReadFile(filepath.Join(exporter.ExportDir, FilesExportSubDir, "folder-1", "a.txt"))
 	require.Nil(t, err)
 
 	assert.Equal(t, regularFile1.Contents, contents)
@@ -84,21 +79,21 @@ func Test_Export(t *testing.T) {
 }
 
 func Test_writeFileToFs(t *testing.T) {
-	testStore := storetest.NewInMemoryStore(t)
+	testStore := dal.NewMockStore(t, dal.MockNowProvider, mockfs.NewMockFs())
+
 	exporter := &LocalExporter{
 		Store:           testStore.Store,
 		BucketName:      "docs",
 		RevisionVersion: nil,
 		ExportDir:       "/outDir",
 		fs:              testStore.Fs,
-		symlinker:       testSymlinker,
 	}
 
 	bucket := storetest.CreateBucket(t, testStore.Store, "docs")
 
-	regularFile := domain.NewRegularFileDescriptorWithContents(t, "a.txt", time.Unix(0, 0), dal.FileMode600, []byte("file a contents"))
-	secondRegularFile := domain.NewRegularFileDescriptorWithContents(t, "b.txt", time.Unix(0, 0), dal.FileMode755, []byte("file b contents"))
-	storetest.CreateRevision(t, testStore.Store, bucket, []*domain.RegularFileDescriptorWithContents{
+	regularFile := intelligentstore.NewRegularFileDescriptorWithContents(t, "a.txt", time.Unix(0, 0), dal.FileMode600, []byte("file a contents"))
+	secondRegularFile := intelligentstore.NewRegularFileDescriptorWithContents(t, "b.txt", time.Unix(0, 0), dal.FileMode755, []byte("file b contents"))
+	storetest.CreateRevision(t, testStore.Store, bucket, []*intelligentstore.RegularFileDescriptorWithContents{
 		regularFile,
 		secondRegularFile,
 	})
@@ -107,7 +102,7 @@ func Test_writeFileToFs(t *testing.T) {
 	require.Nil(t, err)
 
 	filePath := filepath.Join(exporter.ExportDir, FilesExportSubDir, string(regularFile.Descriptor.RelativePath))
-	file1contents, err := afero.ReadFile(testStore.Fs, filePath)
+	file1contents, err := testStore.Fs.ReadFile(filePath)
 	require.Nil(t, err)
 
 	file1Info, err := exporter.fs.Stat(filePath)
@@ -128,19 +123,19 @@ func Test_writeFileToFs(t *testing.T) {
 }
 
 func Test_writeFileToFs_UnknownFile(t *testing.T) {
-	testStore := storetest.NewInMemoryStore(t)
+	testStore := dal.NewMockStore(t, dal.MockNowProvider, mockfs.NewMockFs())
+
 	exporter := &LocalExporter{
 		Store:           testStore.Store,
 		BucketName:      "docs",
 		RevisionVersion: nil,
 		ExportDir:       "/outDir",
 		fs:              testStore.Fs,
-		symlinker:       testSymlinker,
 	}
 
-	unknownDescriptor := &domain.RegularFileDescriptor{
-		FileInfo: &domain.FileInfo{
-			Type: domain.FileTypeUnknown,
+	unknownDescriptor := &intelligentstore.RegularFileDescriptor{
+		FileInfo: &intelligentstore.FileInfo{
+			Type: intelligentstore.FileTypeUnknown,
 		},
 	}
 

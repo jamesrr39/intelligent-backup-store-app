@@ -1,19 +1,18 @@
 package dal
 
 import (
-	"bytes"
-	"encoding/gob"
+	"compress/gzip"
+	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
 
 	"github.com/jamesrr39/goutil/dirtraversal"
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
+	"github.com/jamesrr39/goutil/errorsx"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	"github.com/pkg/errors"
-	"github.com/spf13/afero"
 )
 
 var ErrFileNotRequiredForTransaction = errors.New("hash is not scheduled for upload, or has already been uploaded")
@@ -22,9 +21,9 @@ type TransactionDAL struct {
 	IntelligentStoreDAL *IntelligentStoreDAL
 }
 
-func (dal *TransactionDAL) CreateTransaction(bucket *domain.Bucket, fileInfos []*domain.FileInfo) (*domain.Transaction, error) {
-	revisionVersion := domain.RevisionVersion(dal.IntelligentStoreDAL.nowProvider().Unix())
-	revision := domain.NewRevision(bucket, revisionVersion)
+func (dal *TransactionDAL) CreateTransaction(bucket *intelligentstore.Bucket, fileInfos []*intelligentstore.FileInfo) (*intelligentstore.Transaction, error) {
+	revisionVersion := intelligentstore.RevisionVersion(dal.IntelligentStoreDAL.nowProvider().Unix())
+	revision := intelligentstore.NewRevision(bucket, revisionVersion)
 
 	dal.IntelligentStoreDAL.LockDAL.acquireStoreLock(fmt.Sprintf("lock from transaction. Bucket: %d (%s), revision version: %d",
 		bucket.ID,
@@ -32,9 +31,9 @@ func (dal *TransactionDAL) CreateTransaction(bucket *domain.Bucket, fileInfos []
 		revisionVersion,
 	))
 
-	tx := domain.NewTransaction(revision, FsHashPresentResolver{dal.IntelligentStoreDAL})
+	tx := intelligentstore.NewTransaction(revision, FsHashPresentResolver{dal.IntelligentStoreDAL})
 
-	previousRevisionMap := make(map[domain.RelativePath]domain.FileDescriptor)
+	previousRevisionMap := make(map[intelligentstore.RelativePath]intelligentstore.FileDescriptor)
 
 	previousRevision, err := dal.IntelligentStoreDAL.BucketDAL.GetLatestRevision(bucket)
 	if nil != err {
@@ -71,9 +70,9 @@ func (dal *TransactionDAL) CreateTransaction(bucket *domain.Bucket, fileInfos []
 		} else {
 			// file not in previous version, so mark for hash calculation
 			switch fileInfo.Type {
-			case domain.FileTypeSymlink:
+			case intelligentstore.FileTypeSymlink:
 				tx.FileInfosMissingSymlinks[fileInfo.RelativePath] = fileInfo
-			case domain.FileTypeRegular:
+			case intelligentstore.FileTypeRegular:
 				tx.FileInfosMissingHashes[fileInfo.RelativePath] = fileInfo
 			default:
 				return nil, fmt.Errorf("unknown file type: %d (%s)", fileInfo.Type, fileInfo.Type)
@@ -84,125 +83,22 @@ func (dal *TransactionDAL) CreateTransaction(bucket *domain.Bucket, fileInfos []
 	return tx, nil
 }
 
-//
-// // TODO: test for >4GB file
-// func (dal *TransactionDAL) BackupFile(transaction *domain.Transaction, fileName string, sourceFile io.Reader) error {
-// 	fileName = strings.TrimPrefix(fileName, string(filepath.Separator))
-//
-// 	for _, fileInfo := range transaction.fileInfosMissingSymlinks {
-// 		relativePaths = append(relativePaths, fileInfo.RelativePath)
-// 	}
-// 	return relativePaths
-// }
-
-// // ProcessUploadHashesAndGetRequiredHashes takes the list of relative paths and hashes, and figures out which hashes need to be uploaded
-// // FIXME: better name
-// func (transaction *TransactionDAL) ProcessUploadHashesAndGetRequiredHashes(relativePathsWithHashes []*domain.RelativePathWithHash) ([]domain.Hash, error) {
-// 	if err := transaction.checkStage(TransactionStageAwaitingFileHashes); nil != err {
-// 		return nil, err
-// 	}
-//
-// 	for _, relativePathWithHash := range relativePathsWithHashes {
-// 		fileInfo := transaction.fileInfosMissingHashes[relativePathWithHash.RelativePath]
-// 		if nil == fileInfo {
-// 			return nil, fmt.Errorf("file info not required for upload for '%s'", relativePathWithHash.RelativePath)
-// 		}
-//
-// 		fileDescriptor := NewRegularFileDescriptor(
-// 			NewFileInfo(
-// 				FileTypeRegular,
-// 				relativePathWithHash.RelativePath,
-// 				fileInfo.ModTime,
-// 				fileInfo.Size,
-// 				fileInfo.FileMode,
-// 			),
-// 			relativePathWithHash.Hash,
-// 		)
-//
-// 		transaction.addDescriptorToTransaction(fileDescriptor)
-// 	}
-//
-// 	transaction.stage = TransactionStageReadyToUploadFiles
-//
-// 	return transaction.GetHashesForRequiredContent(), nil
-// }
-
 // TODO: test for >4GB file
-func (dal *TransactionDAL) BackupFile(transaction *domain.Transaction, sourceFile io.Reader) error {
-	// if err := transaction.CheckStage(domain.TransactionStageReadyToUploadFiles); nil != err {
-	// 	return err
-	// }
-	//
-	// sourceAsBytes, err := ioutil.ReadAll(sourceFile)
-	// if nil != err {
-	// 	return err
-	// }
-	//
-	// hash, err := domain.NewHash(bytes.NewBuffer(sourceAsBytes))
-	// if nil != err {
-	// 	return err
-	// }
-	//
-	// if !transaction.IsFileScheduledForUploadAlready[hash] {
-	// 	return ErrFileNotRequiredForTransaction
-	// }
-	//
-	// filePath := filepath.Join(
-	// 	dal.StoreBasePath,
-	// 	".backup_data",
-	// 	"objects",
-	// 	hash.FirstChunk(),
-	// 	hash.Remainder())
-	//
-	// _, err = dal.fs.Stat(filePath)
-	// if nil != err {
-	// 	if !os.IsNotExist(err) {
-	// 		// permissions issue or something.
-	// 		return err
-	// 	}
-	// 	// file doesn't exist in store already. Write it to store.
-	//
-	// 	err := dal.fs.MkdirAll(filepath.Dir(filePath), 0700)
-	// 	if nil != err {
-	// 		return err
-	// 	}
-	//
-	// 	err = afero.WriteFile(dal.fs, filePath, sourceAsBytes, 0700)
-	// 	if nil != err {
-	// 		return err
-	// 	}
-	// } else {
-	// 	existingFile, err := dal.fs.Open(filePath)
-	// 	if nil != err {
-	// 		return fmt.Errorf("couldn't open existing file in store at '%s'. Error: %s", filePath, err)
-	// 	}
-	// 	defer existingFile.Close()
-	// }
-	//
-	// domain.NewRegularFileDescriptor(fileInfo, hash)
-	//
-	// transaction.FilesInVersion = append(
-	// 	transaction.FilesInVersion,
-	// 	domain.NewRegularFileDescriptor(hash, domain.NewRelativePath(fileName)))
-	//
-	// return nil
+func (dal *TransactionDAL) BackupFile(transaction *intelligentstore.Transaction, sourceFile io.ReadSeeker) error {
 
-	if err := transaction.CheckStage(domain.TransactionStageReadyToUploadFiles); nil != err {
-		return err
-	}
-
-	sourceAsBytes, err := ioutil.ReadAll(sourceFile)
+	err := transaction.CheckStage(intelligentstore.TransactionStageReadyToUploadFiles)
 	if nil != err {
 		return err
 	}
 
-	hash, err := domain.NewHash(bytes.NewBuffer(sourceAsBytes))
+	hash, err := intelligentstore.NewHash(sourceFile)
 	if nil != err {
 		return err
 	}
 
-	if !transaction.IsFileScheduledForUploadAlready[hash] {
-		return ErrFileNotRequiredForTransaction
+	_, err = sourceFile.Seek(io.SeekStart, 0)
+	if nil != err {
+		return err
 	}
 
 	filePath := filepath.Join(
@@ -210,10 +106,15 @@ func (dal *TransactionDAL) BackupFile(transaction *domain.Transaction, sourceFil
 		".backup_data",
 		"objects",
 		hash.FirstChunk(),
-		hash.Remainder())
+		hash.Remainder()+".gz")
+
+	if !transaction.IsFileScheduledForUploadAlready[hash] {
+		return errorsx.Wrap(ErrFileNotRequiredForTransaction, "hash", hash, "filepath", filePath)
+	}
 
 	fs := dal.IntelligentStoreDAL.fs
 
+	// file doesn't exist in store yet
 	_, err = fs.Stat(filePath)
 	if nil != err {
 		if !os.IsNotExist(err) {
@@ -221,23 +122,29 @@ func (dal *TransactionDAL) BackupFile(transaction *domain.Transaction, sourceFil
 			return err
 		}
 		// file doesn't exist in store already. Write it to store.
-
 		err := fs.MkdirAll(filepath.Dir(filePath), 0700)
 		if nil != err {
 			return err
 		}
 
-		err = afero.WriteFile(fs, filePath, sourceAsBytes, 0700)
+		newFile, err := fs.Create(filePath)
+		if err != nil {
+			return err
+		}
+		defer newFile.Close()
+
+		gzipWriter := gzip.NewWriter(newFile)
+		defer gzipWriter.Close()
+
+		err = gzipWriter.Flush()
 		if nil != err {
 			return err
 		}
-	} else {
-		// file already exists. Do a byte by byte comparision to make sure there isn't a collision
-		existingFile, err := fs.Open(filePath)
+
+		_, err = io.Copy(gzipWriter, sourceFile)
 		if nil != err {
-			return fmt.Errorf("couldn't open existing file in store at '%s'. Error: %s", filePath, err)
+			return err
 		}
-		defer existingFile.Close()
 	}
 
 	transaction.Mu.Lock()
@@ -248,44 +155,9 @@ func (dal *TransactionDAL) BackupFile(transaction *domain.Transaction, sourceFil
 
 }
 
-//
-// // addDescriptorToTransaction adds a descriptor to the transaction
-// func (transaction *TransactionDAL) addDescriptorToTransaction(fileDescriptor *domain.RegularFileDescriptor) error {
-// 	isTryingToTraverse := dirtraversal.IsTryingToTraverseUp(string(fileDescriptor.Hash))
-// 	if isTryingToTraverse {
-// 		return fmt.Errorf("%s is attempting to traverse up the filesystem tree, which is not allowed (and this is not a hash)", fileDescriptor.Hash)
-// 	}
-//
-// 	transaction.FilesInVersion = append(transaction.FilesInVersion, fileDescriptor)
-//
-// 	// check if it's scheduled for upload already
-// 	transaction.mu.Lock()
-// 	defer transaction.mu.Unlock()
-//
-// 	isFileScheduledForUploadAlready := transaction.isFileScheduledForUploadAlready[fileDescriptor.Hash]
-// 	if isFileScheduledForUploadAlready {
-// 		return nil
-// 	}
-//
-// 	bucketsDirPath := filepath.Join(dal.StoreBasePath, ".backup_data", "objects")
-//
-// 	filePath := filepath.Join(bucketsDirPath, fileDescriptor.Hash.FirstChunk(), fileDescriptor.Hash.Remainder())
-// 	_, err := transaction.Revision.bucket.store.fs.Stat(filePath)
-// 	if nil != err {
-// 		if os.IsNotExist(err) {
-// 			transaction.isFileScheduledForUploadAlready[fileDescriptor.Hash] = true
-// 			return nil
-// 		}
-// 		return fmt.Errorf("couldn't detect if %s is already in the index. Error: %s", fileDescriptor.Hash, err)
-// 	}
-//
-// 	// file on disk was successfully stat'ed (and exists)
-// 	return nil
-// }
-
 // Commit closes the transaction and writes the revision data to disk
-func (dal *TransactionDAL) Commit(transaction *domain.Transaction) error {
-	if err := transaction.CheckStage(domain.TransactionStageReadyToUploadFiles); nil != err {
+func (dal *TransactionDAL) Commit(transaction *intelligentstore.Transaction) error {
+	if err := transaction.CheckStage(intelligentstore.TransactionStageReadyToUploadFiles); nil != err {
 		return err
 	}
 
@@ -313,7 +185,7 @@ func (dal *TransactionDAL) Commit(transaction *domain.Transaction) error {
 	}
 	defer versionContentsFile.Close()
 
-	err = gob.NewEncoder(versionContentsFile).Encode(transaction.FilesInVersion)
+	err = json.NewEncoder(versionContentsFile).Encode(transaction.FilesInVersion)
 	if nil != err {
 		return err
 	}
@@ -323,7 +195,7 @@ func (dal *TransactionDAL) Commit(transaction *domain.Transaction) error {
 		return errors.Wrap(err, "couldn't sync the version contents file")
 	}
 
-	transaction.Stage = domain.TransactionStageCommitted
+	transaction.Stage = intelligentstore.TransactionStageCommitted
 
 	err = dal.IntelligentStoreDAL.LockDAL.removeStoreLock()
 	if nil != err {
@@ -335,8 +207,8 @@ func (dal *TransactionDAL) Commit(transaction *domain.Transaction) error {
 
 // Rollback aborts the current transaction and removes the lock.
 // It doesn't remove files inside the object store
-func (dal *TransactionDAL) Rollback(transaction *domain.Transaction) error {
-	err := transaction.CheckStage(domain.TransactionStageAwaitingFileHashes, domain.TransactionStageReadyToUploadFiles)
+func (dal *TransactionDAL) Rollback(transaction *intelligentstore.Transaction) error {
+	err := transaction.CheckStage(intelligentstore.TransactionStageAwaitingFileHashes, intelligentstore.TransactionStageReadyToUploadFiles)
 	if nil != err {
 		return err
 	}

@@ -10,12 +10,12 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
+	"github.com/jamesrr39/goutil/gofs"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	protofiles "github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/protobufs/proto_files"
 	"github.com/jamesrr39/intelligent-backup-store-app/uploaders"
 	"github.com/pkg/errors"
-	"github.com/spf13/afero"
 )
 
 // WebUploadClient represents an http client for uploading files to an IntelligentStore
@@ -24,8 +24,8 @@ type WebUploadClient struct {
 	bucketName     string
 	folderPath     string
 	excludeMatcher *excludesmatcher.ExcludesMatcher
-	fs             afero.Fs
-	linkReader     uploaders.LinkReader
+	fs             gofs.Fs
+	backupDryRun   bool
 }
 
 // NewWebUploadClient creates a new WebUploadClient
@@ -34,6 +34,7 @@ func NewWebUploadClient(
 	bucketName,
 	folderPath string,
 	excludeMatcher *excludesmatcher.ExcludesMatcher,
+	backupDryRun bool,
 ) *WebUploadClient {
 
 	return &WebUploadClient{
@@ -41,8 +42,8 @@ func NewWebUploadClient(
 		bucketName,
 		folderPath,
 		excludeMatcher,
-		afero.NewOsFs(),
-		uploaders.OsFsLinkReader,
+		gofs.NewOsFs(),
+		backupDryRun,
 	}
 }
 
@@ -50,7 +51,7 @@ func NewWebUploadClient(
 func (c *WebUploadClient) UploadToStore() error {
 	// FIXME abort if error
 
-	fileInfosMap, err := uploaders.BuildFileInfosMap(c.fs, c.linkReader, c.folderPath, c.excludeMatcher)
+	fileInfosMap, err := uploaders.BuildFileInfosMap(c.fs, c.folderPath, c.excludeMatcher)
 	if nil != err {
 		return err
 	}
@@ -62,15 +63,15 @@ func (c *WebUploadClient) UploadToStore() error {
 
 	log.Printf("== requiredRelativePaths: %s\n", requiredRelativePaths)
 
-	var requiredRegularFileRelativePaths []domain.RelativePath
-	var requiredSymlinkRelativePaths []domain.RelativePath
+	var requiredRegularFileRelativePaths []intelligentstore.RelativePath
+	var requiredSymlinkRelativePaths []intelligentstore.RelativePath
 
 	for _, requiredRelativePath := range requiredRelativePaths {
 		fileInfo := fileInfosMap[requiredRelativePath]
 		switch fileInfo.Type {
-		case domain.FileTypeRegular:
+		case intelligentstore.FileTypeRegular:
 			requiredRegularFileRelativePaths = append(requiredRegularFileRelativePaths, requiredRelativePath)
-		case domain.FileTypeSymlink:
+		case intelligentstore.FileTypeSymlink:
 			requiredSymlinkRelativePaths = append(requiredSymlinkRelativePaths, requiredRelativePath)
 		default:
 			return fmt.Errorf("unsupported file type: '%d' for fileInfo: '%v'", fileInfo.Type, fileInfo)
@@ -92,6 +93,10 @@ func (c *WebUploadClient) UploadToStore() error {
 		return err
 	}
 
+	if c.backupDryRun {
+		return nil
+	}
+
 	for _, requiredHash := range requiredHashes {
 		relativePath := hashRelativePathMap[requiredHash][0]
 		err = c.backupFile(revisionVersion, relativePath)
@@ -108,14 +113,14 @@ func (c *WebUploadClient) UploadToStore() error {
 	return nil
 }
 
-func (c *WebUploadClient) uploadSymlinks(revisionVersion domain.RevisionVersion, fileInfosMap uploaders.FileInfoMap, requiredRelativePaths []domain.RelativePath) error {
+func (c *WebUploadClient) uploadSymlinks(revisionVersion intelligentstore.RevisionVersion, fileInfosMap uploaders.FileInfoMap, requiredRelativePaths []intelligentstore.RelativePath) error {
 	uploadSymlinksRequest := &protofiles.UploadSymlinksRequest{}
 	for _, requiredRelativePath := range requiredRelativePaths {
 		fileInfo := fileInfosMap[requiredRelativePath]
 
 		filePath := filepath.Join(c.folderPath, string(fileInfo.RelativePath))
 
-		dest, err := c.linkReader(filePath)
+		dest, err := c.fs.Readlink(filePath)
 		if nil != err {
 			return fmt.Errorf("couldn't read link for %s. Error: %s", filePath, err)
 		}
@@ -156,7 +161,7 @@ func (c *WebUploadClient) uploadSymlinks(revisionVersion domain.RevisionVersion,
 	return nil
 }
 
-func (c *WebUploadClient) fetchRequiredHashes(revisionVersion domain.RevisionVersion, relativePathsWithHashes []*domain.RelativePathWithHash) ([]domain.Hash, error) {
+func (c *WebUploadClient) fetchRequiredHashes(revisionVersion intelligentstore.RevisionVersion, relativePathsWithHashes []*intelligentstore.RelativePathWithHash) ([]intelligentstore.Hash, error) {
 	fetchRequiredHashesRequestProto := &protofiles.GetRequiredHashesRequest{
 		RelativePathsAndHashes: nil,
 	}
@@ -204,16 +209,16 @@ func (c *WebUploadClient) fetchRequiredHashes(revisionVersion domain.RevisionVer
 		return nil, fmt.Errorf("couldn't unmarshal hashes upload response body. Error: %s", err)
 	}
 
-	var hashes []domain.Hash
+	var hashes []intelligentstore.Hash
 	for _, hash := range getRequiredHashesResponse.GetHashes() {
-		hashes = append(hashes, domain.Hash(hash))
+		hashes = append(hashes, intelligentstore.Hash(hash))
 	}
 
 	return hashes, nil
 }
 
 // openTx opens a transaction with the server and sends a list of files it wants to back up
-func (c *WebUploadClient) openTx(fileInfos []*domain.FileInfo) (domain.RevisionVersion, []domain.RelativePath, error) {
+func (c *WebUploadClient) openTx(fileInfos []*intelligentstore.FileInfo) (intelligentstore.RevisionVersion, []intelligentstore.RelativePath, error) {
 	openTxRequest := &protofiles.OpenTxRequest{
 		FileInfos: nil,
 	}
@@ -273,19 +278,19 @@ func (c *WebUploadClient) openTx(fileInfos []*domain.FileInfo) (domain.RevisionV
 		return 0, nil, fmt.Errorf("couldn't unmarshal OpenTx response. Error: %s", err)
 	}
 
-	var requiredRelativePaths []domain.RelativePath
+	var requiredRelativePaths []intelligentstore.RelativePath
 	for _, wantedHash := range openTxResponse.GetRequiredRelativePaths() {
-		requiredRelativePaths = append(requiredRelativePaths, domain.NewRelativePath(wantedHash))
+		requiredRelativePaths = append(requiredRelativePaths, intelligentstore.NewRelativePath(wantedHash))
 	}
 	log.Printf("created a new version: %d\n", openTxResponse.GetRevisionID())
-	return domain.RevisionVersion(openTxResponse.GetRevisionID()), requiredRelativePaths, nil
+	return intelligentstore.RevisionVersion(openTxResponse.GetRevisionID()), requiredRelativePaths, nil
 }
 
-func (c *WebUploadClient) backupFile(revisionStr domain.RevisionVersion, relativePath domain.RelativePath) error {
+func (c *WebUploadClient) backupFile(revisionStr intelligentstore.RevisionVersion, relativePath intelligentstore.RelativePath) error {
 	log.Printf("BACKING UP %s\n", relativePath)
 
 	client := http.Client{Timeout: time.Hour}
-	fileContents, err := afero.ReadFile(c.fs, filepath.Join(
+	fileContents, err := c.fs.ReadFile(filepath.Join(
 		c.folderPath,
 		string(relativePath)))
 	if nil != err {
@@ -298,7 +303,7 @@ func (c *WebUploadClient) backupFile(revisionStr domain.RevisionVersion, relativ
 
 	marshalledFile, err := proto.Marshal(protoBufFile)
 	if nil != err {
-		return errors.Wrapf(err, "couldn't marshall file at %s to protobuf", relativePath)
+		return errors.Wrapf(err, "couldn't marshal file at %s to protobuf", relativePath)
 	}
 
 	uploadURL := fmt.Sprintf("%s/api/buckets/%s/upload/%d/file",
@@ -326,7 +331,7 @@ func (c *WebUploadClient) backupFile(revisionStr domain.RevisionVersion, relativ
 	return nil
 }
 
-func (c *WebUploadClient) commitTx(revisionStr domain.RevisionVersion) error {
+func (c *WebUploadClient) commitTx(revisionStr intelligentstore.RevisionVersion) error {
 	commitTxClient := http.Client{Timeout: time.Second * 20}
 	url := fmt.Sprintf("%s/api/buckets/%s/upload/%d/commit", c.storeURL, c.bucketName, revisionStr)
 	resp, err := commitTxClient.Get(url)

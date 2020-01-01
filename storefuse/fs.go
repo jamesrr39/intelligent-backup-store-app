@@ -46,7 +46,7 @@ func (fs *StoreFS) Root() (fs.Node, error) {
 }
 
 type inodeMap struct {
-	m       map[string]uint64 //map[path]inode
+	m       map[string]uint64 //map[path]inode_id
 	highest uint64
 	mu      *sync.Mutex
 }
@@ -64,9 +64,11 @@ func (m inodeMap) GetOrGenerateInodeId(path string) uint64 {
 	defer m.mu.Unlock()
 	id, ok := m.m[path]
 	if ok {
+		log.Printf("returning same inode id for %q\n", path)
 		return id
 	}
 
+	log.Printf("returning new inode id for %q\n", path)
 	m.highest++
 	m.m[path] = m.highest
 	return m.highest

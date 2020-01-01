@@ -208,6 +208,30 @@
 			"revisionTime": "2017-09-18T23:13:52Z"
 		},
 		{
+			"checksumSHA1": "4KwJAth706pCN/XkVEcyf/Aj88o=",
+			"path": "github.com/jamesrr39/goutil/fswalker",
+			"revision": "eef48524bd8aca4e054517db8bc370b479c26847",
+			"revisionTime": "2018-07-04T21:38:34Z"
+		},
+		{
+			"checksumSHA1": "kKrgv0WoCbs/yLpWd2xqNpJHJd4=",
+			"path": "github.com/jamesrr39/goutil/gofs",
+			"revision": "cc5f1f5a0be69845846e1422366822c6933aaa23",
+			"revisionTime": "2018-10-28T10:14:16Z"
+		},
+		{
+			"checksumSHA1": "vSO9YTxzOtFlSLXtwaptC7QF0bU=",
+			"path": "github.com/jamesrr39/goutil/gofs/mockfs",
+			"revision": "cc5f1f5a0be69845846e1422366822c6933aaa23",
+			"revisionTime": "2018-10-28T10:14:16Z"
+		},
+		{
+			"checksumSHA1": "QcAy0NLUd92+l9KiNHIMccMYLXE=",
+			"path": "github.com/jamesrr39/goutil/humanise",
+			"revision": "eef48524bd8aca4e054517db8bc370b479c26847",
+			"revisionTime": "2018-07-04T21:38:34Z"
+		},
+		{
 			"checksumSHA1": "rJab1YdNhQooDiBWNnt7TLWPyBU=",
 			"path": "github.com/pkg/errors",
 			"revision": "2b3a18b5f0fb6b4f9190549597d3f962c02bc5eb",
@@ -219,6 +243,18 @@
 			"path": "github.com/pmezard/go-difflib/difflib",
 			"revision": "2402e8e7a02fc811447d11f881aa9746cdc57983",
 			"revisionTime": "2016-12-17T20:04:45Z"
+		},
+		{
+			"checksumSHA1": "fV97ryTfS2E+uL7jBjhX8tO1I7k=",
+			"path": "github.com/rakyll/statik",
+			"revision": "19b88da8fc15428620782ba18f68423130e7ac7d",
+			"revisionTime": "2018-08-03T00:42:13Z"
+		},
+		{
+			"checksumSHA1": "++Uxr4F++QrnFEbBlQsJ3VuQoNM=",
+			"path": "github.com/rakyll/statik/fs",
+			"revision": "19b88da8fc15428620782ba18f68423130e7ac7d",
+			"revisionTime": "2018-08-03T00:42:13Z"
 		},
 		{
 			"checksumSHA1": "lBehULzb2/kIK3wZ0gz2yNmHq9s=",
@@ -267,6 +303,10 @@
 			"path": "gopkg.in/alecthomas/kingpin.v2",
 			"revision": "e9044be3ab2a8e11d4e1f418d12f0790d57e8d70",
 			"revisionTime": "2016-08-29T10:30:05Z"
+		},
+		{
+			"path": "vendor/github.com/rakyll/statik",
+			"revision": ""
 		}
 	],
 	"rootPath": "github.com/jamesrr39/intelligent-backup-store-app"

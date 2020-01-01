@@ -5,30 +5,37 @@ import (
 	"os"
 	"strings"
 
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
+	"github.com/jamesrr39/goutil/fswalker"
+	"github.com/jamesrr39/goutil/gofs"
+	"github.com/jamesrr39/goutil/humanise"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
-	"github.com/spf13/afero"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 )
 
-type FileInfoMap map[domain.RelativePath]*domain.FileInfo
+const WarnOverFileSizeBytes = 1024 * 1024 * 1024 * 4
 
-func (m FileInfoMap) ToSlice() []*domain.FileInfo {
-	var fileInfos []*domain.FileInfo
+type FileInfoMap map[intelligentstore.RelativePath]*intelligentstore.FileInfo
+
+func (m FileInfoMap) ToSlice() []*intelligentstore.FileInfo {
+	var fileInfos []*intelligentstore.FileInfo
 	for _, fileInfo := range m {
 		fileInfos = append(fileInfos, fileInfo)
 	}
 	return fileInfos
 }
 
-func BuildFileInfosMap(fs afero.Fs, linkReader LinkReader, backupFromLocation string, excludeMatcher *excludesmatcher.ExcludesMatcher) (FileInfoMap, error) {
+func BuildFileInfosMap(fs gofs.Fs, backupFromLocation string, excludeMatcher *excludesmatcher.ExcludesMatcher) (FileInfoMap, error) {
+	_, err := fs.Stat(backupFromLocation)
+	if err != nil {
+		return nil, err
+	}
+
 	fileInfosMap := make(FileInfoMap)
 
-	err := afero.Walk(fs, backupFromLocation, func(path string, osFileInfo os.FileInfo, err error) error {
+	walkFunc := func(path string, osFileInfo os.FileInfo, err error) error {
 		if nil != err {
 			return err
 		}
-
-		log.Printf("%s: %b\n", path, osFileInfo.Mode()&os.ModeSymlink)
 
 		if osFileInfo.IsDir() {
 			return nil
@@ -36,29 +43,33 @@ func BuildFileInfosMap(fs afero.Fs, linkReader LinkReader, backupFromLocation st
 
 		relativePath := fullPathToRelative(backupFromLocation, path)
 
-		shouldBeExcluded := excludeMatcher.Matches(relativePath)
-		if shouldBeExcluded {
-			log.Printf("skipping '%s'\n", path)
-			return nil
+		if osFileInfo.Size() > WarnOverFileSizeBytes {
+			log.Printf("WARNING: large file found at %q. (Size: %s)\n", relativePath, humanise.HumaniseBytes(osFileInfo.Size()))
 		}
 
-		fileType := domain.FileTypeRegular
+		fileType := intelligentstore.FileTypeRegular
 
 		if !osFileInfo.Mode().IsRegular() {
 			if osFileInfo.Mode()&os.ModeSymlink != os.ModeSymlink {
 				log.Printf("WARNING: Unknown file mode: '%s' at '%s'\n", osFileInfo.Mode(), relativePath)
 				return nil
 			}
-			fileType = domain.FileTypeSymlink
+			fileType = intelligentstore.FileTypeSymlink
 		}
 
-		log.Printf("mode: %b\n", osFileInfo.Mode())
-
-		fileInfo := domain.NewFileInfo(fileType, relativePath, osFileInfo.ModTime(), osFileInfo.Size(), osFileInfo.Mode())
+		fileInfo := intelligentstore.NewFileInfo(fileType, relativePath, osFileInfo.ModTime(), osFileInfo.Size(), osFileInfo.Mode())
 
 		fileInfosMap[relativePath] = fileInfo
 		return nil
-	})
+	}
+
+	options := fswalker.WalkOptions{
+		Fs:             fs,
+		ExcludeMatcher: excludeMatcher,
+	}
+
+	err = fswalker.Walk(backupFromLocation, walkFunc, options)
+
 	if nil != err {
 		return nil, err
 	}
@@ -66,6 +77,6 @@ func BuildFileInfosMap(fs afero.Fs, linkReader LinkReader, backupFromLocation st
 	return fileInfosMap, nil
 }
 
-func fullPathToRelative(rootPath, fullPath string) domain.RelativePath {
-	return domain.NewRelativePath(strings.TrimPrefix(fullPath, rootPath))
+func fullPathToRelative(rootPath, fullPath string) intelligentstore.RelativePath {
+	return intelligentstore.NewRelativePath(strings.TrimPrefix(fullPath, rootPath))
 }

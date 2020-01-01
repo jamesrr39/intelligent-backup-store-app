@@ -5,17 +5,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
-	"github.com/spf13/afero"
+	"github.com/jamesrr39/goutil/gofs/mockfs"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func Test_BackupFile(t *testing.T) {
-	mockStore := NewMockStore(t, MockNowProvider, afero.NewMemMapFs())
+	fs := mockfs.NewMockFs()
+	mockStore := NewMockStore(t, MockNowProvider, fs)
 	bucket := mockStore.CreateBucket(t, "docs")
 
-	descriptor := domain.NewRegularFileDescriptorWithContents(
+	descriptor := intelligentstore.NewRegularFileDescriptorWithContents(
 		t,
 		"../a.txt",
 		time.Unix(0, 0),
@@ -23,39 +24,39 @@ func Test_BackupFile(t *testing.T) {
 		[]byte(""),
 	)
 
-	tx1, err := mockStore.Store.TransactionDAL.CreateTransaction(bucket, []*domain.FileInfo{descriptor.Descriptor.FileInfo})
+	tx1, err := mockStore.Store.TransactionDAL.CreateTransaction(bucket, []*intelligentstore.FileInfo{descriptor.Descriptor.FileInfo})
 	assert.Error(t, err)
 	assert.Equal(t, "couldn't start a transaction: filepath contains .. and is trying to traverse a directory", err.Error())
 	assert.Nil(t, tx1)
 
 	aFileContents := "a text"
-	goodADescriptor, err := domain.NewRegularFileDescriptorFromReader(
+	goodADescriptor, err := intelligentstore.NewRegularFileDescriptorFromReader(
 		"a.txt",
 		time.Unix(0, 0),
 		FileMode600,
-		bytes.NewBuffer([]byte(aFileContents)),
+		bytes.NewReader([]byte(aFileContents)),
 	)
 	require.Nil(t, err)
 
-	tx, err := mockStore.Store.TransactionDAL.CreateTransaction(bucket, []*domain.FileInfo{goodADescriptor.FileInfo})
+	tx, err := mockStore.Store.TransactionDAL.CreateTransaction(bucket, []*intelligentstore.FileInfo{goodADescriptor.FileInfo})
 	require.Nil(t, err)
 
-	err = mockStore.Store.TransactionDAL.BackupFile(tx, bytes.NewBuffer([]byte(aFileContents)))
+	err = mockStore.Store.TransactionDAL.BackupFile(tx, bytes.NewReader([]byte(aFileContents)))
 	require.NotNil(t, err)
 	assert.Equal(t, "expected transaction to be in stage 'Ready To Upload Files' but it was in stage 'Awaiting File Hashes'", err.Error())
 
-	relativePathsWithHashes := []*domain.RelativePathWithHash{
-		domain.NewRelativePathWithHash(goodADescriptor.RelativePath, goodADescriptor.Hash),
+	relativePathsWithHashes := []*intelligentstore.RelativePathWithHash{
+		intelligentstore.NewRelativePathWithHash(goodADescriptor.RelativePath, goodADescriptor.Hash),
 	}
 
 	_, err = tx.ProcessUploadHashesAndGetRequiredHashes(relativePathsWithHashes)
 	require.Nil(t, err)
 
-	err = mockStore.Store.TransactionDAL.BackupFile(tx, bytes.NewBuffer([]byte("bad contents - not in Begin() manifest")))
+	err = mockStore.Store.TransactionDAL.BackupFile(tx, bytes.NewReader([]byte("bad contents - not in Begin() manifest")))
 	require.NotNil(t, err)
 
 	// upload the same file contents at 2 different locations
-	err = mockStore.Store.TransactionDAL.BackupFile(tx, bytes.NewBuffer([]byte(aFileContents)))
+	err = mockStore.Store.TransactionDAL.BackupFile(tx, bytes.NewReader([]byte(aFileContents)))
 	require.Nil(t, err)
 
 	assert.Len(t, tx.FilesInVersion, 1)
@@ -64,7 +65,7 @@ func Test_BackupFile(t *testing.T) {
 
 func Test_ProcessUploadHashesAndGetRequiredHashes(t *testing.T) {
 	aFileContents := "a text"
-	goodADescriptor := domain.NewRegularFileDescriptorWithContents(
+	goodADescriptor := intelligentstore.NewRegularFileDescriptorWithContents(
 		t,
 		"a.txt",
 		time.Unix(0, 0),
@@ -73,7 +74,7 @@ func Test_ProcessUploadHashesAndGetRequiredHashes(t *testing.T) {
 	)
 
 	bFileContents := "b text"
-	goodBDescriptor := domain.NewRegularFileDescriptorWithContents(
+	goodBDescriptor := intelligentstore.NewRegularFileDescriptorWithContents(
 		t,
 		"b.txt",
 		time.Unix(0, 0),
@@ -81,10 +82,11 @@ func Test_ProcessUploadHashesAndGetRequiredHashes(t *testing.T) {
 		[]byte(bFileContents),
 	)
 
-	mockStore := NewMockStore(t, MockNowProvider, afero.NewMemMapFs())
+	fs := mockfs.NewMockFs()
+	mockStore := NewMockStore(t, MockNowProvider, fs)
 	bucket := mockStore.CreateBucket(t, "docs")
 
-	fileInfos := []*domain.FileInfo{
+	fileInfos := []*intelligentstore.FileInfo{
 		goodADescriptor.Descriptor.FileInfo,
 		goodBDescriptor.Descriptor.FileInfo,
 	}
@@ -92,15 +94,15 @@ func Test_ProcessUploadHashesAndGetRequiredHashes(t *testing.T) {
 	tx, err := mockStore.Store.TransactionDAL.CreateTransaction(bucket, fileInfos)
 	require.Nil(t, err)
 
-	relativePathsWithHashes := []*domain.RelativePathWithHash{
-		domain.NewRelativePathWithHash(goodADescriptor.Descriptor.RelativePath, goodADescriptor.Descriptor.Hash),
-		domain.NewRelativePathWithHash(goodBDescriptor.Descriptor.RelativePath, goodBDescriptor.Descriptor.Hash),
+	relativePathsWithHashes := []*intelligentstore.RelativePathWithHash{
+		intelligentstore.NewRelativePathWithHash(goodADescriptor.Descriptor.RelativePath, goodADescriptor.Descriptor.Hash),
+		intelligentstore.NewRelativePathWithHash(goodBDescriptor.Descriptor.RelativePath, goodBDescriptor.Descriptor.Hash),
 	}
 	hashes, err := tx.ProcessUploadHashesAndGetRequiredHashes(relativePathsWithHashes)
 	require.Nil(t, err)
 	require.Len(t, hashes, 2)
 
-	err = mockStore.Store.TransactionDAL.BackupFile(tx, bytes.NewBuffer([]byte(aFileContents)))
+	err = mockStore.Store.TransactionDAL.BackupFile(tx, bytes.NewReader([]byte(aFileContents)))
 	require.Nil(t, err)
 
 	_, err = tx.ProcessUploadHashesAndGetRequiredHashes(relativePathsWithHashes)
@@ -117,27 +119,28 @@ func Test_ProcessUploadHashesAndGetRequiredHashes(t *testing.T) {
 
 func Test_Commit(t *testing.T) {
 	aFileContents := "a text"
-	goodADescriptor, err := domain.NewRegularFileDescriptorFromReader(
+	goodADescriptor, err := intelligentstore.NewRegularFileDescriptorFromReader(
 		"a.txt",
 		time.Unix(0, 0),
 		FileMode600, // FIXME should have the symlink bit set
-		bytes.NewBuffer([]byte(aFileContents)),
+		bytes.NewReader([]byte(aFileContents)),
 	)
 	require.Nil(t, err)
 
 	bFileContents := "b text"
-	goodBDescriptor, err := domain.NewRegularFileDescriptorFromReader(
+	goodBDescriptor, err := intelligentstore.NewRegularFileDescriptorFromReader(
 		"b.txt",
 		time.Unix(0, 0),
 		FileMode600, // FIXME should have the symlink bit set
-		bytes.NewBuffer([]byte(bFileContents)),
+		bytes.NewReader([]byte(bFileContents)),
 	)
 	require.Nil(t, err)
 
-	mockStore := NewMockStore(t, MockNowProvider, afero.NewMemMapFs())
+	fs := mockfs.NewMockFs()
+	mockStore := NewMockStore(t, MockNowProvider, fs)
 	bucket := mockStore.CreateBucket(t, "docs")
 
-	fileInfos := []*domain.FileInfo{
+	fileInfos := []*intelligentstore.FileInfo{
 		goodADescriptor.FileInfo,
 		goodBDescriptor.FileInfo,
 	}
@@ -145,20 +148,20 @@ func Test_Commit(t *testing.T) {
 	tx, err := mockStore.Store.TransactionDAL.CreateTransaction(bucket, fileInfos)
 	require.Nil(t, err)
 
-	relativePathsWithHashes := []*domain.RelativePathWithHash{
-		domain.NewRelativePathWithHash(goodADescriptor.RelativePath, goodADescriptor.Hash),
-		domain.NewRelativePathWithHash(goodBDescriptor.RelativePath, goodBDescriptor.Hash),
+	relativePathsWithHashes := []*intelligentstore.RelativePathWithHash{
+		intelligentstore.NewRelativePathWithHash(goodADescriptor.RelativePath, goodADescriptor.Hash),
+		intelligentstore.NewRelativePathWithHash(goodBDescriptor.RelativePath, goodBDescriptor.Hash),
 	}
 	_, err = tx.ProcessUploadHashesAndGetRequiredHashes(relativePathsWithHashes)
 	require.Nil(t, err)
 
-	err = mockStore.Store.TransactionDAL.BackupFile(tx, bytes.NewBuffer([]byte(aFileContents)))
+	err = mockStore.Store.TransactionDAL.BackupFile(tx, bytes.NewReader([]byte(aFileContents)))
 	require.Nil(t, err)
 
 	err = mockStore.Store.TransactionDAL.Commit(tx)
 	require.NotNil(t, err) // should error because not all files have been uploaded
 
-	err = mockStore.Store.TransactionDAL.BackupFile(tx, bytes.NewBuffer([]byte(bFileContents)))
+	err = mockStore.Store.TransactionDAL.BackupFile(tx, bytes.NewReader([]byte(bFileContents)))
 	require.Nil(t, err)
 
 	err = mockStore.Store.TransactionDAL.Commit(tx)
@@ -167,17 +170,17 @@ func Test_Commit(t *testing.T) {
 
 func Test_ProcessSymlinks(t *testing.T) {
 	aFileContents := "a text"
-	goodADescriptor, err := domain.NewRegularFileDescriptorFromReader(
+	goodADescriptor, err := intelligentstore.NewRegularFileDescriptorFromReader(
 		"a.txt",
 		time.Unix(0, 0),
 		FileMode600,
-		bytes.NewBuffer([]byte(aFileContents)),
+		bytes.NewReader([]byte(aFileContents)),
 	)
 	require.Nil(t, err)
 
-	symlinkDescriptor := domain.NewSymlinkFileDescriptor(
-		domain.NewFileInfo(
-			domain.FileTypeSymlink,
+	symlinkDescriptor := intelligentstore.NewSymlinkFileDescriptor(
+		intelligentstore.NewFileInfo(
+			intelligentstore.FileTypeSymlink,
 			"b",
 			time.Unix(0, 0),
 			1,
@@ -185,10 +188,11 @@ func Test_ProcessSymlinks(t *testing.T) {
 		),
 		"a.txt")
 
-	mockStore := NewMockStore(t, MockNowProvider, afero.NewMemMapFs())
+	fs := mockfs.NewMockFs()
+	mockStore := NewMockStore(t, MockNowProvider, fs)
 	bucket := mockStore.CreateBucket(t, "docs")
 
-	fileInfos := []*domain.FileInfo{
+	fileInfos := []*intelligentstore.FileInfo{
 		goodADescriptor.FileInfo,
 		symlinkDescriptor.FileInfo,
 	}
@@ -196,21 +200,21 @@ func Test_ProcessSymlinks(t *testing.T) {
 	tx, err := mockStore.Store.TransactionDAL.CreateTransaction(bucket, fileInfos)
 	require.Nil(t, err)
 
-	relativePathsWithHashes := []*domain.RelativePathWithHash{
-		domain.NewRelativePathWithHash(goodADescriptor.RelativePath, goodADescriptor.Hash),
+	relativePathsWithHashes := []*intelligentstore.RelativePathWithHash{
+		intelligentstore.NewRelativePathWithHash(goodADescriptor.RelativePath, goodADescriptor.Hash),
 	}
 	_, err = tx.ProcessUploadHashesAndGetRequiredHashes(relativePathsWithHashes)
 	require.Nil(t, err)
 
-	err = mockStore.Store.TransactionDAL.BackupFile(tx, bytes.NewBuffer([]byte(aFileContents)))
+	err = mockStore.Store.TransactionDAL.BackupFile(tx, bytes.NewReader([]byte(aFileContents)))
 	require.Nil(t, err)
 
 	err = mockStore.Store.TransactionDAL.Commit(tx)
 	require.NotNil(t, err) // should error because not all files have been uploaded
 	assert.Equal(t, "tried to commit the transaction but there are 1 symlinks left to upload", err.Error())
 
-	err = tx.ProcessSymlinks([]*domain.SymlinkWithRelativePath{
-		&domain.SymlinkWithRelativePath{
+	err = tx.ProcessSymlinks([]*intelligentstore.SymlinkWithRelativePath{
+		&intelligentstore.SymlinkWithRelativePath{
 			RelativePath: symlinkDescriptor.RelativePath,
 			Dest:         symlinkDescriptor.Dest,
 		},

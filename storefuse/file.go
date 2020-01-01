@@ -7,7 +7,7 @@ import (
 	"log"
 
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 
 	"bazil.org/fuse"
 )
@@ -16,7 +16,7 @@ var data = []byte("my test file\n")
 
 type File struct {
 	dal        *dal.IntelligentStoreDAL
-	descriptor domain.FileDescriptor
+	descriptor intelligentstore.FileDescriptor
 }
 
 func (f *File) Attr(ctx context.Context, attr *fuse.Attr) error {
@@ -38,7 +38,7 @@ func (f *File) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.ReadR
 		return nil
 	}
 
-	regularDescriptor := (f.descriptor).(*domain.RegularFileDescriptor)
+	regularDescriptor := (f.descriptor).(*intelligentstore.RegularFileDescriptor)
 	object, err := f.dal.GetObjectByHash(regularDescriptor.Hash)
 	if nil != err {
 		return err
