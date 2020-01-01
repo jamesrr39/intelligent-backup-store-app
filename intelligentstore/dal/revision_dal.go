@@ -81,17 +81,21 @@ func (r *RevisionDAL) GetFilesInRevisionWithPrefix(bucket *intelligentstore.Buck
 		var fileType intelligentstore.FileType
 		switch len(fragments) {
 		case 1:
-			fileType = intelligentstore.FileTypeRegular // FIXME symlink
+			fileType = descriptor.GetFileInfo().Type
 		default:
 			fileType = intelligentstore.FileTypeDir
 		}
 		child, ok := childFilesMap[fileName]
 		if !ok {
-			childFilesMap[fileName] = intelligentstore.ChildInfo{
+			child = intelligentstore.ChildInfo{
 				FileType: fileType,
 			}
 		}
-		child.SubChildrenCount++
+
+		if fileType == intelligentstore.FileTypeDir {
+			child.SubChildrenCount++
+		}
+		childFilesMap[fileName] = child
 	}
 
 	if len(childFilesMap) == 0 {
