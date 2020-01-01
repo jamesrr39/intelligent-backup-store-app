@@ -15,7 +15,10 @@ import (
 	"github.com/pkg/errors"
 )
 
-var ErrFileNotRequiredForTransaction = errors.New("hash is not scheduled for upload, or has already been uploaded")
+var (
+	ErrFileNotRequiredForTransaction = errors.New("file is not scheduled for upload")
+	ErrFileAlreadyUploaded           = errors.New("file has already been uploaded")
+)
 
 type TransactionDAL struct {
 	IntelligentStoreDAL *IntelligentStoreDAL
@@ -101,15 +104,15 @@ func (dal *TransactionDAL) BackupFile(transaction *intelligentstore.Transaction,
 		return err
 	}
 
-	filePath := filepath.Join(
-		dal.IntelligentStoreDAL.StoreBasePath,
-		".backup_data",
-		"objects",
-		hash.FirstChunk(),
-		hash.Remainder()+".gz")
+	filePath := dal.IntelligentStoreDAL.RevisionDAL.getObjectPath(hash)
 
-	if !transaction.IsFileScheduledForUploadAlready[hash] {
-		return errorsx.Wrap(ErrFileNotRequiredForTransaction, "hash", hash, "filepath", filePath)
+	status, ok := transaction.UploadStatus[hash]
+	if !ok {
+		return errorsx.Wrap(ErrFileNotRequiredForTransaction, "hash", hash)
+	}
+
+	if status == intelligentstore.UploadStatusCompleted {
+		return errorsx.Wrap(ErrFileAlreadyUploaded, "hash", hash)
 	}
 
 	fs := dal.IntelligentStoreDAL.fs
@@ -148,11 +151,21 @@ func (dal *TransactionDAL) BackupFile(transaction *intelligentstore.Transaction,
 	}
 
 	transaction.Mu.Lock()
-	delete(transaction.IsFileScheduledForUploadAlready, hash)
+	transaction.UploadStatus[hash] = intelligentstore.UploadStatusCompleted
 	transaction.Mu.Unlock()
 
 	return nil
 
+}
+
+func getRemainingFileCountToUpload(transaction *intelligentstore.Transaction) int {
+	var count int
+	for _, status := range transaction.UploadStatus {
+		if status == intelligentstore.UploadStatusPending {
+			count++
+		}
+	}
+	return count
 }
 
 // Commit closes the transaction and writes the revision data to disk
@@ -167,7 +180,7 @@ func (dal *TransactionDAL) Commit(transaction *intelligentstore.Transaction) err
 			len(transaction.FileInfosMissingSymlinks))
 	}
 
-	amountOfFilesRemainingToUpload := len(transaction.IsFileScheduledForUploadAlready)
+	amountOfFilesRemainingToUpload := getRemainingFileCountToUpload(transaction)
 	if amountOfFilesRemainingToUpload > 0 {
 		return fmt.Errorf(
 			"tried to commit the transaction but there are %d files left to upload",

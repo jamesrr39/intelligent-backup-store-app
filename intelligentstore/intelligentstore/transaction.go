@@ -11,16 +11,24 @@ type HashAlreadyPresentResolver interface {
 	IsPresent(Hash) (bool, error)
 }
 
+type UploadStatus int
+
+const (
+	UploadStatusUnknown UploadStatus = iota
+	UploadStatusPending
+	UploadStatusCompleted
+)
+
 // TODO in-progress transaction
 type Transaction struct {
-	Revision                        *Revision
-	FilesInVersion                  []FileDescriptor
-	FileInfosMissingHashes          map[RelativePath]*FileInfo
-	FileInfosMissingSymlinks        map[RelativePath]*FileInfo
-	IsFileScheduledForUploadAlready map[Hash]bool
-	Mu                              *sync.RWMutex
-	Stage                           TransactionStage
-	hashAlreadyPresentResolver      HashAlreadyPresentResolver
+	Revision                   *Revision
+	FilesInVersion             []FileDescriptor
+	FileInfosMissingHashes     map[RelativePath]*FileInfo
+	FileInfosMissingSymlinks   map[RelativePath]*FileInfo
+	UploadStatus               map[Hash]UploadStatus
+	Mu                         *sync.RWMutex
+	Stage                      TransactionStage
+	hashAlreadyPresentResolver HashAlreadyPresentResolver
 }
 
 type SymlinkWithRelativePath struct {
@@ -34,7 +42,7 @@ func NewTransaction(revision *Revision, hashAlreadyPresentResolver HashAlreadyPr
 		nil,
 		make(map[RelativePath]*FileInfo),
 		make(map[RelativePath]*FileInfo),
-		make(map[Hash]bool),
+		make(map[Hash]UploadStatus),
 		&sync.RWMutex{},
 		TransactionStageAwaitingFileHashes,
 		hashAlreadyPresentResolver,
@@ -105,8 +113,10 @@ func (transaction *Transaction) GetHashesForRequiredContent() []Hash {
 
 	transaction.Mu.Lock()
 	defer transaction.Mu.Unlock()
-	for hash := range transaction.IsFileScheduledForUploadAlready {
-		hashes = append(hashes, hash)
+	for hash, status := range transaction.UploadStatus {
+		if status == UploadStatusPending {
+			hashes = append(hashes, hash)
+		}
 	}
 
 	return hashes
@@ -151,7 +161,7 @@ func (transaction *Transaction) CheckStage(expectedStages ...TransactionStage) e
 func (transaction *Transaction) addDescriptorToTransaction(fileDescriptor *RegularFileDescriptor) error {
 	isTryingToTraverse := dirtraversal.IsTryingToTraverseUp(string(fileDescriptor.Hash))
 	if isTryingToTraverse {
-		return fmt.Errorf("%s is attempting to traverse up the filesystem tree, which is not allowed (and this is not a hash)", fileDescriptor.Hash)
+		return fmt.Errorf("%q is attempting to traverse up the filesystem tree, which is not allowed (and this is not a hash)", fileDescriptor.Hash)
 	}
 
 	transaction.FilesInVersion = append(transaction.FilesInVersion, fileDescriptor)
@@ -160,8 +170,10 @@ func (transaction *Transaction) addDescriptorToTransaction(fileDescriptor *Regul
 	transaction.Mu.Lock()
 	defer transaction.Mu.Unlock()
 
-	isFileScheduledForUploadAlready := transaction.IsFileScheduledForUploadAlready[fileDescriptor.Hash]
-	if isFileScheduledForUploadAlready {
+	_, ok := transaction.UploadStatus[fileDescriptor.Hash]
+	if ok {
+		// if this hash is already marked for upload, it means there are 2 files with the same contents to be uploaded.
+		// this is fine, but we only need to upload it once, so ignore this second addDescriptorToTransaction
 		return nil
 	}
 
@@ -171,7 +183,7 @@ func (transaction *Transaction) addDescriptorToTransaction(fileDescriptor *Regul
 	}
 
 	if !hashIsPresent {
-		transaction.IsFileScheduledForUploadAlready[fileDescriptor.Hash] = true
+		transaction.UploadStatus[fileDescriptor.Hash] = UploadStatusPending
 	}
 
 	return nil

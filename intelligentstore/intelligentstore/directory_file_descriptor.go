@@ -3,10 +3,10 @@ package intelligentstore
 import "time"
 
 // map[name]file_count
-type ChildFilesMap map[string]ChildInfo
+type ChildFilesMap map[string]*ChildInfo
 
 type ChildInfo struct {
-	FileType         FileType
+	Descriptor       FileDescriptor
 	SubChildrenCount int64
 }
 

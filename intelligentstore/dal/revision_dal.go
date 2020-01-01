@@ -78,24 +78,38 @@ func (r *RevisionDAL) GetFilesInRevisionWithPrefix(bucket *intelligentstore.Buck
 		remainderOfRelativePath := strings.TrimPrefix(string(descriptorRelativePath), prefixPathWithTrailingSlash)
 		fragments := strings.Split(remainderOfRelativePath, string(intelligentstore.RelativePathSep))
 		fileName := fragments[0]
-		var fileType intelligentstore.FileType
+
 		switch len(fragments) {
 		case 1:
-			fileType = descriptor.GetFileInfo().Type
-		default:
-			fileType = intelligentstore.FileTypeDir
-		}
-		child, ok := childFilesMap[fileName]
-		if !ok {
-			child = intelligentstore.ChildInfo{
-				FileType: fileType,
+			// nothing (regular/symlink file)
+			childFilesMap[fileName] = &intelligentstore.ChildInfo{
+				Descriptor: descriptor,
 			}
-		}
-
-		if fileType == intelligentstore.FileTypeDir {
+		default:
+			child, ok := childFilesMap[fileName]
+			if !ok {
+				child = &intelligentstore.ChildInfo{
+					Descriptor: intelligentstore.NewDirectoryFileDescriptor(
+						intelligentstore.NewRelativePath(fileName),
+						nil, // TODO: add this in?
+					),
+				}
+				childFilesMap[fileName] = child
+			}
 			child.SubChildrenCount++
 		}
-		childFilesMap[fileName] = child
+
+		// child, ok := childFilesMap[fileName]
+		// if !ok {
+		// 	child = intelligentstore.ChildInfo{
+		// 		Descriptor: descriptor,
+		// 	}
+		// }
+
+		// if descriptor.GetFileInfo().Type == intelligentstore.FileTypeDir {
+		// 	child.SubChildrenCount++
+		// }
+		// childFilesMap[fileName] = child
 	}
 
 	if len(childFilesMap) == 0 {

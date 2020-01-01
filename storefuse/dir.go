@@ -9,10 +9,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
-
 	"bazil.org/fuse"
 	"bazil.org/fuse/fs"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 )
 
 var _ = fs.Node(&Dir{})
@@ -124,13 +123,13 @@ func (d *Dir) Lookup(ctx context.Context, name string) (fs.Node, error) {
 		for fileName, info := range dirFileDescriptor.ChildFilesMap {
 			path := filepath.Join(pathInFs, fileName)
 			var fileType fuse.DirentType
-			switch info.FileType {
+			switch info.Descriptor.GetFileInfo().Type {
 			case intelligentstore.FileTypeDir:
 				fileType = fuse.DT_Dir
 			case intelligentstore.FileTypeRegular:
 				fileType = fuse.DT_File
 			default:
-				log.Printf("skipping %q (file type %q)\n", fileName, info.FileType)
+				log.Printf("skipping %q (file type %q)\n", fileName, info.Descriptor.GetFileInfo().Type)
 				continue
 			}
 

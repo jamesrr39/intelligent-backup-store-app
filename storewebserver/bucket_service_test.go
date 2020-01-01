@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -14,14 +13,12 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
-
 	"github.com/jamesrr39/goutil/gofs/mockfs"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	protofiles "github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/protobufs/proto_files"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func testNowProvider() time.Time {
@@ -85,8 +82,8 @@ func Test_handleGetRevision(t *testing.T) {
 
 	bucketService.ServeHTTP(w1, r1)
 
-	log.Printf("rev info bytes: %s\n", w1.Body.Bytes())
 	var revInfoWithFiles *revisionInfoWithFiles
+
 	err := json.NewDecoder(w1.Body).Decode(&revInfoWithFiles)
 	require.Nil(t, err)
 	require.Equal(t, 200, w1.Code)
@@ -208,7 +205,7 @@ func Test_handleUploadFile(t *testing.T) {
 	}
 
 	bucketService.ServeHTTP(openTxW, openTxR)
-	require.Equal(t, 200, openTxW.Code)
+	require.Equal(t, http.StatusOK, openTxW.Code)
 
 	var openTxResponse protofiles.OpenTxResponse
 	err = proto.Unmarshal(openTxW.Body.Bytes(), &openTxResponse)
@@ -240,55 +237,59 @@ func Test_handleUploadFile(t *testing.T) {
 	uploadedFileProtoBytes, err := proto.Marshal(uploadedFileProto)
 	require.Nil(t, err)
 
-	r1 := &http.Request{
-		URL:    &url.URL{Path: fmt.Sprintf("/docs/upload/%d/file", openTxResponse.GetRevisionID())},
-		Method: "POST",
-		Body:   ioutil.NopCloser(bytes.NewBuffer(uploadedFileProtoBytes)),
-	}
-	w1 := httptest.NewRecorder()
+	t.Run("wanted file", func(t *testing.T) {
+		r1 := &http.Request{
+			URL:    &url.URL{Path: fmt.Sprintf("/docs/upload/%d/file", openTxResponse.GetRevisionID())},
+			Method: "POST",
+			Body:   ioutil.NopCloser(bytes.NewBuffer(uploadedFileProtoBytes)),
+		}
+		w1 := httptest.NewRecorder()
 
-	// upload wanted file
-	bucketService.ServeHTTP(w1, r1)
-	require.Equal(t, 200, w1.Code)
+		// upload wanted file
+		bucketService.ServeHTTP(w1, r1)
+		require.Equal(t, 200, w1.Code)
+	})
 
-	// upload unwanted file
-	unwantedUploadedFileProto := &protofiles.FileContentsProto{
-		Contents: []byte("unwanted file"),
-	}
-	unwantedUploadedFileProtoBytes, err := proto.Marshal(unwantedUploadedFileProto)
-	require.Nil(t, err)
+	t.Run("unwanted file", func(t *testing.T) {
+		// upload unwanted file
+		unwantedUploadedFileProto := &protofiles.FileContentsProto{
+			Contents: []byte("unwanted file"),
+		}
+		unwantedUploadedFileProtoBytes, err := proto.Marshal(unwantedUploadedFileProto)
+		require.Nil(t, err)
 
-	rUnwanted := &http.Request{
-		Body:   ioutil.NopCloser(bytes.NewBuffer(unwantedUploadedFileProtoBytes)),
-		URL:    &url.URL{Path: fmt.Sprintf("/docs/upload/%d/file", openTxResponse.GetRevisionID())},
-		Method: "POST",
-	}
-	wUnwanted := httptest.NewRecorder()
+		rUnwanted := &http.Request{
+			Body:   ioutil.NopCloser(bytes.NewBuffer(unwantedUploadedFileProtoBytes)),
+			URL:    &url.URL{Path: fmt.Sprintf("/docs/upload/%d/file", openTxResponse.GetRevisionID())},
+			Method: http.MethodPost,
+		}
+		wUnwanted := httptest.NewRecorder()
 
-	bucketService.ServeHTTP(wUnwanted, rUnwanted)
-	assert.Equal(t, 400, wUnwanted.Code)
-	assert.Equal(
-		t,
-		dal.ErrFileNotRequiredForTransaction.Error(),
-		strings.TrimSuffix(string(wUnwanted.Body.Bytes()), "\n"),
-	)
+		bucketService.ServeHTTP(wUnwanted, rUnwanted)
+		assert.Equal(t, 400, wUnwanted.Code)
+		assert.Equal(
+			t,
+			dal.ErrFileNotRequiredForTransaction.Error(),
+			strings.TrimSuffix(string(wUnwanted.Body.Bytes()), "\n"),
+		)
+	})
 
-	// upload file already uploaded
-	rAlreadyUploaded := &http.Request{
-		Body:   ioutil.NopCloser(bytes.NewBuffer(uploadedFileProtoBytes)),
-		URL:    &url.URL{Path: fmt.Sprintf("/docs/upload/%d/file", openTxResponse.GetRevisionID())},
-		Method: "POST",
-	}
-	wAlreadyUploaded := httptest.NewRecorder()
+	t.Run("already uploaded file", func(t *testing.T) {
+		rAlreadyUploaded := &http.Request{
+			Body:   ioutil.NopCloser(bytes.NewBuffer(uploadedFileProtoBytes)),
+			URL:    &url.URL{Path: fmt.Sprintf("/docs/upload/%d/file", openTxResponse.GetRevisionID())},
+			Method: http.MethodPost,
+		}
+		wAlreadyUploaded := httptest.NewRecorder()
 
-	// upload wanted file
-	bucketService.ServeHTTP(wAlreadyUploaded, rAlreadyUploaded)
-	assert.Equal(t, 400, wAlreadyUploaded.Code)
-	assert.Equal(
-		t,
-		dal.ErrFileNotRequiredForTransaction.Error(),
-		strings.TrimSuffix(string(wAlreadyUploaded.Body.Bytes()), "\n"),
-	)
+		bucketService.ServeHTTP(wAlreadyUploaded, rAlreadyUploaded)
+		assert.Equal(t, 400, wAlreadyUploaded.Code)
+		assert.Equal(
+			t,
+			dal.ErrFileNotRequiredForTransaction.Error(),
+			strings.TrimSuffix(string(wAlreadyUploaded.Body.Bytes()), "\n"),
+		)
+	})
 }
 
 func Test_handleCommitTransaction(t *testing.T) {

@@ -47,7 +47,20 @@ func Test_GetFilesInRevisionWithPath(t *testing.T) {
 
 		expected := intelligentstore.NewDirectoryFileDescriptor(
 			"docs/dir1",
-			intelligentstore.ChildFilesMap{"file4.txt": intelligentstore.ChildInfo{FileType: intelligentstore.FileTypeRegular}},
+			intelligentstore.ChildFilesMap{
+				"file4.txt": &intelligentstore.ChildInfo{
+					Descriptor: intelligentstore.NewRegularFileDescriptor(
+						intelligentstore.NewFileInfo(
+							intelligentstore.FileTypeRegular,
+							intelligentstore.NewRelativePath("docs/dir1/file4.txt"),
+							MockNowProvider(),
+							int64(len("test4")),
+							FileMode600,
+						),
+						"2257aab44b42813142aa8ac4767116ad5bd41e94a79aa0672cc962128ed4809f50ed38d35ba945a80799976c9efa9b686f28d18036134bc2bb0ac2de96ec6280",
+					),
+				},
+			},
 		)
 		assert.Equal(t, expected, dirDescriptor)
 	})
@@ -59,8 +72,8 @@ func Test_GetFilesInRevisionWithPath(t *testing.T) {
 		expected2 := intelligentstore.NewDirectoryFileDescriptor(
 			"",
 			intelligentstore.ChildFilesMap{
-				"docs": intelligentstore.ChildInfo{
-					FileType:         intelligentstore.FileTypeDir,
+				"docs": &intelligentstore.ChildInfo{
+					Descriptor:       intelligentstore.NewDirectoryFileDescriptor("docs", nil),
 					SubChildrenCount: 4,
 				},
 			},

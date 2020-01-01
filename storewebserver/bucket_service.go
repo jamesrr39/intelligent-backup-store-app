@@ -210,7 +210,6 @@ func (s *BucketService) handleGetRevision(w http.ResponseWriter, r *http.Request
 
 	rootDir := r.URL.Query().Get("rootDir")
 
-	files := []intelligentstore.FileDescriptor{}
 	//
 	// type subDirInfoMap map[string]int64 // map[name]nestedFileCount
 	// dirnames := subDirInfoMap{}         // dirname[nested file count]
@@ -244,18 +243,29 @@ func (s *BucketService) handleGetRevision(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if descriptor.GetFileInfo().Type == intelligentstore.FileTypeDir {
+	if descriptor.GetFileInfo().Type != intelligentstore.FileTypeDir {
 		http.Error(w, fmt.Sprintf("this endpoint serves directory listings, but you came to a different file type (%q)", descriptor.GetFileInfo().Type), 400)
 		return
 	}
 
 	dirDescriptor := descriptor.(*intelligentstore.DirectoryFileDescriptor)
-	dirs := []*subDirInfo{}
-	for dirname, info := range dirDescriptor.ChildFilesMap {
-		dirs = append(dirs, &subDirInfo{dirname, info.SubChildrenCount})
-	}
 
-	data := &revisionInfoWithFiles{revision.VersionTimestamp, files, dirs}
+	data := revisionInfoWithFiles{
+		LastRevisionTs: revision.VersionTimestamp,
+		Files:          []intelligentstore.FileDescriptor{},
+		Dirs:           []*subDirInfo{},
+	}
+	for dirname, info := range dirDescriptor.ChildFilesMap {
+		switch info.Descriptor.GetFileInfo().Type {
+		case intelligentstore.FileTypeDir:
+			data.Dirs = append(data.Dirs, &subDirInfo{dirname, info.SubChildrenCount})
+		case intelligentstore.FileTypeRegular, intelligentstore.FileTypeSymlink:
+			data.Files = append(data.Files, info.Descriptor)
+		default:
+			http.Error(w, fmt.Sprintf("unhandled file type: %q", info.Descriptor.GetFileInfo().Type), http.StatusInternalServerError)
+			return
+		}
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	err = json.NewEncoder(w).Encode(data)
@@ -412,7 +422,7 @@ func (s *BucketService) handleUploadFile(w http.ResponseWriter, r *http.Request)
 		bytes.NewReader(uploadedFile.Contents))
 	if nil != err {
 		errCode := 500
-		if errorsx.Cause(err) == dal.ErrFileNotRequiredForTransaction {
+		if errorsx.Cause(err) == dal.ErrFileNotRequiredForTransaction || errorsx.Cause(err) == dal.ErrFileAlreadyUploaded {
 			errCode = 400
 		}
 		http.Error(w, err.Error(), errCode)
