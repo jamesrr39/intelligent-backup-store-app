@@ -282,7 +282,7 @@ func setupRunMigrationsCommand() {
 }
 
 func setupFuseMountCommand() {
-	cmd := kingpin.Command("mount", "mount the store as a filesystem")
+	cmd := kingpin.Command("mount", "mount the store as a filesystem (experimental, only linux supported)")
 	storeLocation := addStoreLocation(cmd, true)
 	mountOnPathLocation := cmd.Arg("mount-at", "the path to mount the filesystem at").Required().String()
 	cmd.Action(func(ctx *kingpin.ParseContext) error {
