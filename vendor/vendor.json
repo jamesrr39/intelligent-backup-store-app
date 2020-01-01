@@ -136,6 +136,12 @@
 			"revisionTime": "2017-03-18T15:58:57Z"
 		},
 		{
+			"checksumSHA1": "A2pvBObG7boB0BjpoUj3sBZAAsg=",
+			"path": "github.com/go-chi/render",
+			"revision": "8c8c7a43d054b536d7e18e82c4331e7258f211a2",
+			"revisionTime": "2017-12-31T23:41:54Z"
+		},
+		{
 			"checksumSHA1": "/RE0VzeaXdaBUNeNMUXWqzly7qY=",
 			"path": "github.com/gobwas/glob",
 			"revision": "51eb1ee00b6d931c66d229ceeb7c31b985563420",
@@ -208,6 +214,12 @@
 			"revisionTime": "2017-09-18T23:13:52Z"
 		},
 		{
+			"checksumSHA1": "Tgpmzn98Dy5hhNQhprt2uOIcb+M=",
+			"path": "github.com/jamesrr39/goutil/errorsx",
+			"revision": "6916160f8a53ae70e664839977d4d31d1ca72e95",
+			"revisionTime": "2019-09-05T20:24:57Z"
+		},
+		{
 			"checksumSHA1": "4KwJAth706pCN/XkVEcyf/Aj88o=",
 			"path": "github.com/jamesrr39/goutil/fswalker",
 			"revision": "eef48524bd8aca4e054517db8bc370b479c26847",
@@ -230,6 +242,18 @@
 			"path": "github.com/jamesrr39/goutil/humanise",
 			"revision": "eef48524bd8aca4e054517db8bc370b479c26847",
 			"revisionTime": "2018-07-04T21:38:34Z"
+		},
+		{
+			"checksumSHA1": "zxUCcbzosdXVG4xzEEaghr3uswU=",
+			"path": "github.com/jamesrr39/goutil/snapshot",
+			"revision": "6916160f8a53ae70e664839977d4d31d1ca72e95",
+			"revisionTime": "2019-09-05T20:24:57Z"
+		},
+		{
+			"checksumSHA1": "AC9GXutZpDJDSOGypjYdzS7G7ZA=",
+			"path": "github.com/jamesrr39/semaphore",
+			"revision": "0d5ddc3960869163d28d04446584ae05cb9bbb78",
+			"revisionTime": "2018-05-21T20:22:00Z"
 		},
 		{
 			"checksumSHA1": "rJab1YdNhQooDiBWNnt7TLWPyBU=",
