@@ -3,7 +3,6 @@ package storewebserver
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 )
@@ -30,8 +29,6 @@ func (r *revisionInfoWithFiles) UnmarshalJSON(b []byte) error {
 		if nil != err {
 			return err
 		}
-
-		log.Printf("fileinfo: %v\n", fileInfo)
 
 		switch fileInfo.Type {
 		case intelligentstore.FileTypeRegular:
