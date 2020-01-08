@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -19,6 +20,7 @@ import (
 	"github.com/jamesrr39/intelligent-backup-store-app/storewebserver"
 	"github.com/jamesrr39/intelligent-backup-store-app/uploaders"
 	"github.com/jamesrr39/intelligent-backup-store-app/uploaders/localupload"
+	"github.com/jamesrr39/intelligent-backup-store-app/uploaders/remotedownloader"
 	"github.com/jamesrr39/intelligent-backup-store-app/uploaders/webuploadclient"
 	kingpin "gopkg.in/alecthomas/kingpin.v2"
 )
@@ -31,6 +33,7 @@ func main() {
 	setupExportCommand()
 	setupListBucketRevisionsCommand()
 	setupListBucketsCommand()
+	setupBackupRemoteCommand()
 	setupBackupIntoCommand()
 	setupRunMigrationsCommand()
 	setupFuseMountCommand()
@@ -73,6 +76,38 @@ func setupInitBucketCommand() {
 
 		log.Printf("created bucket '%s'\n", *initBucketBucketName)
 		return nil
+	})
+}
+
+func setupBackupRemoteCommand() {
+	cmd := kingpin.Command("backup-remote", "backup a new version of a remote site into the store")
+	storeLocation := addStoreLocation(cmd, true)
+	bucketName := cmd.Arg("bucket name", "name of the bucket to back up into").Required().String()
+	configLocation := cmd.Arg("config location", "location to config file").Required().String()
+	cmd.Action(func(ctx *kingpin.ParseContext) error {
+		backupStore, err := dal.NewIntelligentStoreConnToExisting(*storeLocation)
+		if nil != err {
+			return err
+		}
+
+		f, err := os.Open(*configLocation)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+
+		var conf *remotedownloader.Config
+		err = json.NewDecoder(f).Decode(&conf)
+		if err != nil {
+			return err
+		}
+
+		bucket, err := backupStore.BucketDAL.GetBucketByName(*bucketName)
+		if err != nil {
+			return err
+		}
+
+		return remotedownloader.DownloadRemote(http.DefaultClient, backupStore, bucket, conf, nil)
 	})
 }
 

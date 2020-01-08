@@ -24,6 +24,7 @@ type TransactionDAL struct {
 	IntelligentStoreDAL *IntelligentStoreDAL
 }
 
+// CreateTransaction starts a transaction. It is the first part of a transaction; after that, the files that are required must be backed up and then the transaction committed
 func (dal *TransactionDAL) CreateTransaction(bucket *intelligentstore.Bucket, fileInfos []*intelligentstore.FileInfo) (*intelligentstore.Transaction, error) {
 	revisionVersion := intelligentstore.RevisionVersion(dal.IntelligentStoreDAL.nowProvider().Unix())
 	revision := intelligentstore.NewRevision(bucket, revisionVersion)

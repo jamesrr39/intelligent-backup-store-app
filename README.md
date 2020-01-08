@@ -6,7 +6,7 @@ intelligent-backup-store uses SHA-512 hashing to store all your content exactly 
 
 Note: Hash collisions are very, very rare with SHA-512 hashing, but are still possible. For files that must never be lost you should either check the contents of the uploaded file (we won't write over it after we first write it), or you should devise another backup strategy for these files.
 
-Upload is done over HTTP. Start the web server to start the upload server, and the web application to view your records of files in a web browser.
+Upload can be done locally or over HTTP. To upload over HTTP, Start the web server to start the upload server, and the web application to view your records of files in a web browser.
 
 If you would like to make a client for the uploader, you can! The messages are serialised with protocol buffers. You can find the .proto files in this repository and and generate code with your language of choice. Search for Google Protocol Buffers guide for help on this.
 
