@@ -238,6 +238,12 @@
 			"revisionTime": "2018-10-28T10:14:16Z"
 		},
 		{
+			"checksumSHA1": "Qa1ljLZExTlfEUHnbw+dDCwOdcw=",
+			"path": "github.com/jamesrr39/goutil/httpextra",
+			"revision": "6916160f8a53ae70e664839977d4d31d1ca72e95",
+			"revisionTime": "2019-09-05T20:24:57Z"
+		},
+		{
 			"checksumSHA1": "QcAy0NLUd92+l9KiNHIMccMYLXE=",
 			"path": "github.com/jamesrr39/goutil/humanise",
 			"revision": "eef48524bd8aca4e054517db8bc370b479c26847",
