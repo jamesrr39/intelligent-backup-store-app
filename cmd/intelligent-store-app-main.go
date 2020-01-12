@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jamesrr39/goutil/errorsx"
 	"github.com/jamesrr39/intelligent-backup-store-app/exporters"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
@@ -107,7 +108,17 @@ func setupBackupRemoteCommand() {
 			return err
 		}
 
-		return remotedownloader.DownloadRemote(http.DefaultClient, backupStore, bucket, conf, nil)
+		variablesKeyValues := make(map[string]string)
+		for _, envKey := range conf.RequiredVariables {
+			val, isPresent := os.LookupEnv(envKey)
+			if !isPresent {
+				return errorsx.Errorf("environment variable %q could not be found", envKey)
+			}
+
+			variablesKeyValues[envKey] = val
+		}
+
+		return remotedownloader.DownloadRemote(http.DefaultClient, backupStore, bucket, conf, variablesKeyValues)
 	})
 }
 

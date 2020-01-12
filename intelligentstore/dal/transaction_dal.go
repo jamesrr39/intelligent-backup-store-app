@@ -87,13 +87,17 @@ func (dal *TransactionDAL) CreateTransaction(bucket *intelligentstore.Bucket, fi
 	return tx, nil
 }
 
-// TODO: test for >4GB file
-func (dal *TransactionDAL) BackupFile(transaction *intelligentstore.Transaction, sourceFile io.ReadSeeker) error {
-
-	err := transaction.CheckStage(intelligentstore.TransactionStageReadyToUploadFiles)
-	if nil != err {
-		return err
+// BackupFromTempFile copies a known tempfile into the store. It moves the file, so the temp file will not exist in the "temp store" after this.
+func (dal *TransactionDAL) BackupFromTempFile(transaction *intelligentstore.Transaction, tempfile *TempFile) error {
+	createFileFunc := func(destinationFilePath string) error {
+		return dal.IntelligentStoreDAL.fs.Rename(tempfile.FilePath, destinationFilePath)
 	}
+
+	return dal.backupFile(transaction, tempfile.Hash, createFileFunc)
+}
+
+// BackupFile backs up a file from a read-seeker
+func (dal *TransactionDAL) BackupFile(transaction *intelligentstore.Transaction, sourceFile io.ReadSeeker) error {
 
 	hash, err := intelligentstore.NewHash(sourceFile)
 	if nil != err {
@@ -101,6 +105,45 @@ func (dal *TransactionDAL) BackupFile(transaction *intelligentstore.Transaction,
 	}
 
 	_, err = sourceFile.Seek(io.SeekStart, 0)
+	if nil != err {
+		return err
+	}
+
+	createFileFunc := func(destinationFilePath string) error {
+		return dal.createNewStoreFile(sourceFile, destinationFilePath)
+	}
+
+	return dal.backupFile(transaction, hash, createFileFunc)
+}
+
+func (dal *TransactionDAL) createNewStoreFile(sourceFile io.ReadSeeker, destinationFilePath string) error {
+	newFile, err := dal.IntelligentStoreDAL.fs.Create(destinationFilePath)
+	if err != nil {
+		return err
+	}
+	defer newFile.Close()
+
+	gzipWriter := gzip.NewWriter(newFile)
+	defer gzipWriter.Close()
+
+	_, err = io.Copy(gzipWriter, sourceFile)
+	if nil != err {
+		return err
+	}
+
+	err = gzipWriter.Flush()
+	if nil != err {
+		return err
+	}
+
+	return nil
+}
+
+type createFileFuncType func(destinationFilePath string) error
+
+// TODO: test for >4GB file
+func (dal *TransactionDAL) backupFile(transaction *intelligentstore.Transaction, hash intelligentstore.Hash, createFileFunc createFileFuncType) error {
+	err := transaction.CheckStage(intelligentstore.TransactionStageReadyToUploadFiles)
 	if nil != err {
 		return err
 	}
@@ -118,7 +161,7 @@ func (dal *TransactionDAL) BackupFile(transaction *intelligentstore.Transaction,
 
 	fs := dal.IntelligentStoreDAL.fs
 
-	// file doesn't exist in store yet
+	// check if file exist in store already
 	_, err = fs.Stat(filePath)
 	if nil != err {
 		if !os.IsNotExist(err) {
@@ -131,22 +174,8 @@ func (dal *TransactionDAL) BackupFile(transaction *intelligentstore.Transaction,
 			return err
 		}
 
-		newFile, err := fs.Create(filePath)
+		err = createFileFunc(filePath)
 		if err != nil {
-			return err
-		}
-		defer newFile.Close()
-
-		gzipWriter := gzip.NewWriter(newFile)
-		defer gzipWriter.Close()
-
-		err = gzipWriter.Flush()
-		if nil != err {
-			return err
-		}
-
-		_, err = io.Copy(gzipWriter, sourceFile)
-		if nil != err {
 			return err
 		}
 	}

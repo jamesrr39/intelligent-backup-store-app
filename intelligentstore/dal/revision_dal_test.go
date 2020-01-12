@@ -37,7 +37,7 @@ func Test_GetFilesInRevisionWithPath(t *testing.T) {
 	})
 
 	t.Run("extra slashes", func(t *testing.T) {
-		_, err := store.Store.RevisionDAL.GetFilesInRevisionWithPrefix(bucket, revision, intelligentstore.NewRelativePath("docs/file1.txt/"))
+		_, err := store.Store.RevisionDAL.GetFilesInRevisionWithPrefix(bucket, revision, intelligentstore.NewRelativePath("docs/file1.txt1"))
 		assert.Equal(t, os.ErrNotExist, err)
 	})
 

@@ -45,9 +45,6 @@ func NewLocalUploader(
 // UploadToStore uses the LocalUploader configurations to backup to a store
 func (uploader *LocalUploader) UploadToStore() error {
 	var err error
-	defer func() {
-		// FIXME: handle abort tx on err
-	}()
 
 	fileInfosMap, err := uploaders.BuildFileInfosMap(uploader.fs, uploader.backupFromLocation, uploader.excludeMatcher)
 	if nil != err {
@@ -60,6 +57,7 @@ func (uploader *LocalUploader) UploadToStore() error {
 	if nil != err {
 		return err
 	}
+	defer uploader.backupStoreDAL.TransactionDAL.Rollback(tx)
 
 	requiredRelativePaths := tx.GetRelativePathsRequired()
 

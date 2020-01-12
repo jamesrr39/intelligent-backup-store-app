@@ -10,15 +10,36 @@ type RelativePath string
 const RelativePathSep = '/'
 
 func NewRelativePath(path string) RelativePath {
-	if strings.HasPrefix(path, "/") || strings.HasPrefix(path, "\\") {
-		path = path[1:]
+	path = trimAndJoinFragments([]string{path})
+
+	return RelativePath(path)
+}
+
+func NewRelativePathFromFragments(fragments ...string) RelativePath {
+	return NewRelativePath(trimAndJoinFragments(fragments))
+}
+
+func trimAndJoinFragments(fragments []string) string {
+	var strippedFragments []string
+	for _, fragment := range fragments {
+		for strings.HasPrefix(fragment, "/") || strings.HasPrefix(fragment, "\\") {
+			fragment = fragment[1:]
+		}
+
+		for strings.HasSuffix(fragment, "/") || strings.HasSuffix(fragment, "\\") {
+			fragment = fragment[:len(fragment)-1]
+		}
+
+		strippedFragments = append(strippedFragments, fragment)
 	}
+
+	path := strings.Join(strippedFragments, string(RelativePathSep))
 
 	if filepath.Separator != RelativePathSep {
 		path = strings.Replace(path, string(filepath.Separator), string(RelativePathSep), -1)
 	}
 
-	return RelativePath(path)
+	return path
 }
 
 func (r RelativePath) Name() string {

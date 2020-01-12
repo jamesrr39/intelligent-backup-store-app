@@ -7,11 +7,14 @@ import (
 	"strconv"
 	"sync/atomic"
 
+	"github.com/jamesrr39/goutil/errorsx"
 	"github.com/jamesrr39/goutil/gofs"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 )
 
 type TempFile struct {
 	FilePath string
+	Hash     intelligentstore.Hash
 }
 
 type TempStoreDAL struct {
@@ -38,13 +41,13 @@ func NewTempStoreDAL(
 	return tempStoreDAL, nil
 }
 
-func (dal *TempStoreDAL) CreateTempFileFromReader(reader io.Reader) (*TempFile, error) {
+func (dal *TempStoreDAL) CreateTempFileFromReader(reader io.Reader, hash intelligentstore.Hash) (*TempFile, errorsx.Error) {
 	newID := atomic.AddUint64(&dal.latestID, 1)
 	dal.latestID = newID
 	filePath := filepath.Join(dal.basePath, strconv.FormatUint(newID, 10))
 	file, err := dal.fs.Create(filePath)
 	if err != nil {
-		return nil, err
+		return nil, errorsx.Wrap(err)
 	}
 	defer file.Close()
 
@@ -53,18 +56,14 @@ func (dal *TempStoreDAL) CreateTempFileFromReader(reader io.Reader) (*TempFile, 
 
 	_, err = io.Copy(writer, reader)
 	if err != nil {
-		return nil, err
+		return nil, errorsx.Wrap(err)
 	}
 
 	writer.Flush()
 
-	return &TempFile{filePath}, nil
+	return &TempFile{filePath, hash}, nil
 }
 
 func (dal *TempStoreDAL) Clear() error {
 	return dal.fs.RemoveAll(dal.basePath)
-}
-
-func (dal *TempStoreDAL) OpenTempFile(tempFile *TempFile) (io.ReadCloser, error) {
-	return dal.fs.Open(tempFile.FilePath)
 }

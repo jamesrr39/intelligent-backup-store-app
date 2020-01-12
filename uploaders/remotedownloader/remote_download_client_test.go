@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jamesrr39/goutil/errorsx"
+	"github.com/jamesrr39/goutil/httpextra"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -21,7 +22,7 @@ func Test_getFileInfosFromListing(t *testing.T) {
 	tests := []struct {
 		name  string
 		args  args
-		want  []*intelligentstore.FileInfo
+		want  []*downloadFileInfoType
 		want1 errorsx.Error
 	}{
 		{
@@ -33,8 +34,7 @@ func Test_getFileInfosFromListing(t *testing.T) {
 							ModTimeKey:      "modTime",
 							FileModeKey:     "fileMode",
 							SizeKey:         "fileSizeBytes",
-							IDKey:           "hashValue",
-							RelativePathKey: "hashValue",
+							RelativePathKey: "relativePath",
 							ForEach:         []string{"data", "mediaFiles", "pictures"},
 						},
 					},
@@ -47,42 +47,51 @@ func Test_getFileInfosFromListing(t *testing.T) {
 									"modTime": 0,
 									"fileSizeBytes": 1000,
 									"hashValue": "abcdef123456",
-									"fileMode": "0600"
+									"fileMode": "0600",
+									"relativePath": "dir1/file1.txt"
 								},
 								{
-									"modTime": 1001,
+									"modTime": 1001000000,
 									"fileSizeBytes": 2500,
 									"hashValue": "xyz123",
-									"fileMode": "700"
+									"fileMode": "700",
+									"relativePath": "dir1/file2.txt"
 								}
 							]
 						}
 					}
 				}`),
 			},
-			want: []*intelligentstore.FileInfo{
+			want: []*downloadFileInfoType{
 				{
-					Type:         intelligentstore.FileTypeRegular,
-					RelativePath: intelligentstore.RelativePath(strings.Join([]string{"data", "mediaFiles", "pictures", "abcdef123456"}, string(intelligentstore.RelativePathSep))),
-					ModTime:      time.Unix(0, 0),
-					Size:         1000,
-					FileMode:     0600,
-				},
-				{
-					Type:         intelligentstore.FileTypeRegular,
-					RelativePath: intelligentstore.RelativePath(strings.Join([]string{"data", "mediaFiles", "pictures", "xyz123"}, string(intelligentstore.RelativePathSep))),
-					ModTime:      time.Unix(1, 1*1000*1000),
-					Size:         2500,
-					FileMode:     0700,
+					FileInfo: &intelligentstore.FileInfo{
+						Type:         intelligentstore.FileTypeRegular,
+						RelativePath: intelligentstore.RelativePath(strings.Join([]string{FilesFolderName, "dir1", "file1.txt"}, string(intelligentstore.RelativePathSep))),
+						ModTime:      time.Unix(0, 0),
+						Size:         1000,
+						FileMode:     0600,
+					},
+				}, {
+					FileInfo: &intelligentstore.FileInfo{
+						Type:         intelligentstore.FileTypeRegular,
+						RelativePath: intelligentstore.RelativePath(strings.Join([]string{FilesFolderName, "dir1", "file2.txt"}, string(intelligentstore.RelativePathSep))),
+						ModTime:      time.Unix(1, 1*1000*1000),
+						Size:         2500,
+						FileMode:     0700,
+					},
 				},
 			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, got1 := getFileInfosFromListing(tt.args.conf, tt.args.respBody)
-			require.Equal(t, tt.want1, got1)
-			assert.Equal(t, tt.want, got)
+			httpClient := &httpextra.MockDoer{}
+			downloadInfos, err := getFileInfosFromListing(httpClient, tt.args.conf, tt.args.respBody, nil)
+			require.Equal(t, tt.want1, err)
+			require.Len(t, downloadInfos, len(tt.want))
+			for i, downloadInfo := range downloadInfos {
+				assert.Equal(t, tt.want[i].FileInfo, downloadInfo.FileInfo)
+			}
 		})
 	}
 }

@@ -49,8 +49,6 @@ func NewWebUploadClient(
 
 // UploadToStore backs up a directory on the local machine to the bucket in the store in the WebUploadClient
 func (c *WebUploadClient) UploadToStore() error {
-	// FIXME abort if error
-
 	fileInfosMap, err := uploaders.BuildFileInfosMap(c.fs, c.folderPath, c.excludeMatcher)
 	if nil != err {
 		return err
