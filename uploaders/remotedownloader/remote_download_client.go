@@ -103,7 +103,6 @@ func downloadRemoteConfigV1(
 	if err != nil {
 		return errorsx.Wrap(err)
 	}
-	json.NewEncoder(os.Stderr).Encode(fileInfosFromListing)
 
 	_, err = buf.Seek(0, io.SeekStart)
 	if err != nil {
