@@ -33,19 +33,19 @@ func NewRevisionDAL(
 }
 
 // GetFilesInRevision gets a list of files in this revision
-func (r *RevisionDAL) GetFilesInRevision(bucket *intelligentstore.Bucket, revision *intelligentstore.Revision) ([]intelligentstore.FileDescriptor, error) {
+func (r *RevisionDAL) GetFilesInRevision(bucket *intelligentstore.Bucket, revision *intelligentstore.Revision) ([]intelligentstore.FileDescriptor, errorsx.Error) {
 	filePath := filepath.Join(
 		r.bucketPath(bucket),
 		"versions",
 		strconv.FormatInt(int64(revision.VersionTimestamp), 10))
 	revisionDataBytes, err := r.fs.ReadFile(filePath)
 	if nil != err {
-		return nil, fmt.Errorf("couldn't open revision data file at '%s'. Error: '%s'", filePath, err)
+		return nil, errorsx.Wrap(err, "filePath", filePath)
 	}
 
 	filesInVersion, err := readFilesInRevisionJSON(revisionDataBytes)
 	if err != nil {
-		return nil, fmt.Errorf("couldn't read files in revision JSON. Error: %q", err)
+		return nil, errorsx.Wrap(err, "filePath", filePath)
 	}
 
 	return filesInVersion, nil
@@ -231,7 +231,7 @@ func (r *RevisionDAL) VerifyRevision(
 	return nil
 }
 
-func (r *RevisionDAL) verifyFile(i int, file intelligentstore.FileDescriptor, lenFiles int) error {
+func (r *RevisionDAL) verifyFile(i int, file intelligentstore.FileDescriptor, lenFiles int) errorsx.Error {
 	if i%100 == 0 {
 		percentageThrough := float64(i) * 100 / float64(lenFiles)
 		log.Printf("verified %d of %d files (%.02f%%)\n", i, lenFiles, percentageThrough)

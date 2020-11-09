@@ -96,7 +96,7 @@ func (s *BucketService) handleGetAllBuckets(w http.ResponseWriter, r *http.Reque
 	for _, bucket := range buckets {
 		latestRevision, err = s.store.RevisionDAL.GetLatestRevision(bucket)
 		if nil != err {
-			if dal.ErrNoRevisionsForBucket != err {
+			if errorsx.Cause(err) != dal.ErrNoRevisionsForBucket {
 				http.Error(w, err.Error(), 500)
 				return
 			}

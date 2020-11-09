@@ -5,12 +5,12 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/jamesrr39/goutil/errorsx"
+	"github.com/jamesrr39/goutil/excludesmatcher"
 	"github.com/jamesrr39/goutil/gofs"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	"github.com/jamesrr39/intelligent-backup-store-app/uploaders"
-	"github.com/pkg/errors"
 )
 
 // LocalUploader represents an object for performing an upload over a local FS
@@ -43,9 +43,7 @@ func NewLocalUploader(
 }
 
 // UploadToStore uses the LocalUploader configurations to backup to a store
-func (uploader *LocalUploader) UploadToStore() error {
-	var err error
-
+func (uploader *LocalUploader) UploadToStore() errorsx.Error {
 	fileInfosMap, err := uploaders.BuildFileInfosMap(uploader.fs, uploader.backupFromLocation, uploader.excludeMatcher)
 	if nil != err {
 		return err
@@ -76,7 +74,7 @@ func (uploader *LocalUploader) UploadToStore() error {
 		case intelligentstore.FileTypeSymlink:
 			dest, err := uploader.fs.Readlink(filepath.Join(uploader.backupFromLocation, string(fileInfo.RelativePath)))
 			if nil != err {
-				return err
+				return errorsx.Wrap(err)
 			}
 			symlinksWithRelativePath = append(
 				symlinksWithRelativePath,
@@ -111,7 +109,7 @@ func (uploader *LocalUploader) UploadToStore() error {
 	for index, requiredHash := range requiredHashes {
 		relativePath := hashRelativePathMap[requiredHash]
 		if 0 == len(relativePath) {
-			return errors.Errorf("couldn't find any paths for hash: '%s'", requiredHash)
+			return errorsx.Errorf("couldn't find any paths for hash: '%s'", requiredHash)
 		}
 
 		err = uploader.uploadFile(tx, relativePath[0])
@@ -136,27 +134,27 @@ func (uploader *LocalUploader) UploadToStore() error {
 	return nil
 }
 
-func (uploader *LocalUploader) uploadFile(tx *intelligentstore.Transaction, relativePath intelligentstore.RelativePath) error {
+func (uploader *LocalUploader) uploadFile(tx *intelligentstore.Transaction, relativePath intelligentstore.RelativePath) errorsx.Error {
 	filePath := filepath.Join(uploader.backupFromLocation, string(relativePath))
 
 	file, err := uploader.fs.Open(filePath)
 	if nil != err {
-		return errors.Wrap(err, filePath)
+		return errorsx.Wrap(err, "filepath", filePath)
 	}
 	defer file.Close()
 	// relativeFilePath := fullPathToRelative(uploader.backupFromLocation, filePath)
 	err = uploader.backupStoreDAL.TransactionDAL.BackupFile(tx, file)
 	if nil != err {
-		return errors.Wrap(err, filePath)
+		return errorsx.Wrap(err, "filepath", filePath)
 	}
 
 	return nil
 }
 
-func (uploader *LocalUploader) begin(fileInfos []*intelligentstore.FileInfo) (*intelligentstore.Transaction, error) {
+func (uploader *LocalUploader) begin(fileInfos []*intelligentstore.FileInfo) (*intelligentstore.Transaction, errorsx.Error) {
 	bucket, err := uploader.backupStoreDAL.BucketDAL.GetBucketByName(uploader.backupBucketName)
 	if nil != err {
-		return nil, err
+		return nil, errorsx.Wrap(err)
 	}
 
 	return uploader.backupStoreDAL.TransactionDAL.CreateTransaction(bucket, fileInfos)

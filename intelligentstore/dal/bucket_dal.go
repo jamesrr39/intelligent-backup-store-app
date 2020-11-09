@@ -3,7 +3,6 @@ package dal
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -11,6 +10,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/jamesrr39/goutil/dirtraversal"
+	"github.com/jamesrr39/goutil/errorsx"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 )
 
@@ -93,22 +93,22 @@ var ErrNoRevisionsForBucket = errors.New("no revisions for this bucket yet")
 
 // GetLatestRevision returns the latest Revision of this bucket.
 // error could be either ErrNoRevisionsForBucket or an FS-related error.
-func (dal *BucketDAL) GetLatestRevision(bucket *intelligentstore.Bucket) (*intelligentstore.Revision, error) {
+func (dal *BucketDAL) GetLatestRevision(bucket *intelligentstore.Bucket) (*intelligentstore.Revision, errorsx.Error) {
 	versionsDirPath := filepath.Join(dal.bucketPath(bucket), "versions")
 	versionsFileInfos, err := dal.IntelligentStoreDAL.fs.ReadDir(versionsDirPath)
 	if nil != err {
-		return nil, err
+		return nil, errorsx.Wrap(err)
 	}
 
 	if 0 == len(versionsFileInfos) {
-		return nil, ErrNoRevisionsForBucket
+		return nil, errorsx.Wrap(ErrNoRevisionsForBucket)
 	}
 
 	var highestTs int64
 	for _, fileInfo := range versionsFileInfos {
 		ts, err := strconv.ParseInt(fileInfo.Name(), 10, 64)
 		if nil != err {
-			return nil, fmt.Errorf(
+			return nil, errorsx.Errorf(
 				"couldn't understand revision '%s' of bucket '%s'. Error: '%s'",
 				fileInfo.Name(),
 				bucket.BucketName,
@@ -126,19 +126,19 @@ func (dal *BucketDAL) GetLatestRevision(bucket *intelligentstore.Bucket) (*intel
 }
 
 // GetRevisions gets all revisions of this bucket
-func (dal *BucketDAL) GetRevisions(bucket *intelligentstore.Bucket) ([]*intelligentstore.Revision, error) {
+func (dal *BucketDAL) GetRevisions(bucket *intelligentstore.Bucket) ([]*intelligentstore.Revision, errorsx.Error) {
 	versionsFolderPath := filepath.Join(dal.bucketPath(bucket), "versions")
 
 	versionsFileInfos, err := dal.IntelligentStoreDAL.fs.ReadDir(versionsFolderPath)
 	if nil != err {
-		return nil, err
+		return nil, errorsx.Wrap(err)
 	}
 
 	var versions []*intelligentstore.Revision
 	for _, versionFileInfo := range versionsFileInfos {
 		revisionTs, err := strconv.ParseInt(versionFileInfo.Name(), 10, 64)
 		if nil != err {
-			return nil, errors.Wrapf(err, "couldn't parse '%s' to a revision timestamp", versionFileInfo.Name())
+			return nil, errorsx.Wrap(err, "revision timestamp", versionFileInfo.Name())
 		}
 		versions = append(versions, intelligentstore.NewRevision(bucket, intelligentstore.RevisionVersion(revisionTs)))
 	}

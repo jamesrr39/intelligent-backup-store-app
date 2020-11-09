@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/jamesrr39/goutil/errorsx"
 )
 
 type LockDAL struct {
@@ -38,19 +40,19 @@ func (s *LockDAL) GetLockInformation() (*StoreLock, error) {
 
 var ErrLockAlreadyTaken = errors.New("lock already taken")
 
-func (s *LockDAL) acquireStoreLock(text string) (*StoreLock, error) {
+func (s *LockDAL) acquireStoreLock(text string) (*StoreLock, errorsx.Error) {
 	_, err := s.storeDAL.fs.Stat(s.getLockFilePath())
 	if nil == err {
-		return nil, ErrLockAlreadyTaken
+		return nil, errorsx.Wrap(ErrLockAlreadyTaken)
 	}
 	if !os.IsNotExist(err) {
-		return nil, err
+		return nil, errorsx.Wrap(err)
 	}
 
 	//lockFile, err := s.fs.OpenFile(s.getLockFilePath(), os.O_CREATE, 0600)
 	lockFile, err := s.storeDAL.fs.OpenFile(s.getLockFilePath(), os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0600)
 	if nil != err {
-		return nil, err
+		return nil, errorsx.Wrap(err)
 	}
 	defer lockFile.Close()
 
@@ -62,14 +64,18 @@ func (s *LockDAL) acquireStoreLock(text string) (*StoreLock, error) {
 
 	err = json.NewEncoder(lockFile).Encode(lock)
 	if nil != err {
-		return nil, err
+		return nil, errorsx.Wrap(err)
 	}
 
 	return lock, nil
 }
 
-func (s *LockDAL) removeStoreLock() error {
-	return s.storeDAL.fs.RemoveAll(s.getLockFilePath())
+func (s *LockDAL) removeStoreLock() errorsx.Error {
+	err := s.storeDAL.fs.RemoveAll(s.getLockFilePath())
+	if err != nil {
+		return errorsx.Wrap(err)
+	}
+	return nil
 }
 
 func (s *LockDAL) getLockFilePath() string {

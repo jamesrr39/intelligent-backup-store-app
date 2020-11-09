@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jamesrr39/goutil/errorsx"
 	"github.com/jamesrr39/goutil/gofs/mockfs"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	"github.com/stretchr/testify/assert"
@@ -24,11 +25,12 @@ func Test_BackupFile(t *testing.T) {
 		[]byte(""),
 	)
 
-	tx1, err := mockStore.Store.TransactionDAL.CreateTransaction(bucket, []*intelligentstore.FileInfo{descriptor.Descriptor.FileInfo})
-	assert.Error(t, err)
-	assert.Equal(t, "couldn't start a transaction: filepath contains .. and is trying to traverse a directory", err.Error())
-	assert.Nil(t, tx1)
+	// try to start tx with illegal path
+	_, err := mockStore.Store.TransactionDAL.CreateTransaction(bucket, []*intelligentstore.FileInfo{descriptor.Descriptor.FileInfo})
+	require.Error(t, err)
+	assert.Equal(t, ErrIllegalDirectoryTraversal, errorsx.Cause(err))
 
+	// now try a correct tx
 	aFileContents := "a text"
 	goodADescriptor, err := intelligentstore.NewRegularFileDescriptorFromReader(
 		"a.txt",
@@ -38,10 +40,10 @@ func Test_BackupFile(t *testing.T) {
 	)
 	require.Nil(t, err)
 
-	tx, err := mockStore.Store.TransactionDAL.CreateTransaction(bucket, []*intelligentstore.FileInfo{goodADescriptor.FileInfo})
+	tx2, err := mockStore.Store.TransactionDAL.CreateTransaction(bucket, []*intelligentstore.FileInfo{goodADescriptor.FileInfo})
 	require.Nil(t, err)
 
-	err = mockStore.Store.TransactionDAL.BackupFile(tx, bytes.NewReader([]byte(aFileContents)))
+	err = mockStore.Store.TransactionDAL.BackupFile(tx2, bytes.NewReader([]byte(aFileContents)))
 	require.NotNil(t, err)
 	assert.Equal(t, "expected transaction to be in stage 'Ready To Upload Files' but it was in stage 'Awaiting File Hashes'", err.Error())
 
@@ -49,17 +51,17 @@ func Test_BackupFile(t *testing.T) {
 		intelligentstore.NewRelativePathWithHash(goodADescriptor.RelativePath, goodADescriptor.Hash),
 	}
 
-	_, err = tx.ProcessUploadHashesAndGetRequiredHashes(relativePathsWithHashes)
+	_, err = tx2.ProcessUploadHashesAndGetRequiredHashes(relativePathsWithHashes)
 	require.Nil(t, err)
 
-	err = mockStore.Store.TransactionDAL.BackupFile(tx, bytes.NewReader([]byte("bad contents - not in Begin() manifest")))
+	err = mockStore.Store.TransactionDAL.BackupFile(tx2, bytes.NewReader([]byte("bad contents - not in Begin() manifest")))
 	require.NotNil(t, err)
 
 	// upload the same file contents at 2 different locations
-	err = mockStore.Store.TransactionDAL.BackupFile(tx, bytes.NewReader([]byte(aFileContents)))
+	err = mockStore.Store.TransactionDAL.BackupFile(tx2, bytes.NewReader([]byte(aFileContents)))
 	require.Nil(t, err)
 
-	assert.Len(t, tx.FilesInVersion, 1)
+	assert.Len(t, tx2.FilesInVersion, 1)
 
 }
 

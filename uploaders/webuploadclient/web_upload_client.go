@@ -10,12 +10,13 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/jamesrr39/goutil/errorsx"
+	"github.com/jamesrr39/goutil/excludesmatcher"
 	"github.com/jamesrr39/goutil/gofs"
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
+	"github.com/jamesrr39/goutil/httpextra"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	protofiles "github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/protobufs/proto_files"
 	"github.com/jamesrr39/intelligent-backup-store-app/uploaders"
-	"github.com/pkg/errors"
 )
 
 // WebUploadClient represents an http client for uploading files to an IntelligentStore
@@ -48,7 +49,7 @@ func NewWebUploadClient(
 }
 
 // UploadToStore backs up a directory on the local machine to the bucket in the store in the WebUploadClient
-func (c *WebUploadClient) UploadToStore() error {
+func (c *WebUploadClient) UploadToStore() errorsx.Error {
 	fileInfosMap, err := uploaders.BuildFileInfosMap(c.fs, c.folderPath, c.excludeMatcher)
 	if nil != err {
 		return err
@@ -72,7 +73,7 @@ func (c *WebUploadClient) UploadToStore() error {
 		case intelligentstore.FileTypeSymlink:
 			requiredSymlinkRelativePaths = append(requiredSymlinkRelativePaths, requiredRelativePath)
 		default:
-			return fmt.Errorf("unsupported file type: '%d' for fileInfo: '%v'", fileInfo.Type, fileInfo)
+			return errorsx.Errorf("unsupported file type: '%d' for fileInfo: '%v'", fileInfo.Type, fileInfo)
 		}
 	}
 
@@ -111,7 +112,7 @@ func (c *WebUploadClient) UploadToStore() error {
 	return nil
 }
 
-func (c *WebUploadClient) uploadSymlinks(revisionVersion intelligentstore.RevisionVersion, fileInfosMap uploaders.FileInfoMap, requiredRelativePaths []intelligentstore.RelativePath) error {
+func (c *WebUploadClient) uploadSymlinks(revisionVersion intelligentstore.RevisionVersion, fileInfosMap uploaders.FileInfoMap, requiredRelativePaths []intelligentstore.RelativePath) errorsx.Error {
 	uploadSymlinksRequest := &protofiles.UploadSymlinksRequest{}
 	for _, requiredRelativePath := range requiredRelativePaths {
 		fileInfo := fileInfosMap[requiredRelativePath]
@@ -120,7 +121,7 @@ func (c *WebUploadClient) uploadSymlinks(revisionVersion intelligentstore.Revisi
 
 		dest, err := c.fs.Readlink(filePath)
 		if nil != err {
-			return fmt.Errorf("couldn't read link for %s. Error: %s", filePath, err)
+			return errorsx.Wrap(err, "filePath", filePath)
 		}
 
 		uploadSymlinksRequest.SymlinksWithRelativePaths = append(
@@ -134,7 +135,7 @@ func (c *WebUploadClient) uploadSymlinks(revisionVersion intelligentstore.Revisi
 
 	uploadSymlinksRequestBytes, err := proto.Marshal(uploadSymlinksRequest)
 	if nil != err {
-		return err
+		return errorsx.Wrap(err)
 	}
 
 	url := fmt.Sprintf("%s/api/buckets/%s/upload/%d/symlinks", c.storeURL, c.bucketName, revisionVersion)
@@ -144,22 +145,19 @@ func (c *WebUploadClient) uploadSymlinks(revisionVersion intelligentstore.Revisi
 		"application/octet-stream",
 		bytes.NewBuffer(uploadSymlinksRequestBytes))
 	if nil != err {
-		return fmt.Errorf("couln't POST to %s. Error: %s", url, err)
+		return errorsx.Wrap(err, "url", url)
 	}
 	defer resp.Body.Close()
 
-	if 200 != resp.StatusCode {
-		errMessageBytes, err := ioutil.ReadAll(resp.Body)
-		if nil != err {
-			errMessageBytes = []byte(fmt.Sprintf("couldn't read response body. Error: %v", err))
-		}
-		return fmt.Errorf("expected 200 response code but got %d. Response body: '%s'", resp.StatusCode, errMessageBytes)
+	err = httpextra.CheckResponseCode(http.StatusOK, resp.StatusCode)
+	if err != nil {
+		return errorsx.Wrap(err, "body", httpextra.GetBodyOrErrorMsg(resp))
 	}
 
 	return nil
 }
 
-func (c *WebUploadClient) fetchRequiredHashes(revisionVersion intelligentstore.RevisionVersion, relativePathsWithHashes []*intelligentstore.RelativePathWithHash) ([]intelligentstore.Hash, error) {
+func (c *WebUploadClient) fetchRequiredHashes(revisionVersion intelligentstore.RevisionVersion, relativePathsWithHashes []*intelligentstore.RelativePathWithHash) ([]intelligentstore.Hash, errorsx.Error) {
 	fetchRequiredHashesRequestProto := &protofiles.GetRequiredHashesRequest{
 		RelativePathsAndHashes: nil,
 	}
@@ -176,7 +174,7 @@ func (c *WebUploadClient) fetchRequiredHashes(revisionVersion intelligentstore.R
 
 	fetchRequiredHashesRequestBytes, err := proto.Marshal(fetchRequiredHashesRequestProto)
 	if nil != err {
-		return nil, err
+		return nil, errorsx.Wrap(err)
 	}
 
 	fetchRequiredHashesRequest := http.Client{Timeout: time.Minute}
@@ -187,24 +185,25 @@ func (c *WebUploadClient) fetchRequiredHashes(revisionVersion intelligentstore.R
 		"application/octet-stream",
 		bytes.NewBuffer(fetchRequiredHashesRequestBytes))
 	if nil != err {
-		return nil, fmt.Errorf("couln't POST to %s. Error: %s", url, err)
+		return nil, errorsx.Wrap(err, "url", url)
 	}
 	defer resp.Body.Close()
+
+	err = httpextra.CheckResponseCode(http.StatusOK, resp.StatusCode)
+	if err != nil {
+		return nil, errorsx.Wrap(err, "body", httpextra.GetBodyOrErrorMsg(resp))
+	}
 
 	// read the response body now; we will need it whether the response was good or bad.
 	respBytes, err := ioutil.ReadAll(resp.Body)
 	if nil != err {
-		return nil, fmt.Errorf("couldn't read hashes upload response body. Error: %s", err)
-	}
-
-	if 200 != resp.StatusCode {
-		return nil, fmt.Errorf("hashes upload to %s failed with error: HTTP %d: %s", url, resp.StatusCode, respBytes)
+		return nil, errorsx.Wrap(err, "detail", "couldn't read hashes upload response body")
 	}
 
 	var getRequiredHashesResponse protofiles.GetRequiredHashesResponse
 	err = proto.Unmarshal(respBytes, &getRequiredHashesResponse)
 	if nil != err {
-		return nil, fmt.Errorf("couldn't unmarshal hashes upload response body. Error: %s", err)
+		return nil, errorsx.Wrap(err, "detail", "couldn't unmarshal hashes upload response body")
 	}
 
 	var hashes []intelligentstore.Hash
@@ -216,7 +215,7 @@ func (c *WebUploadClient) fetchRequiredHashes(revisionVersion intelligentstore.R
 }
 
 // openTx opens a transaction with the server and sends a list of files it wants to back up
-func (c *WebUploadClient) openTx(fileInfos []*intelligentstore.FileInfo) (intelligentstore.RevisionVersion, []intelligentstore.RelativePath, error) {
+func (c *WebUploadClient) openTx(fileInfos []*intelligentstore.FileInfo) (intelligentstore.RevisionVersion, []intelligentstore.RelativePath, errorsx.Error) {
 	openTxRequest := &protofiles.OpenTxRequest{
 		FileInfos: nil,
 	}
@@ -235,7 +234,7 @@ func (c *WebUploadClient) openTx(fileInfos []*intelligentstore.FileInfo) (intell
 
 	openTxRequestBodyBytes, err := proto.Marshal(openTxRequest)
 	if nil != err {
-		return 0, nil, errors.Wrap(err, "couldn't unmarshall the open transaction request response")
+		return 0, nil, errorsx.Wrap(err, "detail", "couldn't unmarshall the open transaction request response")
 	}
 
 	openTxClient := http.Client{Timeout: time.Second * 20}
@@ -246,34 +245,25 @@ func (c *WebUploadClient) openTx(fileInfos []*intelligentstore.FileInfo) (intell
 		"application/octet-stream",
 		bytes.NewBuffer(openTxRequestBodyBytes))
 	if nil != err {
-		return 0, nil, fmt.Errorf("couln't POST to %s. Error: %s", openTxURL, err)
+		return 0, nil, errorsx.Wrap(err, "openTxURL", openTxURL)
 	}
 	defer resp.Body.Close()
 
-	// read the response body now; we will need it whether the response was good or bad.
-	respBytes, respReadErr := ioutil.ReadAll(resp.Body)
-
-	if 200 != resp.StatusCode {
-		var respErrMessage string
-		if nil == respReadErr {
-			respErrMessage = string(respBytes)
-		} else {
-			respErrMessage = fmt.Sprintf("couldn't read response error message. Error: %s", respReadErr)
-		}
-
-		return 0, nil, fmt.Errorf(
-			"expected 200 (OK) repsonse code for open transaction, but received '%s' on POSTing to %s. Message body: %s",
-			resp.Status, openTxURL, respErrMessage)
+	err = httpextra.CheckResponseCode(http.StatusOK, resp.StatusCode)
+	if err != nil {
+		return 0, nil, errorsx.Wrap(err, "body", httpextra.GetBodyOrErrorMsg(resp))
 	}
 
-	if nil != respReadErr {
-		return 0, nil, fmt.Errorf("couldn't read OpenTx response. Error: %s", err)
+	// read the response body now; we will need it whether the response was good or bad.
+	respBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return 0, nil, errorsx.Wrap(err)
 	}
 
 	var openTxResponse protofiles.OpenTxResponse
 	err = proto.Unmarshal(respBytes, &openTxResponse)
 	if nil != err {
-		return 0, nil, fmt.Errorf("couldn't unmarshal OpenTx response. Error: %s", err)
+		return 0, nil, errorsx.Wrap(err)
 	}
 
 	var requiredRelativePaths []intelligentstore.RelativePath
@@ -284,7 +274,7 @@ func (c *WebUploadClient) openTx(fileInfos []*intelligentstore.FileInfo) (intell
 	return intelligentstore.RevisionVersion(openTxResponse.GetRevisionID()), requiredRelativePaths, nil
 }
 
-func (c *WebUploadClient) backupFile(revisionStr intelligentstore.RevisionVersion, relativePath intelligentstore.RelativePath) error {
+func (c *WebUploadClient) backupFile(revisionStr intelligentstore.RevisionVersion, relativePath intelligentstore.RelativePath) errorsx.Error {
 	log.Printf("BACKING UP %s\n", relativePath)
 
 	client := http.Client{Timeout: time.Hour}
@@ -292,7 +282,7 @@ func (c *WebUploadClient) backupFile(revisionStr intelligentstore.RevisionVersio
 		c.folderPath,
 		string(relativePath)))
 	if nil != err {
-		return errors.Wrapf(err, "couldn't read file at %s", relativePath)
+		return errorsx.Wrap(err, "relativePath", relativePath)
 	}
 
 	protoBufFile := &protofiles.FileContentsProto{
@@ -301,7 +291,7 @@ func (c *WebUploadClient) backupFile(revisionStr intelligentstore.RevisionVersio
 
 	marshalledFile, err := proto.Marshal(protoBufFile)
 	if nil != err {
-		return errors.Wrapf(err, "couldn't marshal file at %s to protobuf", relativePath)
+		return errorsx.Wrap(err, "relativePath", relativePath)
 	}
 
 	uploadURL := fmt.Sprintf("%s/api/buckets/%s/upload/%d/file",
@@ -311,47 +301,30 @@ func (c *WebUploadClient) backupFile(revisionStr intelligentstore.RevisionVersio
 
 	resp, err := client.Post(uploadURL, "application/octet-stream", bytes.NewBuffer(marshalledFile))
 	if nil != err {
-		return errors.Wrapf(err, "couldn't send file at %s to remote Store server", relativePath)
+		return errorsx.Wrap(err, "relativePath", relativePath)
 	}
 	defer resp.Body.Close()
 
-	if 200 != resp.StatusCode {
-		respBodyBytes, err := ioutil.ReadAll(resp.Body)
-		if nil != err {
-			respBodyBytes = []byte(fmt.Sprintf("couldn't read response body. Error: '%s'", err))
-		}
-		return fmt.Errorf("expected 200 (OK) repsonse code for file upload for '%s' to '%s', but received '%s'. Response Text: '%s'",
-			string(relativePath),
-			uploadURL,
-			resp.Status,
-			respBodyBytes)
+	err = httpextra.CheckResponseCode(http.StatusOK, resp.StatusCode)
+	if err != nil {
+		return errorsx.Wrap(err, "body", httpextra.GetBodyOrErrorMsg(resp))
 	}
+
 	return nil
 }
 
-func (c *WebUploadClient) commitTx(revisionStr intelligentstore.RevisionVersion) error {
+func (c *WebUploadClient) commitTx(revisionStr intelligentstore.RevisionVersion) errorsx.Error {
 	commitTxClient := http.Client{Timeout: time.Second * 20}
 	url := fmt.Sprintf("%s/api/buckets/%s/upload/%d/commit", c.storeURL, c.bucketName, revisionStr)
 	resp, err := commitTxClient.Get(url)
 	if nil != err {
-		return errors.Wrap(err, "couldn't commit upload transaction")
+		return errorsx.Wrap(err, "couldn't commit upload transaction")
 	}
 	defer resp.Body.Close()
 
-	if 200 != resp.StatusCode {
-		var errorMessageBodyByteString string
-		bodyBytes, err := ioutil.ReadAll(resp.Body)
-		if nil != err {
-			errorMessageBodyByteString = fmt.Sprintf(
-				"couldn't read response body. Error: %s", err)
-		} else {
-			errorMessageBodyByteString = fmt.Sprintf(
-				"response text: '%s'", string(bodyBytes))
-		}
-		return fmt.Errorf(
-			"expected 200 (OK) repsonse code for commit, but received '%s'. Response Text: '%s'",
-			resp.Status,
-			errorMessageBodyByteString)
+	err = httpextra.CheckResponseCode(http.StatusOK, resp.StatusCode)
+	if err != nil {
+		return errorsx.Wrap(err, "body", httpextra.GetBodyOrErrorMsg(resp))
 	}
 
 	return nil

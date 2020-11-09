@@ -67,7 +67,7 @@ func (s *UserDAL) CreateUser(user *intelligentstore.User) (*intelligentstore.Use
 		return nil, err
 	}
 
-	highestID := 0
+	highestID := int64(0)
 	for _, user := range users {
 		if user.ID > highestID {
 			highestID = user.ID

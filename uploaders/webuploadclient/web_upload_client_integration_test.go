@@ -9,8 +9,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/jamesrr39/goutil/excludesmatcher"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/storetest"
 	"github.com/jamesrr39/intelligent-backup-store-app/storewebserver"
 	"github.com/stretchr/testify/assert"

@@ -64,14 +64,3 @@ func (e *ExcludesMatcher) Matches(path string) bool {
 	}
 	return false
 }
-
-func (e *ExcludesMatcher) MatchesDir(path string) bool {
-	for _, matcherGlob := range e.dirGlobs {
-		doesMatch := matcherGlob.Match(string(path))
-
-		if doesMatch {
-			return true
-		}
-	}
-	return false
-}

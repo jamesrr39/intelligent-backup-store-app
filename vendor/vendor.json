@@ -142,52 +142,52 @@
 			"revisionTime": "2017-12-31T23:41:54Z"
 		},
 		{
-			"checksumSHA1": "/RE0VzeaXdaBUNeNMUXWqzly7qY=",
+			"checksumSHA1": "ApSLjc10RxzqUffxOBlTMqJmiGk=",
 			"path": "github.com/gobwas/glob",
-			"revision": "51eb1ee00b6d931c66d229ceeb7c31b985563420",
-			"revisionTime": "2017-02-12T20:01:51Z"
+			"revision": "e7a84e9525fe90abcda167b604e483cc959ad4aa",
+			"revisionTime": "2018-09-11T21:33:45Z"
 		},
 		{
-			"checksumSHA1": "OIV3k+Xbx7u4rP0TSgxzY2Xn4MI=",
+			"checksumSHA1": "UIxNdlqa2kcYi5EEe79/WzyPiz4=",
 			"path": "github.com/gobwas/glob/compiler",
-			"revision": "51eb1ee00b6d931c66d229ceeb7c31b985563420",
-			"revisionTime": "2017-02-12T20:01:51Z"
+			"revision": "e7a84e9525fe90abcda167b604e483cc959ad4aa",
+			"revisionTime": "2018-09-11T21:33:45Z"
 		},
 		{
-			"checksumSHA1": "WHQ6bs/IWj0Oj2FMVR5uis5FWno=",
+			"checksumSHA1": "jNdbCxBabqjv9tREXA4Nx45Y4wg=",
 			"path": "github.com/gobwas/glob/match",
-			"revision": "51eb1ee00b6d931c66d229ceeb7c31b985563420",
-			"revisionTime": "2017-02-12T20:01:51Z"
+			"revision": "e7a84e9525fe90abcda167b604e483cc959ad4aa",
+			"revisionTime": "2018-09-11T21:33:45Z"
 		},
 		{
 			"checksumSHA1": "2KhDNUE98XhHnIgg2S9E4gcWoig=",
 			"path": "github.com/gobwas/glob/syntax",
-			"revision": "51eb1ee00b6d931c66d229ceeb7c31b985563420",
-			"revisionTime": "2017-02-12T20:01:51Z"
+			"revision": "e7a84e9525fe90abcda167b604e483cc959ad4aa",
+			"revisionTime": "2018-09-11T21:33:45Z"
 		},
 		{
-			"checksumSHA1": "0aauhx71LcqUSUbdb/mr8DC0XCw=",
+			"checksumSHA1": "FPIMdPSazNZGNU+ZmPtIeZpVHFU=",
 			"path": "github.com/gobwas/glob/syntax/ast",
-			"revision": "51eb1ee00b6d931c66d229ceeb7c31b985563420",
-			"revisionTime": "2017-02-12T20:01:51Z"
+			"revision": "e7a84e9525fe90abcda167b604e483cc959ad4aa",
+			"revisionTime": "2018-09-11T21:33:45Z"
 		},
 		{
 			"checksumSHA1": "umyztSrQrQIl9JgwhDDb6wrSLeI=",
 			"path": "github.com/gobwas/glob/syntax/lexer",
-			"revision": "51eb1ee00b6d931c66d229ceeb7c31b985563420",
-			"revisionTime": "2017-02-12T20:01:51Z"
+			"revision": "e7a84e9525fe90abcda167b604e483cc959ad4aa",
+			"revisionTime": "2018-09-11T21:33:45Z"
 		},
 		{
 			"checksumSHA1": "vux29fN5O22F3QPLOnjQ37278vg=",
 			"path": "github.com/gobwas/glob/util/runes",
-			"revision": "51eb1ee00b6d931c66d229ceeb7c31b985563420",
-			"revisionTime": "2017-02-12T20:01:51Z"
+			"revision": "e7a84e9525fe90abcda167b604e483cc959ad4aa",
+			"revisionTime": "2018-09-11T21:33:45Z"
 		},
 		{
-			"checksumSHA1": "O8jtulDdZMB+CdlRORLultMKQrE=",
+			"checksumSHA1": "Sxp2AHWkkLkIq6w9aMcLmzcwD6w=",
 			"path": "github.com/gobwas/glob/util/strings",
-			"revision": "51eb1ee00b6d931c66d229ceeb7c31b985563420",
-			"revisionTime": "2017-02-12T20:01:51Z"
+			"revision": "e7a84e9525fe90abcda167b604e483cc959ad4aa",
+			"revisionTime": "2018-09-11T21:33:45Z"
 		},
 		{
 			"checksumSHA1": "yqF125xVSkmfLpIVGrLlfE05IUk=",
@@ -210,50 +210,56 @@
 		{
 			"checksumSHA1": "DmPGJoJZh7hW+xgjqBFKqGe7eD8=",
 			"path": "github.com/jamesrr39/goutil/dirtraversal",
-			"revision": "2d7dc6d2de328f77599883bcae23d93928f8262d",
-			"revisionTime": "2017-09-18T23:13:52Z"
+			"revision": "8c6fc8b7aa320fa078330330e32ab60cbcb73664",
+			"revisionTime": "2020-11-09T18:00:04Z"
 		},
 		{
-			"checksumSHA1": "Tgpmzn98Dy5hhNQhprt2uOIcb+M=",
+			"checksumSHA1": "URHDHMbByTvmPqL3kV0dqz8h7Lk=",
 			"path": "github.com/jamesrr39/goutil/errorsx",
-			"revision": "6916160f8a53ae70e664839977d4d31d1ca72e95",
-			"revisionTime": "2019-09-05T20:24:57Z"
+			"revision": "8c6fc8b7aa320fa078330330e32ab60cbcb73664",
+			"revisionTime": "2020-11-09T18:00:04Z"
 		},
 		{
-			"checksumSHA1": "4KwJAth706pCN/XkVEcyf/Aj88o=",
-			"path": "github.com/jamesrr39/goutil/fswalker",
-			"revision": "eef48524bd8aca4e054517db8bc370b479c26847",
-			"revisionTime": "2018-07-04T21:38:34Z"
+			"checksumSHA1": "Jvq3t4b1twc8U6V7iYu8nvy4fVw=",
+			"path": "github.com/jamesrr39/goutil/excludesmatcher",
+			"revision": "8c6fc8b7aa320fa078330330e32ab60cbcb73664",
+			"revisionTime": "2020-11-09T18:00:04Z"
 		},
 		{
-			"checksumSHA1": "kKrgv0WoCbs/yLpWd2xqNpJHJd4=",
+			"checksumSHA1": "p0uRIcsMKIubIOcWwRQdC6HbwdI=",
 			"path": "github.com/jamesrr39/goutil/gofs",
-			"revision": "cc5f1f5a0be69845846e1422366822c6933aaa23",
-			"revisionTime": "2018-10-28T10:14:16Z"
+			"revision": "8c6fc8b7aa320fa078330330e32ab60cbcb73664",
+			"revisionTime": "2020-11-09T18:00:04Z"
 		},
 		{
-			"checksumSHA1": "vSO9YTxzOtFlSLXtwaptC7QF0bU=",
+			"checksumSHA1": "lsRKfsgdxw0ezrjB0Ed8ie5qTA4=",
 			"path": "github.com/jamesrr39/goutil/gofs/mockfs",
-			"revision": "cc5f1f5a0be69845846e1422366822c6933aaa23",
-			"revisionTime": "2018-10-28T10:14:16Z"
+			"revision": "8c6fc8b7aa320fa078330330e32ab60cbcb73664",
+			"revisionTime": "2020-11-09T18:00:04Z"
 		},
 		{
-			"checksumSHA1": "Qa1ljLZExTlfEUHnbw+dDCwOdcw=",
+			"checksumSHA1": "oDJuDvnkLnc6mWFWkgUmoQeHH5M=",
 			"path": "github.com/jamesrr39/goutil/httpextra",
-			"revision": "6916160f8a53ae70e664839977d4d31d1ca72e95",
-			"revisionTime": "2019-09-05T20:24:57Z"
+			"revision": "8c6fc8b7aa320fa078330330e32ab60cbcb73664",
+			"revisionTime": "2020-11-09T18:00:04Z"
 		},
 		{
 			"checksumSHA1": "QcAy0NLUd92+l9KiNHIMccMYLXE=",
 			"path": "github.com/jamesrr39/goutil/humanise",
-			"revision": "eef48524bd8aca4e054517db8bc370b479c26847",
-			"revisionTime": "2018-07-04T21:38:34Z"
+			"revision": "8c6fc8b7aa320fa078330330e32ab60cbcb73664",
+			"revisionTime": "2020-11-09T18:00:04Z"
 		},
 		{
-			"checksumSHA1": "zxUCcbzosdXVG4xzEEaghr3uswU=",
+			"checksumSHA1": "X8kAsKS40o5dRb++CcpoSyRogaE=",
+			"path": "github.com/jamesrr39/goutil/open",
+			"revision": "8c6fc8b7aa320fa078330330e32ab60cbcb73664",
+			"revisionTime": "2020-11-09T18:00:04Z"
+		},
+		{
+			"checksumSHA1": "G2Bm6PHgMvAYgfyDVs1WTVpbEao=",
 			"path": "github.com/jamesrr39/goutil/snapshot",
-			"revision": "6916160f8a53ae70e664839977d4d31d1ca72e95",
-			"revisionTime": "2019-09-05T20:24:57Z"
+			"revision": "8c6fc8b7aa320fa078330330e32ab60cbcb73664",
+			"revisionTime": "2020-11-09T18:00:04Z"
 		},
 		{
 			"checksumSHA1": "AC9GXutZpDJDSOGypjYdzS7G7ZA=",

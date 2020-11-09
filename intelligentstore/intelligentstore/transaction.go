@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/jamesrr39/goutil/dirtraversal"
+	"github.com/jamesrr39/goutil/errorsx"
 )
 
 type HashAlreadyPresentResolver interface {
@@ -25,7 +26,7 @@ type Transaction struct {
 	FilesInVersion             []FileDescriptor
 	FileInfosMissingHashes     map[RelativePath]*FileInfo
 	FileInfosMissingSymlinks   map[RelativePath]*FileInfo
-	UploadStatus               map[Hash]UploadStatus
+	UploadStatusMap            map[Hash]UploadStatus
 	Mu                         *sync.RWMutex
 	Stage                      TransactionStage
 	hashAlreadyPresentResolver HashAlreadyPresentResolver
@@ -49,13 +50,13 @@ func NewTransaction(revision *Revision, hashAlreadyPresentResolver HashAlreadyPr
 	}
 }
 
-func (transaction *Transaction) ProcessSymlinks(symlinksWithRelativePaths []*SymlinkWithRelativePath) error {
+func (transaction *Transaction) ProcessSymlinks(symlinksWithRelativePaths []*SymlinkWithRelativePath) errorsx.Error {
 	transaction.Mu.Lock() // FIXME separate locks for files & symlinks
 	defer transaction.Mu.Unlock()
 	for _, symlinkWithRelativePath := range symlinksWithRelativePaths {
 		fileInfo := transaction.FileInfosMissingSymlinks[symlinkWithRelativePath.RelativePath]
 		if nil == fileInfo {
-			return fmt.Errorf("file info for '%s' not found as a symlink in the upload manifest", symlinkWithRelativePath.RelativePath)
+			return errorsx.Errorf("file info for '%s' not found as a symlink in the upload manifest", symlinkWithRelativePath.RelativePath)
 		}
 
 		transaction.FilesInVersion = append(
@@ -74,7 +75,7 @@ func (transaction *Transaction) ProcessSymlinks(symlinksWithRelativePaths []*Sym
 
 // ProcessUploadHashesAndGetRequiredHashes takes the list of relative paths and hashes, and figures out which hashes need to be uploaded
 // FIXME: better name
-func (transaction *Transaction) ProcessUploadHashesAndGetRequiredHashes(relativePathsWithHashes []*RelativePathWithHash) ([]Hash, error) {
+func (transaction *Transaction) ProcessUploadHashesAndGetRequiredHashes(relativePathsWithHashes []*RelativePathWithHash) ([]Hash, errorsx.Error) {
 	if err := transaction.CheckStage(TransactionStageAwaitingFileHashes); nil != err {
 		return nil, err
 	}
@@ -82,7 +83,7 @@ func (transaction *Transaction) ProcessUploadHashesAndGetRequiredHashes(relative
 	for _, relativePathWithHash := range relativePathsWithHashes {
 		fileInfo := transaction.FileInfosMissingHashes[relativePathWithHash.RelativePath]
 		if nil == fileInfo {
-			return nil, fmt.Errorf("file info not required for upload for '%s'", relativePathWithHash.RelativePath)
+			return nil, errorsx.Errorf("file info not required for upload for '%s'", relativePathWithHash.RelativePath)
 		}
 
 		fileDescriptor := NewRegularFileDescriptor(
@@ -98,7 +99,7 @@ func (transaction *Transaction) ProcessUploadHashesAndGetRequiredHashes(relative
 
 		err := transaction.addDescriptorToTransaction(fileDescriptor)
 		if nil != err {
-			return nil, err
+			return nil, errorsx.Wrap(err)
 		}
 	}
 
@@ -113,7 +114,7 @@ func (transaction *Transaction) GetHashesForRequiredContent() []Hash {
 
 	transaction.Mu.Lock()
 	defer transaction.Mu.Unlock()
-	for hash, status := range transaction.UploadStatus {
+	for hash, status := range transaction.UploadStatusMap {
 		if status == UploadStatusPending {
 			hashes = append(hashes, hash)
 		}
@@ -134,7 +135,7 @@ func (transaction *Transaction) GetRelativePathsRequired() []RelativePath {
 	return relativePaths
 }
 
-func (transaction *Transaction) CheckStage(expectedStages ...TransactionStage) error {
+func (transaction *Transaction) CheckStage(expectedStages ...TransactionStage) errorsx.Error {
 	var expectedStagesString string
 
 	for _, expectedStage := range expectedStages {
@@ -151,7 +152,7 @@ func (transaction *Transaction) CheckStage(expectedStages ...TransactionStage) e
 		}
 	}
 
-	return fmt.Errorf("expected transaction to be in stage '%s' but it was in stage '%s'",
+	return errorsx.Errorf("expected transaction to be in stage '%s' but it was in stage '%s'",
 		expectedStagesString,
 		transactionStages[transaction.Stage],
 	)
@@ -170,7 +171,7 @@ func (transaction *Transaction) addDescriptorToTransaction(fileDescriptor *Regul
 	transaction.Mu.Lock()
 	defer transaction.Mu.Unlock()
 
-	_, ok := transaction.UploadStatus[fileDescriptor.Hash]
+	_, ok := transaction.UploadStatusMap[fileDescriptor.Hash]
 	if ok {
 		// if this hash is already marked for upload, it means there are 2 files with the same contents to be uploaded.
 		// this is fine, but we only need to upload it once, so ignore this second addDescriptorToTransaction
@@ -183,7 +184,7 @@ func (transaction *Transaction) addDescriptorToTransaction(fileDescriptor *Regul
 	}
 
 	if !hashIsPresent {
-		transaction.UploadStatus[fileDescriptor.Hash] = UploadStatusPending
+		transaction.UploadStatusMap[fileDescriptor.Hash] = UploadStatusPending
 	}
 
 	return nil

@@ -19,6 +19,6 @@ func Test_CreateUser(t *testing.T) {
 	u := intelligentstore.NewUser(0, "test öäø user", "testpassword2")
 	newUser, err := mockStore.Store.UserDAL.CreateUser(u)
 	require.Nil(t, err)
-	assert.Equal(t, 0, u.ID, "a new object should be returned")
-	assert.Equal(t, 1, newUser.ID)
+	assert.Equal(t, int64(0), u.ID, "a new object should be returned")
+	assert.Equal(t, int64(1), newUser.ID)
 }

@@ -30,6 +30,7 @@ func Test_handleGetAllBuckets(t *testing.T) {
 	mockStore := dal.NewMockStore(t, testNowProvider, mockfs.NewMockFs())
 	bucketService := NewBucketService(mockStore.Store)
 
+	// GET /
 	requestURL := &url.URL{Path: "/"}
 	r1 := &http.Request{Method: "GET", URL: requestURL}
 	w1 := httptest.NewRecorder()
@@ -42,6 +43,7 @@ func Test_handleGetAllBuckets(t *testing.T) {
 	_, err := bucketService.store.BucketDAL.CreateBucket("docs")
 	require.Nil(t, err)
 
+	// with bucket
 	r2 := &http.Request{Method: "GET", URL: requestURL}
 	w2 := httptest.NewRecorder()
 
@@ -123,6 +125,8 @@ func Test_handleGetRevision(t *testing.T) {
 }
 
 func Test_handleCreateRevision(t *testing.T) {
+	var err error
+
 	store := dal.NewMockStore(t, testNowProvider, mockfs.NewMockFs())
 	store.CreateBucket(t, "docs")
 
@@ -170,6 +174,8 @@ func Test_handleCreateRevision(t *testing.T) {
 }
 
 func Test_handleUploadFile(t *testing.T) {
+	var err error
+
 	store := dal.NewMockStore(t, testNowProvider, mockfs.NewMockFs())
 	store.CreateBucket(t, "docs")
 
@@ -268,7 +274,7 @@ func Test_handleUploadFile(t *testing.T) {
 
 		bucketService.ServeHTTP(wUnwanted, rUnwanted)
 		assert.Equal(t, 400, wUnwanted.Code)
-		snapshot.AssertMatchesSnapshot(t, t.Name(), wUnwanted.Body.String())
+		snapshot.AssertMatchesSnapshot(t, t.Name(), snapshot.NewTextSnapshot(wUnwanted.Body.String()))
 	})
 
 	t.Run("already uploaded file", func(t *testing.T) {
@@ -281,11 +287,13 @@ func Test_handleUploadFile(t *testing.T) {
 
 		bucketService.ServeHTTP(wAlreadyUploaded, rAlreadyUploaded)
 		assert.Equal(t, 400, wAlreadyUploaded.Code)
-		snapshot.AssertMatchesSnapshot(t, t.Name(), wAlreadyUploaded.Body.String())
+		snapshot.AssertMatchesSnapshot(t, t.Name(), snapshot.NewTextSnapshot(wAlreadyUploaded.Body.String()))
 	})
 }
 
 func Test_handleCommitTransaction(t *testing.T) {
+	var err error
+
 	store := dal.NewMockStore(t, testNowProvider, mockfs.NewMockFs())
 	bucket := store.CreateBucket(t, "docs")
 
@@ -396,6 +404,8 @@ func Test_handleCommitTransaction(t *testing.T) {
 }
 
 func Test_handleGetFileContents(t *testing.T) {
+	var err error
+
 	mockStore := dal.NewMockStore(t, testNowProvider, mockfs.NewMockFs())
 	bucket := mockStore.CreateBucket(t, "docs")
 

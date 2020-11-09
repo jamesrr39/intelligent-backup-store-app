@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jamesrr39/goutil/excludesmatcher"
 	"github.com/jamesrr39/goutil/gofs"
 	"github.com/jamesrr39/goutil/gofs/mockfs"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	"github.com/jamesrr39/intelligent-backup-store-app/storewebserver"
 	"github.com/stretchr/testify/assert"
@@ -46,7 +46,8 @@ func Test_UploadToStore(t *testing.T) {
 	require.Nil(t, err)
 
 	excludeMatcher, err := excludesmatcher.NewExcludesMatcherFromReader(
-		bytes.NewBuffer([]byte("\nexclude*\n")))
+		bytes.NewBufferString("*exclude*"),
+	)
 	require.Nil(t, err)
 
 	// set up remote store server
@@ -82,7 +83,7 @@ func Test_UploadToStore(t *testing.T) {
 
 	fileDescriptors, err := remoteStore.Store.RevisionDAL.GetFilesInRevision(bucket, revision)
 	require.Nil(t, err)
-	assert.Len(t, fileDescriptors, 4)
+	require.Len(t, fileDescriptors, 4)
 
 	fileDescriptorNameMap := make(map[intelligentstore.RelativePath]intelligentstore.FileDescriptor)
 	for _, fileDescriptor := range fileDescriptors {

@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jamesrr39/goutil/excludesmatcher"
 	"github.com/jamesrr39/goutil/gofs/mockfs"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/storetest"
 	"github.com/stretchr/testify/assert"

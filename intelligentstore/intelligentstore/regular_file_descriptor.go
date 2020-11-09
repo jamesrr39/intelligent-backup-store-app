@@ -7,6 +7,8 @@ import (
 	"io"
 	"os"
 	"time"
+
+	"github.com/jamesrr39/goutil/errorsx"
 )
 
 // RegularFileDescriptor represents a file and it's storage location metadata.
@@ -24,7 +26,7 @@ func NewRegularFileDescriptor(fileInfo *FileInfo, hash Hash) *RegularFileDescrip
 	return &RegularFileDescriptor{fileInfo, hash}
 }
 
-func NewRegularFileDescriptorFromReader(relativePath RelativePath, modTime time.Time, fileMode os.FileMode, file io.Reader) (*RegularFileDescriptor, error) {
+func NewRegularFileDescriptorFromReader(relativePath RelativePath, modTime time.Time, fileMode os.FileMode, file io.Reader) (*RegularFileDescriptor, errorsx.Error) {
 	hasher := newHasher()
 	size := int64(0)
 	readerSize := 4096
@@ -38,7 +40,7 @@ func NewRegularFileDescriptorFromReader(relativePath RelativePath, modTime time.
 			if io.EOF == err {
 				break
 			}
-			return nil, err
+			return nil, errorsx.Wrap(err)
 		}
 
 		if bytesReadCount < readerSize {
@@ -48,7 +50,7 @@ func NewRegularFileDescriptorFromReader(relativePath RelativePath, modTime time.
 		size += int64(len(b))
 		_, err = hasher.Write(b)
 		if nil != err {
-			return nil, err
+			return nil, errorsx.Wrap(err)
 		}
 	}
 

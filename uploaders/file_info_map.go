@@ -5,10 +5,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/jamesrr39/goutil/fswalker"
+	"github.com/jamesrr39/goutil/errorsx"
+	"github.com/jamesrr39/goutil/excludesmatcher"
 	"github.com/jamesrr39/goutil/gofs"
 	"github.com/jamesrr39/goutil/humanise"
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 )
 
@@ -24,17 +24,17 @@ func (m FileInfoMap) ToSlice() []*intelligentstore.FileInfo {
 	return fileInfos
 }
 
-func BuildFileInfosMap(fs gofs.Fs, backupFromLocation string, excludeMatcher *excludesmatcher.ExcludesMatcher) (FileInfoMap, error) {
+func BuildFileInfosMap(fs gofs.Fs, backupFromLocation string, excludeMatcher excludesmatcher.Matcher) (FileInfoMap, errorsx.Error) {
 	_, err := fs.Stat(backupFromLocation)
 	if err != nil {
-		return nil, err
+		return nil, errorsx.Wrap(err)
 	}
 
 	fileInfosMap := make(FileInfoMap)
 
 	walkFunc := func(path string, osFileInfo os.FileInfo, err error) error {
 		if nil != err {
-			return err
+			return errorsx.Wrap(err, "path", path)
 		}
 
 		if osFileInfo.IsDir() {
@@ -63,15 +63,12 @@ func BuildFileInfosMap(fs gofs.Fs, backupFromLocation string, excludeMatcher *ex
 		return nil
 	}
 
-	options := fswalker.WalkOptions{
-		Fs:             fs,
-		ExcludeMatcher: excludeMatcher,
+	walkOptions := gofs.WalkOptions{
+		ExcludesMatcher: excludeMatcher,
 	}
-
-	err = fswalker.Walk(backupFromLocation, walkFunc, options)
-
+	err = gofs.Walk(fs, backupFromLocation, walkFunc, walkOptions)
 	if nil != err {
-		return nil, err
+		return nil, errorsx.Wrap(err)
 	}
 
 	return fileInfosMap, nil

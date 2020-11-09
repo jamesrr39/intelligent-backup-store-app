@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jamesrr39/goutil/excludesmatcher"
 	"github.com/jamesrr39/goutil/gofs/mockfs"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -22,7 +22,7 @@ func Test_fullPathToRelative(t *testing.T) {
 
 func Test_BuildFileInfosMap(t *testing.T) {
 	fs := mockfs.NewMockFs()
-	excludes, err := excludesmatcher.NewExcludesMatcherFromReader(bytes.NewBuffer([]byte("exclude-me.txt")))
+	excludes, err := excludesmatcher.NewExcludesMatcherFromReader(bytes.NewBufferString("*exclude-me.txt"))
 	require.Nil(t, err)
 
 	fileContents := []byte("123")
@@ -41,14 +41,18 @@ func Test_BuildFileInfosMap(t *testing.T) {
 	err = fs.WriteFile("/test/exclude-me.txt", fileContents, 0600)
 	require.Nil(t, err)
 
-	_, err = BuildFileInfosMap(fs, "/bad_path", excludes)
-	require.NotNil(t, err)
+	t.Run("bad path", func(t *testing.T) {
+		_, err = BuildFileInfosMap(fs, "/bad_path", excludes)
+		require.NotNil(t, err)
+	})
 
-	fileInfosMap, err := BuildFileInfosMap(fs, "/test", excludes)
-	require.Nil(t, err)
+	t.Run("good path", func(t *testing.T) {
+		fileInfosMap, err := BuildFileInfosMap(fs, "/test", excludes)
+		require.Nil(t, err)
 
-	require.Len(t, fileInfosMap, 1)
-	require.Equal(t, fileInfo, fileInfosMap["folder-1/a.txt"])
+		require.Len(t, fileInfosMap, 1)
+		require.Equal(t, fileInfo, fileInfosMap["folder-1/a.txt"])
+	})
 }
 
 func Test_ToSlice(t *testing.T) {

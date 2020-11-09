@@ -6,9 +6,9 @@ import (
 	"io"
 	"path/filepath"
 
+	"github.com/jamesrr39/goutil/excludesmatcher"
 	"github.com/jamesrr39/goutil/gofs"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/excludesmatcher"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 )
 
@@ -62,7 +62,7 @@ func (exporter *LocalExporter) Export() error {
 	}
 
 	for _, fileInRevision := range filesInRevision {
-		if nil != exporter.Matcher && !exporter.Matcher.IsIncluded(fileInRevision.GetFileInfo().RelativePath) {
+		if nil != exporter.Matcher && !exporter.Matcher.Matches(string(fileInRevision.GetFileInfo().RelativePath)) {
 			continue
 		}
 
