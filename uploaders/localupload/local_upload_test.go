@@ -3,6 +3,7 @@ package localupload
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
@@ -22,13 +23,16 @@ type testfile struct {
 func Test_UploadToStore(t *testing.T) {
 	// define and write test files to upload, living under /docs
 	testFiles := []*testfile{
-		&testfile{"a.txt", "file a"},
-		&testfile{"b.txt", "file b"},
-		&testfile{"folder1/a.txt", "file 1/a"},
-		&testfile{"folder1/c.txt", "file 1/c"},
+		{"a.txt", "file a"},
+		{"b.txt", "file b"},
+		{"folder1/a.txt", "file 1/a"},
+		{"folder1/c.txt", "file 1/c"},
 	}
 
 	fs := mockfs.NewMockFs()
+	fs.LstatFunc = func(path string) (os.FileInfo, error) {
+		return fs.Stat(path)
+	}
 	err := fs.MkdirAll("/docs/folder1", 0700)
 	require.Nil(t, err)
 

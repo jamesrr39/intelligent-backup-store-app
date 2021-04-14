@@ -3,6 +3,7 @@ package uploaders
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
@@ -22,6 +23,9 @@ func Test_fullPathToRelative(t *testing.T) {
 
 func Test_BuildFileInfosMap(t *testing.T) {
 	fs := mockfs.NewMockFs()
+	fs.LstatFunc = func(path string) (os.FileInfo, error) {
+		return fs.Stat(path)
+	}
 	excludes, err := excludesmatcher.NewExcludesMatcherFromReader(bytes.NewBufferString("*exclude-me.txt"))
 	require.Nil(t, err)
 

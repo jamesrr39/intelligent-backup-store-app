@@ -64,6 +64,7 @@ func BuildFileInfosMap(fs gofs.Fs, backupFromLocation string, excludeMatcher exc
 	}
 
 	walkOptions := gofs.WalkOptions{
+		// FollowSymlinks:  false,
 		ExcludesMatcher: excludeMatcher,
 	}
 	err = gofs.Walk(fs, backupFromLocation, walkFunc, walkOptions)

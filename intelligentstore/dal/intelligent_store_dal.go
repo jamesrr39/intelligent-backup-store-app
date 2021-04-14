@@ -227,27 +227,6 @@ func (rc readCloser) Close() error {
 	return rc.closeFunc()
 }
 
-//
-// func (s *IntelligentStoreDAL) GetObjectByHash(hash intelligentstore.Hash) (io.ReadCloser, error) {
-// 	var err error
-// 	gzipedReadCloser, err := s.GetGzippedObjectByHash(hash)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	defer func() {
-// 		if err != nil {
-// 			gzipedReadCloser.Close()
-// 		}
-// 	}()
-//
-// 	reader, err := gzip.NewReader(gzipedReadCloser)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-//
-// 	return reader, nil
-// }
-
 // Search looks for the searchTerm in any of the file paths in the store
 func (s *IntelligentStoreDAL) Search(searchTerm string) ([]*intelligentstore.SearchResult, error) {
 	buckets, err := s.BucketDAL.GetAllBuckets()
@@ -291,7 +270,7 @@ func (s *IntelligentStoreDAL) IsObjectPresent(hash intelligentstore.Hash) (bool,
 		if os.IsNotExist(err) {
 			return false, nil
 		}
-		return false, fmt.Errorf("couldn't detect if %s is already in the index. Error: %s", hash, err)
+		return false, fmt.Errorf("couldn't detect if %s is already in the index. Error: %s (%T)", hash, err, err)
 	}
 
 	return true, nil
