@@ -108,7 +108,7 @@ func (dal *TransactionDAL) BackupFile(transaction *intelligentstore.Transaction,
 		return errorsx.Wrap(err)
 	}
 
-	_, err = sourceFile.Seek(io.SeekStart, 0)
+	_, err = sourceFile.Seek(0, io.SeekStart)
 	if nil != err {
 		return errorsx.Wrap(err)
 	}
