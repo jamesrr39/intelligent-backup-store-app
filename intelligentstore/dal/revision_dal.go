@@ -1,6 +1,7 @@
 package dal
 
 import (
+	"encoding/csv"
 	"encoding/gob"
 	"encoding/json"
 	"fmt"
@@ -10,8 +11,10 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jamesrr39/goutil/errorsx"
+	"github.com/jamesrr39/goutil/gofs"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	"github.com/jamesrr39/semaphore"
 	"github.com/pkg/errors"
@@ -38,17 +41,87 @@ func (r *RevisionDAL) GetFilesInRevision(bucket *intelligentstore.Bucket, revisi
 		r.bucketPath(bucket),
 		"versions",
 		strconv.FormatInt(int64(revision.VersionTimestamp), 10))
-	revisionDataBytes, err := r.fs.ReadFile(filePath)
+	revisionFile, err := r.fs.Open(filePath)
 	if nil != err {
 		return nil, errorsx.Wrap(err, "filePath", filePath)
 	}
 
-	filesInVersion, err := readFilesInRevisionJSON(revisionDataBytes)
+	filesInVersion, err := readFilesInRevisionJSON(revisionFile)
 	if err != nil {
 		return nil, errorsx.Wrap(err, "filePath", filePath)
 	}
 
 	return filesInVersion, nil
+}
+
+func getCSVHeaders() []string {
+	return []string{"path", "type", "modTime", "size", "fileMode", "contents_hash_or_symlink_target"}
+}
+
+func (r *RevisionDAL) readFilesInRevisionCSV(file gofs.File) (intelligentstore.FileDescriptors, errorsx.Error) {
+	descriptors := []intelligentstore.FileDescriptor{}
+
+	reader := csv.NewReader(file)
+	reader.Comma = '|'
+	_, err := reader.Read()
+	if err != nil {
+		return nil, errorsx.Wrap(err, "extra info", "error reading first line of CSV")
+	}
+
+	for {
+		fields, err := reader.Read()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return nil, errorsx.Wrap(err)
+		}
+
+		path := fields[0]
+		fileType, err := intelligentstore.FileTypeFromInt(fields[1])
+		if err != nil {
+			return nil, errorsx.Wrap(err)
+		}
+		modTime, err := time.Parse("2006-01-02T15:04:05-0700", fields[2])
+		if err != nil {
+			return nil, errorsx.Wrap(err)
+		}
+		size, err := strconv.ParseInt(fields[3], 10, 64)
+		if err != nil {
+			return nil, errorsx.Wrap(err)
+		}
+		fileMode, err := strconv.Atoi(fields[4])
+		if err != nil {
+			return nil, errorsx.Wrap(err)
+		}
+		hashOrTarget := fields[5]
+
+		fileInfo := intelligentstore.NewFileInfo(
+			intelligentstore.FileTypeRegular,
+			path,
+			modTime,
+			size,
+			os.FileMode(fileMode),
+		)
+
+		var descriptor intelligentstore.FileDescriptor
+
+		switch fileType {
+		case intelligentstore.FileTypeRegular:
+			descriptor = intelligentstore.NewRegularFileDescriptor(
+				fileInfo,
+				intelligentstore.Hash(hashOrTarget),
+			)
+		case intelligentstore.FileTypeDir:
+			descriptor = intelligentstore.NewDirectoryFileDescriptor()
+		}
+
+		descriptors = append(descriptors, descriptor)
+		println(fields, descriptors)
+
+	}
+
+	return descriptors, nil
 }
 
 func (r *RevisionDAL) GetFilesInRevisionWithPrefix(bucket *intelligentstore.Bucket, revision *intelligentstore.Revision, prefixPath intelligentstore.RelativePath) (intelligentstore.FileDescriptor, error) {
@@ -98,18 +171,6 @@ func (r *RevisionDAL) GetFilesInRevisionWithPrefix(bucket *intelligentstore.Buck
 			}
 			child.SubChildrenCount++
 		}
-
-		// child, ok := childFilesMap[fileName]
-		// if !ok {
-		// 	child = intelligentstore.ChildInfo{
-		// 		Descriptor: descriptor,
-		// 	}
-		// }
-
-		// if descriptor.GetFileInfo().Type == intelligentstore.FileTypeDir {
-		// 	child.SubChildrenCount++
-		// }
-		// childFilesMap[fileName] = child
 	}
 
 	if len(childFilesMap) == 0 {
@@ -122,9 +183,9 @@ func (r *RevisionDAL) GetFilesInRevisionWithPrefix(bucket *intelligentstore.Buck
 	), nil
 }
 
-func readFilesInRevisionJSON(b []byte) (intelligentstore.FileDescriptors, error) {
+func readFilesInRevisionJSON(reader io.Reader) (intelligentstore.FileDescriptors, error) {
 	var fdBytes []json.RawMessage
-	err := json.Unmarshal(b, &fdBytes)
+	err := json.NewDecoder(reader).Decode(&fdBytes)
 	if err != nil {
 		return nil, err
 	}

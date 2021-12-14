@@ -314,8 +314,9 @@ func setupRunMigrationsCommand() {
 	runMigrationsMigrationName := runMigrationsCommand.Arg("migration name", "name of the migtation you want to run").String()
 	runMigrationsCommand.Action(func(ctx *kingpin.ParseContext) error {
 		migrationMap := map[string]migrations.Migration{
-			"1-gob-to-json-records": migrations.Run1,
-			"2-gzip-files":          migrations.Run2,
+			"1-gob-to-json-records":   migrations.Run1,
+			"2-gzip-files":            migrations.Run2,
+			"3-revision-contents-csv": migrations.Run3,
 		}
 
 		migration := migrationMap[*runMigrationsMigrationName]
