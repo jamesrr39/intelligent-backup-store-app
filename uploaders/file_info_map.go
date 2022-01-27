@@ -6,9 +6,9 @@ import (
 	"strings"
 
 	"github.com/jamesrr39/goutil/errorsx"
-	"github.com/jamesrr39/goutil/excludesmatcher"
 	"github.com/jamesrr39/goutil/gofs"
 	"github.com/jamesrr39/goutil/humanise"
+	"github.com/jamesrr39/goutil/patternmatcher"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 )
 
@@ -24,7 +24,7 @@ func (m FileInfoMap) ToSlice() []*intelligentstore.FileInfo {
 	return fileInfos
 }
 
-func BuildFileInfosMap(fs gofs.Fs, backupFromLocation string, excludeMatcher excludesmatcher.Matcher) (FileInfoMap, errorsx.Error) {
+func BuildFileInfosMap(fs gofs.Fs, backupFromLocation string, includeMatcher, excludeMatcher patternmatcher.Matcher) (FileInfoMap, errorsx.Error) {
 	_, err := fs.Stat(backupFromLocation)
 	if err != nil {
 		return nil, errorsx.Wrap(err)
@@ -65,6 +65,7 @@ func BuildFileInfosMap(fs gofs.Fs, backupFromLocation string, excludeMatcher exc
 
 	walkOptions := gofs.WalkOptions{
 		// FollowSymlinks:  false,
+		IncludesMatcher: includeMatcher,
 		ExcludesMatcher: excludeMatcher,
 	}
 	err = gofs.Walk(fs, backupFromLocation, walkFunc, walkOptions)

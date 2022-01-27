@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"github.com/jamesrr39/goutil/errorsx"
-	"github.com/jamesrr39/goutil/excludesmatcher"
 	"github.com/jamesrr39/goutil/gofs"
+	"github.com/jamesrr39/goutil/patternmatcher"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	"github.com/jamesrr39/intelligent-backup-store-app/uploaders"
@@ -18,9 +18,10 @@ type LocalUploader struct {
 	backupStoreDAL     *dal.IntelligentStoreDAL
 	backupBucketName   string
 	backupFromLocation string
-	excludeMatcher     *excludesmatcher.ExcludesMatcher
-	fs                 gofs.Fs
-	backupDryRun       bool
+	includeMatcher,
+	excludeMatcher patternmatcher.Matcher
+	fs           gofs.Fs
+	backupDryRun bool
 }
 
 // NewLocalUploader connects to the upload store and returns a LocalUploader
@@ -28,7 +29,8 @@ func NewLocalUploader(
 	backupStoreDAL *dal.IntelligentStoreDAL,
 	backupBucketName,
 	backupFromLocation string,
-	excludeMatcher *excludesmatcher.ExcludesMatcher,
+	includeMatcher,
+	excludeMatcher patternmatcher.Matcher,
 	backupDryRun bool,
 ) *LocalUploader {
 
@@ -36,6 +38,7 @@ func NewLocalUploader(
 		backupStoreDAL,
 		backupBucketName,
 		backupFromLocation,
+		includeMatcher,
 		excludeMatcher,
 		gofs.NewOsFs(),
 		backupDryRun,
@@ -44,7 +47,7 @@ func NewLocalUploader(
 
 // UploadToStore uses the LocalUploader configurations to backup to a store
 func (uploader *LocalUploader) UploadToStore() errorsx.Error {
-	fileInfosMap, err := uploaders.BuildFileInfosMap(uploader.fs, uploader.backupFromLocation, uploader.excludeMatcher)
+	fileInfosMap, err := uploaders.BuildFileInfosMap(uploader.fs, uploader.backupFromLocation, uploader.includeMatcher, uploader.excludeMatcher)
 	if nil != err {
 		return err
 	}

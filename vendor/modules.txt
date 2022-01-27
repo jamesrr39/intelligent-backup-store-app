@@ -3,58 +3,14 @@
 bazil.org/fuse
 bazil.org/fuse/fs
 bazil.org/fuse/fuseutil
-# github.com/alecthomas/assert v0.0.0-20170929043011-405dbfeb8e38
-## explicit
-# github.com/alecthomas/colour v0.1.0
-## explicit
-# github.com/alecthomas/repr v0.0.0-20210301060118-828286944d6a
-## explicit
-# github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc
-## explicit
+# github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751
 github.com/alecthomas/template
 github.com/alecthomas/template/parse
-# github.com/alecthomas/units v0.0.0-20151022065526-2efee857e7cf
-## explicit
+# github.com/alecthomas/units v0.0.0-20210208195552-ff826a37aa15
 github.com/alecthomas/units
-# github.com/cznic/b v0.0.0-20171108092530-c0c71e655879
-## explicit
-github.com/cznic/b
-# github.com/cznic/fileutil v0.0.0-20171107141331-2d566d841097
-## explicit
-github.com/cznic/fileutil
-# github.com/cznic/golex v0.0.0-20170803123110-4ab7c5e190e4
-## explicit
-github.com/cznic/golex/lex
-# github.com/cznic/internal v0.0.0-20170905175358-4747030f7cf2
-## explicit
-github.com/cznic/internal/buffer
-github.com/cznic/internal/file
-github.com/cznic/internal/slice
-# github.com/cznic/lldb v1.1.0
-## explicit
-github.com/cznic/lldb
-# github.com/cznic/mathutil v0.0.0-20171015093839-09cde8d5df5f
-## explicit
-github.com/cznic/mathutil
-# github.com/cznic/ql v1.1.1-0.20171122124620-3f53e147d722
-## explicit
-github.com/cznic/ql
-github.com/cznic/ql/driver
-github.com/cznic/ql/vendored/github.com/camlistore/go4/lock
-# github.com/cznic/sortutil v0.0.0-20150617083342-4c7342852e65
-## explicit
-github.com/cznic/sortutil
-# github.com/cznic/strutil v0.0.0-20171016134553-529a34b1c186
-## explicit
-github.com/cznic/strutil
-# github.com/cznic/zappy v0.0.0-20160723133515-2533cb5b45cc
-## explicit
-github.com/cznic/zappy
 # github.com/davecgh/go-spew v1.1.1
-github.com/davecgh/go-spew/spew
-# github.com/edsrzf/mmap-go v0.0.0-20170320065105-0bce6a688712
 ## explicit
-github.com/edsrzf/mmap-go
+github.com/davecgh/go-spew/spew
 # github.com/go-chi/render v1.0.1-0.20171231234154-8c8c7a43d054
 ## explicit
 github.com/go-chi/render
@@ -68,34 +24,34 @@ github.com/gobwas/glob/syntax/ast
 github.com/gobwas/glob/syntax/lexer
 github.com/gobwas/glob/util/runes
 github.com/gobwas/glob/util/strings
-# github.com/golang/protobuf v0.0.0-20170808021621-1909bc2f63dc
+# github.com/golang/protobuf v1.5.2
 ## explicit
 github.com/golang/protobuf/proto
-# github.com/golang/snappy v0.0.3
-## explicit
 # github.com/gorilla/context v1.1.1
 ## explicit
 github.com/gorilla/context
 # github.com/gorilla/mux v0.0.0-20160920230813-757bef944d0f
 ## explicit
 github.com/gorilla/mux
-# github.com/jamesrr39/goutil v0.0.0-20201109180004-8c6fc8b7aa32
+# github.com/jamesrr39/go-snapshot-testing v0.0.0-20210417135521-a5ca70c087bc
+## explicit
+github.com/jamesrr39/go-snapshot-testing
+# github.com/jamesrr39/goutil v0.0.0-20220127172547-37a3bdc40f9a
 ## explicit
 github.com/jamesrr39/goutil/dirtraversal
 github.com/jamesrr39/goutil/errorsx
-github.com/jamesrr39/goutil/excludesmatcher
 github.com/jamesrr39/goutil/gofs
 github.com/jamesrr39/goutil/gofs/mockfs
 github.com/jamesrr39/goutil/httpextra
 github.com/jamesrr39/goutil/humanise
 github.com/jamesrr39/goutil/open
-github.com/jamesrr39/goutil/snapshot
+github.com/jamesrr39/goutil/patternmatcher
 # github.com/jamesrr39/semaphore v0.0.0-20180521202200-0d5ddc396086
 ## explicit
 github.com/jamesrr39/semaphore
-# github.com/mattn/go-isatty v0.0.12
+# github.com/kr/pretty v0.1.0
 ## explicit
-# github.com/pkg/errors v0.8.1-0.20170910134614-2b3a18b5f0fb
+# github.com/pkg/errors v0.8.1
 ## explicit
 github.com/pkg/errors
 # github.com/pmezard/go-difflib v1.0.0
@@ -103,29 +59,52 @@ github.com/pmezard/go-difflib/difflib
 # github.com/rakyll/statik v0.1.3
 ## explicit
 github.com/rakyll/statik/fs
-# github.com/sergi/go-diff v1.2.0
-## explicit
-# github.com/spf13/afero v0.0.0-20170217164146-9be650865eab
-## explicit
+# github.com/spf13/afero v1.6.0
 github.com/spf13/afero
 github.com/spf13/afero/mem
-# github.com/stretchr/testify v1.4.0
+# github.com/stretchr/testify v1.7.0
 ## explicit
 github.com/stretchr/testify/assert
 github.com/stretchr/testify/require
-# golang.org/x/net v0.0.0-20171207222016-dc871a5d77e2
-## explicit
+# golang.org/x/net v0.0.0-20201021035429-f5854403a974
 golang.org/x/net/context
-# golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
-## explicit
 # golang.org/x/sys v0.0.0-20210514084401-e8d321eab015
 ## explicit
-# golang.org/x/text v0.0.0-20170117123646-11dbc599981c
-## explicit
+# golang.org/x/text v0.3.3
 golang.org/x/text/transform
 golang.org/x/text/unicode/norm
-# gopkg.in/alecthomas/kingpin.v2 v2.2.3
+# google.golang.org/protobuf v1.26.0
+google.golang.org/protobuf/encoding/prototext
+google.golang.org/protobuf/encoding/protowire
+google.golang.org/protobuf/internal/descfmt
+google.golang.org/protobuf/internal/descopts
+google.golang.org/protobuf/internal/detrand
+google.golang.org/protobuf/internal/encoding/defval
+google.golang.org/protobuf/internal/encoding/messageset
+google.golang.org/protobuf/internal/encoding/tag
+google.golang.org/protobuf/internal/encoding/text
+google.golang.org/protobuf/internal/errors
+google.golang.org/protobuf/internal/filedesc
+google.golang.org/protobuf/internal/filetype
+google.golang.org/protobuf/internal/flags
+google.golang.org/protobuf/internal/genid
+google.golang.org/protobuf/internal/impl
+google.golang.org/protobuf/internal/order
+google.golang.org/protobuf/internal/pragma
+google.golang.org/protobuf/internal/set
+google.golang.org/protobuf/internal/strs
+google.golang.org/protobuf/internal/version
+google.golang.org/protobuf/proto
+google.golang.org/protobuf/reflect/protodesc
+google.golang.org/protobuf/reflect/protoreflect
+google.golang.org/protobuf/reflect/protoregistry
+google.golang.org/protobuf/runtime/protoiface
+google.golang.org/protobuf/runtime/protoimpl
+google.golang.org/protobuf/types/descriptorpb
+# gopkg.in/alecthomas/kingpin.v2 v2.2.6
 ## explicit
 gopkg.in/alecthomas/kingpin.v2
-# gopkg.in/yaml.v2 v2.2.4
-gopkg.in/yaml.v2
+# gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15
+## explicit
+# gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c
+gopkg.in/yaml.v3

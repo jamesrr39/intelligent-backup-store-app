@@ -102,8 +102,6 @@ func (d *Dir) Lookup(ctx context.Context, name string) (fs.Node, error) {
 	revision := intelligentstore.NewRevision(bucket, intelligentstore.RevisionVersion(revisionVersionStr))
 	searchRelativePath := intelligentstore.NewRelativePath(strings.Join(fragments[2:], sep))
 
-	println("bucket, rev, search path:", bucket.BucketName, revision, string(searchRelativePath))
-
 	fileDescriptor, err := d.fs.dal.RevisionDAL.GetFilesInRevisionWithPrefix(bucket, revision, searchRelativePath)
 	if nil != err {
 		return nil, err

@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jamesrr39/goutil/excludesmatcher"
 	"github.com/jamesrr39/goutil/gofs/mockfs"
+	"github.com/jamesrr39/goutil/patternmatcher"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/storetest"
@@ -62,7 +62,7 @@ func Test_Export(t *testing.T) {
 
 	// export with matcher to only export a sub-directory
 	exporter.ExportDir = "/outDir-3"
-	exporter.Matcher = excludesmatcher.NewSimplePrefixMatcher("folder-1/")
+	exporter.Matcher = patternmatcher.NewSimplePrefixMatcher("folder-1/")
 
 	err = exporter.Export()
 	require.Nil(t, err)
