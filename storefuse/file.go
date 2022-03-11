@@ -12,8 +12,6 @@ import (
 	"bazil.org/fuse"
 )
 
-var data = []byte("my test file\n")
-
 type File struct {
 	dal        *dal.IntelligentStoreDAL
 	descriptor intelligentstore.FileDescriptor
