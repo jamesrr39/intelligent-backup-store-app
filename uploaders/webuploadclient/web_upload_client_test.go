@@ -10,6 +10,7 @@ import (
 
 	"github.com/jamesrr39/goutil/gofs"
 	"github.com/jamesrr39/goutil/gofs/mockfs"
+	"github.com/jamesrr39/goutil/logpkg"
 	"github.com/jamesrr39/goutil/patternmatcher"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
@@ -24,6 +25,8 @@ type testfile struct {
 }
 
 func Test_UploadToStore(t *testing.T) {
+	logger := logpkg.NewLogger(os.Stderr, logpkg.LogLevelInfo)
+
 	// set up local files/FS
 	testFiles := []*testfile{
 		{"a.txt", "file a"},
@@ -60,7 +63,7 @@ func Test_UploadToStore(t *testing.T) {
 	bucket := remoteStore.CreateBucket(t, "docs")
 
 	storeServer := httptest.NewServer(
-		storewebserver.NewStoreWebServer(remoteStore.Store))
+		storewebserver.NewStoreWebServer(logger, remoteStore.Store))
 	defer storeServer.Close()
 
 	log.Printf("store URL: %s\n", storeServer.URL)

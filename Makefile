@@ -34,3 +34,19 @@ update_snapshots:
 install: build
 	cp build/bin/default/intelligent-store ${shell go env GOBIN}/
 
+LOCALENV_DIR=data/localenv
+LOCALENV_BUCKETNAME=test1
+
+.PHONY: ensure_localenv
+ensure_localenv:
+	mkdir -p ${LOCALENV_DIR}
+
+.PHONY: setup_localenv_store
+setup_localenv_store:
+	go run cmd/intelligent-store-app-main.go init -C ${LOCALENV_DIR}
+	go run cmd/intelligent-store-app-main.go create-bucket -C ${LOCALENV_DIR} ${LOCALENV_BUCKETNAME}
+
+.PHONY: run_dev_webserver
+run_dev_webserver: ensure_localenv
+#go run cmd/intelligent-store-app-main.go -C ${LOCALENV_DIR} start-webapp
+	go run cmd/intelligent-store-app-main.go start-webapp --store-location=${LOCALENV_DIR}

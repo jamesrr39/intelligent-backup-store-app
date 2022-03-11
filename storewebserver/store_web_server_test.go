@@ -5,10 +5,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/jamesrr39/goutil/gofs/mockfs"
+	"github.com/jamesrr39/goutil/logpkg"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/storetest"
@@ -17,6 +19,8 @@ import (
 )
 
 func Test_handleSearch(t *testing.T) {
+	logger := logpkg.NewLogger(os.Stderr, logpkg.LogLevelInfo)
+
 	store := dal.NewMockStore(t, dal.MockNowProvider, mockfs.NewMockFs())
 	bucket := storetest.CreateBucket(t, store.Store, "docs")
 
@@ -25,7 +29,7 @@ func Test_handleSearch(t *testing.T) {
 		intelligentstore.NewRegularFileDescriptorWithContents(t, intelligentstore.NewRelativePath("a/something else.txt"), time.Unix(0, 0), dal.FileMode600, []byte("")),
 	})
 
-	storeHandler := NewStoreWebServer(store.Store)
+	storeHandler := NewStoreWebServer(logger, store.Store)
 
 	// good request
 

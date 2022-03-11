@@ -7,6 +7,10 @@ import (
 
 type RelativePath string
 
+func (rp RelativePath) String() string {
+	return string(rp)
+}
+
 const RelativePathSep = '/'
 
 func NewRelativePath(path string) RelativePath {

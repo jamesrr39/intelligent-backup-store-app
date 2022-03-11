@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/jamesrr39/goutil/errorsx"
+	"github.com/jamesrr39/goutil/logpkg"
 	"github.com/jamesrr39/goutil/patternmatcher"
 	"github.com/jamesrr39/intelligent-backup-store-app/exporters"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
@@ -26,8 +27,13 @@ import (
 	kingpin "gopkg.in/alecthomas/kingpin.v2"
 )
 
+var (
+	logger *logpkg.Logger
+)
+
 //go:generate swagger generate spec
 func main() {
+	logger = logpkg.NewLogger(os.Stderr, logpkg.LogLevelInfo)
 	setupInitCommand()
 	setupInitBucketCommand()
 	setupStartWebappCommand()
@@ -45,7 +51,7 @@ func main() {
 
 func setupInitCommand() {
 	initCommand := kingpin.Command("init", "create a new store")
-	initStoreLocation := addStoreLocation(initCommand, false)
+	initStoreLocation := addStoreLocation(initCommand)
 	initCommand.Action(func(ctx *kingpin.ParseContext) error {
 		store, err := dal.CreateIntelligentStoreAndNewConn(*initStoreLocation)
 		if nil != err {
@@ -59,7 +65,7 @@ func setupInitCommand() {
 
 func setupInitBucketCommand() {
 	initBucketCommand := kingpin.Command("create-bucket", "create a new bucket")
-	initBucketStoreLocation := addStoreLocation(initBucketCommand, true)
+	initBucketStoreLocation := addStoreLocation(initBucketCommand)
 	initBucketBucketName := initBucketCommand.Arg("bucket name", "name of the bucket").Required().String()
 	initBucketCommand.Action(func(ctx *kingpin.ParseContext) error {
 		store, err := dal.NewIntelligentStoreConnToExisting(
@@ -82,7 +88,7 @@ func setupInitBucketCommand() {
 
 func setupBackupRemoteCommand() {
 	cmd := kingpin.Command("backup-remote", "backup a new version of a remote site into the store")
-	storeLocation := addStoreLocation(cmd, true)
+	storeLocation := addStoreLocation(cmd)
 	bucketName := cmd.Arg("bucket name", "name of the bucket to back up into").Required().String()
 	configLocation := cmd.Arg("config location", "location to config file").Required().String()
 	cmd.Action(func(ctx *kingpin.ParseContext) error {
@@ -124,10 +130,10 @@ func setupBackupRemoteCommand() {
 
 func setupBackupIntoCommand() {
 	backupIntoCommand := kingpin.Command("backup-to", "backup a new version of the folder into the store")
-	backupStoreLocation := addStoreLocation(backupIntoCommand, true)
+	backupStoreLocation := addStoreLocation(backupIntoCommand)
 	backupBucketName := backupIntoCommand.Arg("bucket name", "name of the bucket to back up into").Required().String()
 	backupFromLocation := backupIntoCommand.Arg("backup from location", "location to backup from").Default(".").String()
-	backupDryRun := backupIntoCommand.Flag("dry-run", "Don't actually copy files or create a revision").Default("False").Bool()
+	backupDryRun := backupIntoCommand.Flag("dry-run", "Don't actually copy files or create a revision").Short('n').Default("False").Bool()
 	profileFilePath := backupIntoCommand.Flag("profile", "file to write the profile to").String()
 	backupIncludesMatcherLocation := backupIntoCommand.Flag("include", "path to a file with glob-style patterns to include files").Default("").String()
 	backupExcludesMatcherLocation := backupIntoCommand.Flag("exclude", "path to a file with glob-style patterns to exclude files").Default("").String()
@@ -146,7 +152,7 @@ func setupBackupIntoCommand() {
 			}
 		}
 
-		includeMatcher := &patternmatcher.PatternMatcher{}
+		var includeMatcher patternmatcher.Matcher
 		if *backupIncludesMatcherLocation != "" {
 			includeFile, err := os.Open(*backupIncludesMatcherLocation)
 			if nil != err {
@@ -189,7 +195,7 @@ func setupBackupIntoCommand() {
 
 func setupListBucketsCommand() {
 	listBucketsCommand := kingpin.Command("list-buckets", "produce a listing of all the buckets and the last backup time")
-	listBucketsStoreLocation := addStoreLocation(listBucketsCommand, false)
+	listBucketsStoreLocation := addStoreLocation(listBucketsCommand)
 	listBucketsCommand.Action(func(ctx *kingpin.ParseContext) error {
 		store, err := dal.NewIntelligentStoreConnToExisting(*listBucketsStoreLocation)
 		if nil != err {
@@ -226,7 +232,7 @@ func setupListBucketsCommand() {
 
 func setupListBucketRevisionsCommand() {
 	listBucketRevisionsCommand := kingpin.Command("list-revisions", "produce a listing of all the revisions in a bucket")
-	listBucketRevisionsStoreLocation := addStoreLocation(listBucketRevisionsCommand, true)
+	listBucketRevisionsStoreLocation := addStoreLocation(listBucketRevisionsCommand)
 	listBucketRevisionsBucketName := listBucketRevisionsCommand.Arg("bucket name", "name of the bucket to back up into").Required().String()
 	listBucketRevisionsCommand.Action(func(ctx *kingpin.ParseContext) error {
 		store, err := dal.NewIntelligentStoreConnToExisting(
@@ -257,7 +263,7 @@ func setupListBucketRevisionsCommand() {
 
 func setupExportCommand() {
 	exportCommand := kingpin.Command("export", "export files from the store to the local file system")
-	exportCommandStoreLocation := addStoreLocation(exportCommand, true)
+	exportCommandStoreLocation := addStoreLocation(exportCommand)
 	exportCommandBucketName := exportCommand.Arg("bucket name", "name of the bucket to export from").Required().String()
 	exportCommandExportDir := exportCommand.Arg("export folder", "where to export files to").Required().String()
 	exportCommandRevisionVersion := exportCommand.Flag(
@@ -274,13 +280,13 @@ func setupExportCommand() {
 		}
 
 		var version *intelligentstore.RevisionVersion
-		if 0 != *exportCommandRevisionVersion {
+		if *exportCommandRevisionVersion != 0 {
 			r := intelligentstore.RevisionVersion(*exportCommandRevisionVersion)
 			version = &r
 		}
 
 		var prefixMatcher patternmatcher.Matcher
-		if "" != *exportCommandFilePathPrefix {
+		if *exportCommandFilePathPrefix != "" {
 			prefixMatcher = patternmatcher.NewSimplePrefixMatcher(*exportCommandFilePathPrefix)
 		}
 
@@ -294,8 +300,8 @@ func setupExportCommand() {
 }
 
 func setupStartWebappCommand() {
-	startWebappCommand := kingpin.Command("start-webapp", "start a webapplication")
-	startWebappStoreLocation := addStoreLocation(startWebappCommand, false)
+	startWebappCommand := kingpin.Command("start-webapp", "start a web application")
+	startWebappStoreLocation := addStoreLocation(startWebappCommand)
 	startWebappAddr := startWebappCommand.Flag("address", "custom address to expose the webapp to. Example: ':8081': expose to everyone on port 8081").Default("localhost:8080").String()
 	startWebappCommand.Action(func(ctx *kingpin.ParseContext) error {
 		store, err := dal.NewIntelligentStoreConnToExisting(
@@ -310,7 +316,7 @@ func setupStartWebappCommand() {
 			WriteTimeout:      10 * time.Second,
 			ReadHeaderTimeout: 5 * time.Second,
 			Addr:              *startWebappAddr,
-			Handler:           storewebserver.NewStoreWebServer(store),
+			Handler:           storewebserver.NewStoreWebServer(logger, store),
 		}
 
 		log.Printf("starting server on %s\n", server.Addr)
@@ -325,7 +331,7 @@ func setupStartWebappCommand() {
 
 func setupRunMigrationsCommand() {
 	runMigrationsCommand := kingpin.Command("run-migration", "run one-off migrations")
-	runMigrationsStoreLocation := addStoreLocation(runMigrationsCommand, true)
+	runMigrationsStoreLocation := addStoreLocation(runMigrationsCommand)
 	runMigrationsMigrationName := runMigrationsCommand.Arg("migration name", "name of the migtation you want to run").String()
 	runMigrationsCommand.Action(func(ctx *kingpin.ParseContext) error {
 		migrationMap := map[string]migrations.Migration{
@@ -345,7 +351,7 @@ func setupRunMigrationsCommand() {
 
 func setupFuseMountCommand() {
 	cmd := kingpin.Command("mount", "mount the store as a filesystem (experimental, only linux supported)")
-	storeLocation := addStoreLocation(cmd, true)
+	storeLocation := addStoreLocation(cmd)
 	mountOnPathLocation := cmd.Arg("mount-at", "the path to mount the filesystem at").Required().String()
 	cmd.Action(func(ctx *kingpin.ParseContext) error {
 		store, err := dal.NewIntelligentStoreConnToExisting(
@@ -362,7 +368,7 @@ func setupFuseMountCommand() {
 
 func setupVerifyCommand() {
 	cmd := kingpin.Command("verify", "verify the files exist in the store")
-	storeLocation := addStoreLocation(cmd, true)
+	storeLocation := addStoreLocation(cmd)
 	bucketName := cmd.Arg("bucket name", "name of the bucket").Required().String()
 	revisionVersion := cmd.Flag(
 		"revision-version",
@@ -399,13 +405,9 @@ func setupVerifyCommand() {
 	})
 }
 
-func addStoreLocation(cmd *kingpin.CmdClause, required bool) *string {
-	arg := cmd.Arg("store location", "location of the store")
-	if required {
-		arg = arg.Required()
-	} else {
-		arg = arg.Default()
-	}
+func addStoreLocation(cmd *kingpin.CmdClause) *string {
+	arg := cmd.Flag("store-location", "location of the store").Short('C').Default(".")
+
 	return arg.String()
 }
 

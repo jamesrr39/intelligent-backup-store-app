@@ -101,18 +101,25 @@ func (d *Dir) Lookup(ctx context.Context, name string) (fs.Node, error) {
 	case intelligentstore.FileTypeDir:
 		dirFileDescriptor := fileDescriptor.(*intelligentstore.DirectoryFileDescriptor)
 		var dirEntries []fuse.Dirent
-		for fileName, info := range dirFileDescriptor.ChildFilesMap {
-			path := filepath.Join(pathInFs, fileName)
+		dirEntryDescriptors, err := d.fs.dal.RevisionDAL.ReadDir(bucket, revision, dirFileDescriptor.GetFileInfo().RelativePath)
+		if err != nil {
+			return nil, err
+		}
+		for _, descriptor := range dirEntryDescriptors {
+			path := filepath.Join(pathInFs, string(descriptor.GetFileInfo().RelativePath))
 			var fileType fuse.DirentType
-			switch info.Descriptor.GetFileInfo().Type {
+			switch descriptor.GetFileInfo().Type {
 			case intelligentstore.FileTypeDir:
 				fileType = fuse.DT_Dir
 			case intelligentstore.FileTypeRegular:
 				fileType = fuse.DT_File
 			default:
-				log.Printf("skipping %q (file type %q)\n", fileName, info.Descriptor.GetFileInfo().Type)
+				log.Printf("skipping %q (file type %q)\n", descriptor.GetFileInfo().RelativePath, descriptor.GetFileInfo().Type)
 				continue
 			}
+
+			filePathFragments := strings.Split(string(descriptor.GetFileInfo().RelativePath), string(intelligentstore.RelativePathSep))
+			fileName := filePathFragments[len(filePathFragments)-1]
 
 			dirEntries = append(dirEntries, fuse.Dirent{
 				Inode: d.fs.inodeMapInstance.GetOrGenerateInodeId(path),
@@ -128,64 +135,4 @@ func (d *Dir) Lookup(ctx context.Context, name string) (fs.Node, error) {
 	default:
 		return nil, fmt.Errorf("unknown type: %s at %q", fileDescriptor.GetFileInfo().Type, fileDescriptor.GetFileInfo().RelativePath)
 	}
-
-	// var dirEntries []fuse.Dirent
-	// for _, fileDescriptor := range filterResults.FileDescriptors {
-	// 	fileName := fileDescriptor.GetFileInfo().RelativePath.Name()
-	// 	path := filepath.Join(pathInFs, fileName)
-	//
-	// 	dirEntries = append(dirEntries, fuse.Dirent{
-	// 		Inode: d.fs.inodeMapInstance.GetOrGenerateInodeId(path),
-	// 		Type:  fuse.DT_File,
-	// 		Name:  fileName,
-	// 	})
-	// }
-	//
-	// for _, dirName := range filterResults.DirNames {
-	// 	path := filepath.Join(pathInFs, dirName)
-	//
-	// 	dirEntries = append(dirEntries, fuse.Dirent{
-	// 		Inode: d.fs.inodeMapInstance.GetOrGenerateInodeId(path),
-	// 		Type:  fuse.DT_File,
-	// 		Name:  dirName,
-	// 	})
-	// }
-	//
-	// return &Dir{
-	// 	d.fs,
-	// 	dirEntries,
-	// 	pathInFs,
-	// }, nil
-
-	// // bucket name and revision version given (list root folder of revision)
-	// if len(fragments) == 2 {
-	// 	var dirEntries []fuse.Dirent
-	// 	for _, fileInRevision := range filesInRevision {
-	// 		descriptorRelativePathStr := string(fileInRevision.GetFileInfo().RelativePath)
-	// 		if !strings.Contains(descriptorRelativePathStr, string(domain.RelativePathSep)) {
-	//
-	// 			dirEntries = append(dirEntries, fuse.Dirent{
-	// 				Name:  revision.VersionTimestamp.String(),
-	// 				Type:  fuse.DT_Dir,
-	// 				Inode: d.fs.inodeMapInstance.GetOrGenerateInodeId(name),
-	// 			})
-	// 		}
-	//
-	// 		// FIXME also create folders
-	// 	}
-	// 	return &Dir{
-	// 		d.fs,
-	// 		dirEntries,
-	// 		pathInFs,
-	// 	}, nil
-	// }
-	//
-	// // 3 or
-	//
-	// return &Dir{
-	// 	d.fs,
-	// 	nil,
-	// 	pathInFs,
-	// }, nil
-
 }

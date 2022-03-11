@@ -1,9 +1,7 @@
 package dal
 
 import (
-	"encoding/csv"
 	"encoding/gob"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -11,14 +9,16 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/jamesrr39/goutil/errorsx"
-	"github.com/jamesrr39/goutil/gofs"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	"github.com/jamesrr39/semaphore"
 	"github.com/pkg/errors"
 )
+
+type revisionReader interface {
+	ReadDir(relativePath intelligentstore.RelativePath) ([]intelligentstore.FileDescriptor, error)
+}
 
 type RevisionDAL struct {
 	*IntelligentStoreDAL
@@ -31,7 +31,6 @@ func NewRevisionDAL(
 	bucketDAL *BucketDAL,
 	maxConcurrentOpenFiles uint,
 ) *RevisionDAL {
-
 	return &RevisionDAL{intelligentStoreDAL, bucketDAL, maxConcurrentOpenFiles}
 }
 
@@ -54,74 +53,21 @@ func (r *RevisionDAL) GetFilesInRevision(bucket *intelligentstore.Bucket, revisi
 	return filesInVersion, nil
 }
 
-func getCSVHeaders() []string {
-	return []string{"path", "type", "modTime", "size", "fileMode", "contents_hash_or_symlink_target"}
-}
+func (r *RevisionDAL) ReadDir(bucket *intelligentstore.Bucket, revision *intelligentstore.Revision, relativePath intelligentstore.RelativePath) ([]intelligentstore.FileDescriptor, error) {
+	var reader revisionReader
 
-func (r *RevisionDAL) readFilesInRevisionCSV(file gofs.File) (intelligentstore.FileDescriptors, errorsx.Error) {
-	descriptors := []intelligentstore.FileDescriptor{}
-
-	reader := csv.NewReader(file)
-	reader.Comma = '|'
-	_, err := reader.Read()
-	if err != nil {
-		return nil, errorsx.Wrap(err, "extra info", "error reading first line of CSV")
+	filePath := filepath.Join(
+		r.bucketPath(bucket),
+		"versions",
+		strconv.FormatInt(int64(revision.VersionTimestamp), 10))
+	revisionFile, err := r.fs.Open(filePath)
+	if nil != err {
+		return nil, errorsx.Wrap(err, "filePath", filePath)
 	}
+	defer revisionFile.Close()
 
-	for {
-		fields, err := reader.Read()
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			return nil, errorsx.Wrap(err)
-		}
-
-		path := fields[0]
-		fileType, err := intelligentstore.FileTypeFromInt(fields[1])
-		if err != nil {
-			return nil, errorsx.Wrap(err)
-		}
-		modTime, err := time.Parse("2006-01-02T15:04:05-0700", fields[2])
-		if err != nil {
-			return nil, errorsx.Wrap(err)
-		}
-		size, err := strconv.ParseInt(fields[3], 10, 64)
-		if err != nil {
-			return nil, errorsx.Wrap(err)
-		}
-		fileMode, err := strconv.Atoi(fields[4])
-		if err != nil {
-			return nil, errorsx.Wrap(err)
-		}
-		hashOrTarget := fields[5]
-
-		fileInfo := intelligentstore.NewFileInfo(
-			intelligentstore.FileTypeRegular,
-			path,
-			modTime,
-			size,
-			os.FileMode(fileMode),
-		)
-
-		var descriptor intelligentstore.FileDescriptor
-
-		switch fileType {
-		case intelligentstore.FileTypeRegular:
-			descriptor = intelligentstore.NewRegularFileDescriptor(
-				fileInfo,
-				intelligentstore.Hash(hashOrTarget),
-			)
-		case intelligentstore.FileTypeDir:
-			descriptor = intelligentstore.NewDirectoryFileDescriptor()
-		}
-
-		descriptors = append(descriptors, descriptor)
-		println(fields, descriptors)
-
-	}
-
-	return descriptors, nil
+	reader = &revisionJSONReader{revisionFile: revisionFile}
+	return reader.ReadDir(relativePath)
 }
 
 func (r *RevisionDAL) GetFilesInRevisionWithPrefix(bucket *intelligentstore.Bucket, revision *intelligentstore.Revision, prefixPath intelligentstore.RelativePath) (intelligentstore.FileDescriptor, error) {
@@ -164,7 +110,7 @@ func (r *RevisionDAL) GetFilesInRevisionWithPrefix(bucket *intelligentstore.Buck
 				child = &intelligentstore.ChildInfo{
 					Descriptor: intelligentstore.NewDirectoryFileDescriptor(
 						intelligentstore.NewRelativePath(fileName),
-						nil, // TODO: add this in?
+						// nil, // TODO: add this in?
 					),
 				}
 				childFilesMap[fileName] = child
@@ -179,44 +125,8 @@ func (r *RevisionDAL) GetFilesInRevisionWithPrefix(bucket *intelligentstore.Buck
 
 	return intelligentstore.NewDirectoryFileDescriptor(
 		intelligentstore.NewRelativePath(prefixPathWithoutTrailingSlash),
-		childFilesMap,
+		// childFilesMap,
 	), nil
-}
-
-func readFilesInRevisionJSON(reader io.Reader) (intelligentstore.FileDescriptors, error) {
-	var fdBytes []json.RawMessage
-	err := json.NewDecoder(reader).Decode(&fdBytes)
-	if err != nil {
-		return nil, err
-	}
-
-	var descriptors []intelligentstore.FileDescriptor
-
-	for _, fdJSON := range fdBytes {
-		var fileInfo intelligentstore.FileInfo
-		err = json.Unmarshal(fdJSON, &fileInfo)
-		if err != nil {
-			return nil, err
-		}
-
-		var objToUnmarshalTo intelligentstore.FileDescriptor
-		switch fileInfo.Type {
-		case intelligentstore.FileTypeRegular:
-			objToUnmarshalTo = &intelligentstore.RegularFileDescriptor{}
-		case intelligentstore.FileTypeSymlink:
-			objToUnmarshalTo = &intelligentstore.SymlinkFileDescriptor{}
-		default:
-			return nil, fmt.Errorf("unrecognised file descriptor type. JSON: %q", string(fdJSON))
-		}
-		err = json.Unmarshal(fdJSON, &objToUnmarshalTo)
-		if err != nil {
-			return nil, err
-		}
-
-		descriptors = append(descriptors, objToUnmarshalTo)
-	}
-
-	return descriptors, nil
 }
 
 func (r *RevisionDAL) GetFileContentsInRevision(
@@ -311,4 +221,20 @@ func (r *RevisionDAL) verifyFile(i int, file intelligentstore.FileDescriptor, le
 	}
 
 	return nil
+}
+
+// isFileDescriptorChildOfRelativePath checks if a descriptor should be filtered in. Returns (filtered in, error)
+func isFileDescriptorChildOfRelativePath(descriptor intelligentstore.FileDescriptor, relativePathIncludingLastSlash string, relativePathFragments []string) (bool, errorsx.Error) {
+	if !strings.HasPrefix(string(descriptor.GetFileInfo().RelativePath), relativePathIncludingLastSlash) {
+		return false, nil
+	}
+
+	// file is below the relative path in the file hierarchy, but how far below?
+	fileFragments := strings.Split(string(descriptor.GetFileInfo().RelativePath), string(intelligentstore.RelativePathSep))
+	if len(fileFragments) != len(relativePathFragments)+1 {
+		// file is not an immediate child of the directory, but rather is a grandchild, or further down
+		return false, nil
+	}
+
+	return true, nil
 }

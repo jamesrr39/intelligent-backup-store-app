@@ -30,41 +30,6 @@ func NewBucketDAL(intelligentStoreDAL *IntelligentStoreDAL) *BucketDAL {
 	return &BucketDAL{intelligentStoreDAL}
 }
 
-// Begin creates a new Transaction to create a new revision of files in the Bucket.
-// FIXME remove (use CreateTransaction instead)
-// func (dal *BucketDAL) Begin(bucket *domain.Bucket, fileInfos []*domain.FileInfo) (*domain.Transaction, error) {
-// 	versionTimestamp := dal.nowProvider().Unix()
-//
-// 	err := dal.acquireStoreLock(fmt.Sprintf("bucket: %s", bucket.BucketName))
-// 	if nil != err {
-// 		return nil, err
-// 	}
-//
-// 	revision := domain.NewRevision(bucket, domain.RevisionVersion(versionTimestamp))
-// 	tx := &domain.Transaction{
-// 		Revision: revision,
-// 	}
-// 	if nil != err {
-// 		removeStockLockErr := dal.removeStoreLock()
-// 		if nil != removeStockLockErr {
-// 			return nil, errors.Errorf("couldn't start a transaction and remove Stock lock. Start transaction error: '%s'. Remove Store lock error: '%s'", err, removeStockLockErr)
-// 		}
-// 		return nil, errors.Errorf("couldn't start a transaction. Error: '%s'", err)
-// 	}
-//
-// 	return tx, nil
-// }
-
-// func (dal *BucketDAL) Begin(bucket *domain.Bucket, fileInfos []*domain.FileInfo) *domain.Transaction {
-// 	versionTimestamp := dal.nowProvider().Unix()
-//
-// 	return domain.NewTransaction(
-// 		domain.NewRevision(
-// 			bucket,
-// 			domain.RevisionVersion(versionTimestamp)),
-// 		nil)
-// }
-
 func (bucketDAL *BucketDAL) bucketPath(bucket *intelligentstore.Bucket) string {
 	return filepath.Join(
 		bucketDAL.StoreBasePath,

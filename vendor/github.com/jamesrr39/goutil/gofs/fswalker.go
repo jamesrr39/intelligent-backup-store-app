@@ -1,7 +1,6 @@
 package gofs
 
 import (
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -103,7 +102,6 @@ func (wt *walkerType) processPath(path string) (os.FileInfo, error) {
 	}
 
 	if wt.options.IncludesMatcher != nil {
-		log.Printf("inc:: %T %v %v\n", wt.options.IncludesMatcher, wt.options.IncludesMatcher, wt.options.IncludesMatcher == nil)
 		isIncluded := wt.options.IncludesMatcher.Matches(relativePath)
 		if !isIncluded {
 			return nil, nil

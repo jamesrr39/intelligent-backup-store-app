@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/render"
-	"github.com/gorilla/mux"
+	"github.com/jamesrr39/goutil/logpkg"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 )
@@ -17,22 +19,22 @@ type StoreWebServer struct {
 }
 
 // NewStoreWebServer creates a StoreWebServer and sets up the routing for the services it provides.
-func NewStoreWebServer(store *dal.IntelligentStoreDAL) *StoreWebServer {
-	router := mux.NewRouter()
+func NewStoreWebServer(logger *logpkg.Logger, store *dal.IntelligentStoreDAL) *StoreWebServer {
+	router := chi.NewRouter()
+	router.Use(middleware.Logger)
 	storeHandler := &StoreWebServer{store, router}
 
-	router.HandleFunc("/api/search", storeHandler.handleSearch)
+	router.Get("/api/search", storeHandler.handleSearch)
 
-	bucketsHandler := NewBucketService(store)
-	router.PathPrefix("/api/buckets/").Handler(http.StripPrefix("/api/buckets", bucketsHandler))
-	router.PathPrefix("/").Handler(http.StripPrefix("/", NewClientHandler()))
+	router.Mount("/api/buckets/", NewBucketService(logger, store))
+	router.Mount("/", NewClientHandler())
 
 	return storeHandler
 }
 
 func (s *StoreWebServer) handleSearch(w http.ResponseWriter, r *http.Request) {
 	searchTerm := r.URL.Query().Get("searchTerm")
-	if "" == searchTerm {
+	if searchTerm == "" {
 		http.Error(
 			w,
 			"no search term specified (use URL query parameter `searchTerm`)",
@@ -52,7 +54,7 @@ func (s *StoreWebServer) handleSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if 0 == len(searchResults) {
+	if len(searchResults) == 0 {
 		searchResults = []*intelligentstore.SearchResult{}
 	}
 

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	snapshot "github.com/jamesrr39/go-snapshot-testing"
 	"github.com/jamesrr39/goutil/gofs/mockfs"
+	"github.com/jamesrr39/goutil/logpkg"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	protofiles "github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/protobufs/proto_files"
@@ -27,8 +29,9 @@ func testNowProvider() time.Time {
 }
 
 func Test_handleGetAllBuckets(t *testing.T) {
+	logger := logpkg.NewLogger(os.Stderr, logpkg.LogLevelInfo)
 	mockStore := dal.NewMockStore(t, testNowProvider, mockfs.NewMockFs())
-	bucketService := NewBucketService(mockStore.Store)
+	bucketService := NewBucketService(logger, mockStore.Store)
 
 	// GET /
 	requestURL := &url.URL{Path: "/"}
@@ -64,6 +67,8 @@ func Test_handleGetAllBuckets(t *testing.T) {
 }
 
 func Test_handleGetRevision(t *testing.T) {
+	logger := logpkg.NewLogger(os.Stderr, logpkg.LogLevelInfo)
+
 	// create the fs, and put some test data in it
 	testFiles := []*intelligentstore.RegularFileDescriptorWithContents{
 		intelligentstore.NewRegularFileDescriptorWithContents(t, "a.txt", time.Unix(0, 0), dal.FileMode600, []byte("file a")),
@@ -77,7 +82,7 @@ func Test_handleGetRevision(t *testing.T) {
 
 	store.CreateRevision(t, bucket, testFiles)
 
-	bucketService := NewBucketService(store.Store)
+	bucketService := NewBucketService(logger, store.Store)
 
 	requestURL := &url.URL{Path: "/docs/latest"}
 	r1 := &http.Request{Method: "GET", URL: requestURL}
@@ -125,6 +130,7 @@ func Test_handleGetRevision(t *testing.T) {
 }
 
 func Test_handleCreateRevision(t *testing.T) {
+	logger := logpkg.NewLogger(os.Stderr, logpkg.LogLevelInfo)
 	var err error
 
 	store := dal.NewMockStore(t, testNowProvider, mockfs.NewMockFs())
@@ -138,7 +144,7 @@ func Test_handleCreateRevision(t *testing.T) {
 		bytes.NewBuffer([]byte(aFileText)))
 	require.Nil(t, err)
 
-	bucketService := NewBucketService(store.Store)
+	bucketService := NewBucketService(logger, store.Store)
 
 	openTxRequest := &protofiles.OpenTxRequest{
 		FileInfos: []*protofiles.FileInfoProto{
@@ -174,6 +180,7 @@ func Test_handleCreateRevision(t *testing.T) {
 }
 
 func Test_handleUploadFile(t *testing.T) {
+	logger := logpkg.NewLogger(os.Stderr, logpkg.LogLevelInfo)
 	var err error
 
 	store := dal.NewMockStore(t, testNowProvider, mockfs.NewMockFs())
@@ -202,7 +209,7 @@ func Test_handleUploadFile(t *testing.T) {
 	openTxRequestBytes, err := proto.Marshal(openTxRequest)
 	require.Nil(t, err)
 
-	bucketService := NewBucketService(store.Store)
+	bucketService := NewBucketService(logger, store.Store)
 
 	openTxW := httptest.NewRecorder()
 	openTxR := &http.Request{
@@ -292,12 +299,13 @@ func Test_handleUploadFile(t *testing.T) {
 }
 
 func Test_handleCommitTransaction(t *testing.T) {
+	logger := logpkg.NewLogger(os.Stderr, logpkg.LogLevelInfo)
 	var err error
 
 	store := dal.NewMockStore(t, testNowProvider, mockfs.NewMockFs())
 	bucket := store.CreateBucket(t, "docs")
 
-	bucketService := NewBucketService(store.Store)
+	bucketService := NewBucketService(logger, store.Store)
 
 	bucketRevisions, err := store.Store.RevisionDAL.GetRevisions(bucket)
 	require.Nil(t, err)
@@ -404,12 +412,13 @@ func Test_handleCommitTransaction(t *testing.T) {
 }
 
 func Test_handleGetFileContents(t *testing.T) {
+	logger := logpkg.NewLogger(os.Stderr, logpkg.LogLevelInfo)
 	var err error
 
 	mockStore := dal.NewMockStore(t, testNowProvider, mockfs.NewMockFs())
 	bucket := mockStore.CreateBucket(t, "docs")
 
-	bucketService := NewBucketService(mockStore.Store)
+	bucketService := NewBucketService(logger, mockStore.Store)
 
 	fileContents := "my file contents"
 	fileName := "folder1/file a.txt"

@@ -14,9 +14,11 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/render"
 	"github.com/golang/protobuf/proto"
-	"github.com/gorilla/mux"
 	"github.com/jamesrr39/goutil/errorsx"
+	"github.com/jamesrr39/goutil/logpkg"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	protofiles "github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/protobufs/proto_files"
@@ -24,7 +26,8 @@ import (
 
 // BucketService handles HTTP requests to get bucket information.
 type BucketService struct {
-	store *dal.IntelligentStoreDAL
+	logger *logpkg.Logger
+	store  *dal.IntelligentStoreDAL
 	http.Handler
 	openTransactionsMap
 }
@@ -32,33 +35,31 @@ type BucketService struct {
 type openTransactionsMap map[string]*intelligentstore.Transaction
 
 type subDirInfo struct {
-	Name            string `json:"name"`
-	NestedFileCount int64  `json:"nestedFileCount"`
+	Name string `json:"name"`
 }
 
 // NewBucketService creates a new BucketService and a router for handling requests.
-func NewBucketService(store *dal.IntelligentStoreDAL) *BucketService {
-	router := mux.NewRouter()
-	bucketService := &BucketService{store, router, make(openTransactionsMap)}
+func NewBucketService(logger *logpkg.Logger, store *dal.IntelligentStoreDAL) *BucketService {
+	router := chi.NewRouter()
+	bucketService := &BucketService{logger, store, router, make(openTransactionsMap)}
 
 	// swagger:route GET /api/buckets/ bucket listBuckets
 	//     Produces:
 	//     - application/json
-	router.HandleFunc("/", bucketService.handleGetAllBuckets)
+	router.Get("/", bucketService.handleGetAllBuckets)
 
 	// swagger:route GET /api/buckets/{bucketName} bucket getBucket
 	//     Produces:
 	//     - application/json
-	router.HandleFunc("/{bucketName}", bucketService.handleGetBucket).Methods("GET")
+	router.Get("/{bucketName}", bucketService.handleGetBucket)
+	router.Post("/{bucketName}/upload", bucketService.handleCreateRevision)
+	router.Post("/{bucketName}/upload/{revisionTs}/symlinks", bucketService.handleUploadSymlinks)
+	router.Post("/{bucketName}/upload/{revisionTs}/hashes", bucketService.handleUploadHashes)
+	router.Post("/{bucketName}/upload/{revisionTs}/file", bucketService.handleUploadFile)
+	router.Get("/{bucketName}/upload/{revisionTs}/commit", bucketService.handleCommitTransaction)
 
-	router.HandleFunc("/{bucketName}/upload", bucketService.handleCreateRevision).Methods("POST")
-	router.HandleFunc("/{bucketName}/upload/{revisionTs}/symlinks", bucketService.handleUploadSymlinks).Methods("POST")
-	router.HandleFunc("/{bucketName}/upload/{revisionTs}/hashes", bucketService.handleUploadHashes).Methods("POST")
-	router.HandleFunc("/{bucketName}/upload/{revisionTs}/file", bucketService.handleUploadFile).Methods("POST")
-	router.HandleFunc("/{bucketName}/upload/{revisionTs}/commit", bucketService.handleCommitTransaction).Methods("GET")
-
-	router.HandleFunc("/{bucketName}/{revisionTs}", bucketService.handleGetRevision).Methods("GET")
-	router.HandleFunc("/{bucketName}/{revisionTs}/file", bucketService.handleGetFileContents).Methods("GET")
+	router.Get("/{bucketName}/{revisionTs}", bucketService.handleGetRevision)
+	router.Get("/{bucketName}/{revisionTs}/file", bucketService.handleGetFileContents)
 	return bucketService
 }
 
@@ -85,7 +86,7 @@ func (s *BucketService) handleGetAllBuckets(w http.ResponseWriter, r *http.Reque
 
 	w.Header().Set("Content-Type", "application/json")
 
-	if 0 == len(buckets) {
+	if len(buckets) == 0 {
 		w.Write([]byte("[]"))
 		return
 	}
@@ -119,7 +120,7 @@ type handleGetBucketResponse struct {
 }
 
 func (s *BucketService) handleGetBucket(w http.ResponseWriter, r *http.Request) {
-	bucketName := mux.Vars(r)["bucketName"]
+	bucketName := chi.URLParam(r, "bucketName")
 
 	bucket, err := s.store.BucketDAL.GetBucketByName(bucketName)
 	if nil != err {
@@ -137,24 +138,15 @@ func (s *BucketService) handleGetBucket(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	w.Header().Set("content-type", "application/json")
-
-	if 0 == len(revisions) {
+	if len(revisions) == 0 {
 		revisions = make([]*intelligentstore.Revision, 0)
 	}
 
 	sort.Slice(revisions, func(i int, j int) bool {
-		if revisions[i].VersionTimestamp < revisions[j].VersionTimestamp {
-			return true
-		}
-		return false
+		return revisions[i].VersionTimestamp < revisions[j].VersionTimestamp
 	})
 
-	err = json.NewEncoder(w).Encode(handleGetBucketResponse{revisions})
-	if nil != err {
-		http.Error(w, err.Error(), 500)
-		return
-	}
+	render.JSON(w, r, handleGetBucketResponse{revisions})
 }
 
 func (s *BucketService) getRevision(bucketName, revisionTsString string) (*intelligentstore.Revision, *HTTPError) {
@@ -167,7 +159,7 @@ func (s *BucketService) getRevision(bucketName, revisionTsString string) (*intel
 	}
 
 	var revision *intelligentstore.Revision
-	if "latest" == revisionTsString {
+	if revisionTsString == "latest" {
 		revision, err = s.store.RevisionDAL.GetLatestRevision(bucket)
 		if dal.ErrNoRevisionsForBucket == err {
 			return nil, NewHTTPError(err, 404)
@@ -191,10 +183,8 @@ func (s *BucketService) getRevision(bucketName, revisionTsString string) (*intel
 }
 
 func (s *BucketService) handleGetRevision(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-
-	bucketName := vars["bucketName"]
-	revisionTsString := vars["revisionTs"]
+	bucketName := chi.URLParam(r, "bucketName")
+	revisionTsString := chi.URLParam(r, "revisionTs")
 
 	revision, revErr := s.getRevision(bucketName, revisionTsString)
 	if nil != revErr {
@@ -202,37 +192,8 @@ func (s *BucketService) handleGetRevision(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// allFiles, err := s.store.RevisionDAL.GetFilesInRevision(revision.Bucket, revision)
-	// if nil != err {
-	// 	http.Error(w, err.Error(), 500)
-	// 	return
-	// }
-
 	rootDir := r.URL.Query().Get("rootDir")
 
-	//
-	// type subDirInfoMap map[string]int64 // map[name]nestedFileCount
-	// dirnames := subDirInfoMap{}         // dirname[nested file count]
-	// for _, file := range allFiles {
-	// 	if !strings.HasPrefix(string(file.GetFileInfo().RelativePath), rootDir) {
-	// 		// not in this root dir
-	// 		continue
-	// 	}
-	//
-	// 	relativeFilePath := intelligentstore.NewRelativePath(
-	// 		strings.TrimPrefix(
-	// 			string(file.GetFileInfo().RelativePath),
-	// 			rootDir))
-	//
-	// 	indexOfSlash := strings.Index(string(relativeFilePath), "/")
-	// 	if indexOfSlash != -1 {
-	// 		// file is inside a dir (not in the root folder)
-	// 		dirnames[string(relativeFilePath)[0:indexOfSlash]]++
-	// 	} else {
-	// 		// file is in the dir we're searching inside
-	// 		files = append(files, file)
-	// 	}
-	// }
 	descriptor, err := s.store.RevisionDAL.GetFilesInRevisionWithPrefix(revision.Bucket, revision, intelligentstore.NewRelativePath(rootDir))
 	if nil != err {
 		if os.IsNotExist(err) {
@@ -249,36 +210,35 @@ func (s *BucketService) handleGetRevision(w http.ResponseWriter, r *http.Request
 	}
 
 	dirDescriptor := descriptor.(*intelligentstore.DirectoryFileDescriptor)
-
+	println("1: ", dirDescriptor)
 	data := revisionInfoWithFiles{
 		LastRevisionTs: revision.VersionTimestamp,
 		Files:          []intelligentstore.FileDescriptor{},
 		Dirs:           []*subDirInfo{},
 	}
-	for dirname, info := range dirDescriptor.ChildFilesMap {
-		switch info.Descriptor.GetFileInfo().Type {
+	dirEntries, err := s.store.RevisionDAL.ReadDir(revision.Bucket, revision, dirDescriptor.GetFileInfo().RelativePath)
+	if err != nil {
+		errorsx.HTTPError(w, s.logger, errorsx.Wrap(err), http.StatusInternalServerError)
+		return
+	}
+	println("2", dirDescriptor, len(dirEntries))
+	for _, descriptor := range dirEntries {
+		switch descriptor.GetFileInfo().Type {
 		case intelligentstore.FileTypeDir:
-			data.Dirs = append(data.Dirs, &subDirInfo{dirname, info.SubChildrenCount})
+			data.Dirs = append(data.Dirs, &subDirInfo{descriptor.GetFileInfo().RelativePath.String()})
 		case intelligentstore.FileTypeRegular, intelligentstore.FileTypeSymlink:
-			data.Files = append(data.Files, info.Descriptor)
+			data.Files = append(data.Files, descriptor)
 		default:
-			http.Error(w, fmt.Sprintf("unhandled file type: %q", info.Descriptor.GetFileInfo().Type), http.StatusInternalServerError)
+			http.Error(w, fmt.Sprintf("unhandled file type: %q", descriptor.GetFileInfo().Type), http.StatusInternalServerError)
 			return
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	err = json.NewEncoder(w).Encode(data)
-	if nil != err {
-		http.Error(w, err.Error(), 500)
-		return
-	}
+	render.JSON(w, r, data)
 }
 
 func (s *BucketService) handleCreateRevision(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-
-	bucketName := vars["bucketName"]
+	bucketName := chi.URLParam(r, "bucketName")
 
 	bucket, err := s.store.BucketDAL.GetBucketByName(bucketName)
 	if nil != err {
@@ -383,10 +343,8 @@ func fileTypeProtoToFileType(protoFileType protofiles.FileType) (intelligentstor
 }
 
 func (s *BucketService) handleUploadFile(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-
-	bucketName := vars["bucketName"]
-	revisionTsString := vars["revisionTs"]
+	bucketName := chi.URLParam(r, "bucketName")
+	revisionTsString := chi.URLParam(r, "revisionTs")
 
 	bucket, err := s.store.BucketDAL.GetBucketByName(bucketName)
 	if nil != err {
@@ -431,10 +389,8 @@ func (s *BucketService) handleUploadFile(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *BucketService) handleCommitTransaction(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-
-	bucketName := vars["bucketName"]
-	revisionTsString := vars["revisionTs"]
+	bucketName := chi.URLParam(r, "bucketName")
+	revisionTsString := chi.URLParam(r, "revisionTs")
 
 	bucket, err := s.store.BucketDAL.GetBucketByName(bucketName)
 	if nil != err {
@@ -461,10 +417,8 @@ func (s *BucketService) handleCommitTransaction(w http.ResponseWriter, r *http.R
 }
 
 func (s *BucketService) handleGetFileContents(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-
-	bucketName := vars["bucketName"]
-	revisionTsString := vars["revisionTs"]
+	bucketName := chi.URLParam(r, "bucketName")
+	revisionTsString := chi.URLParam(r, "revisionTs")
 
 	relativePath := intelligentstore.NewRelativePath(r.URL.Query().Get("relativePath"))
 	revision, revErr := s.getRevision(bucketName, revisionTsString)
@@ -492,10 +446,8 @@ func (s *BucketService) handleGetFileContents(w http.ResponseWriter, r *http.Req
 }
 
 func (s *BucketService) handleUploadHashes(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-
-	bucketName := vars["bucketName"]
-	revisionTsString := vars["revisionTs"]
+	bucketName := chi.URLParam(r, "bucketName")
+	revisionTsString := chi.URLParam(r, "revisionTs")
 
 	bucket, err := s.store.BucketDAL.GetBucketByName(bucketName)
 	if nil != err {
@@ -566,10 +518,8 @@ func (s *BucketService) handleUploadHashes(w http.ResponseWriter, r *http.Reques
 }
 
 func (s *BucketService) handleUploadSymlinks(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-
-	bucketName := vars["bucketName"]
-	revisionTsString := vars["revisionTs"]
+	bucketName := chi.URLParam(r, "bucketName")
+	revisionTsString := chi.URLParam(r, "revisionTs")
 
 	bucket, err := s.store.BucketDAL.GetBucketByName(bucketName)
 	if nil != err {

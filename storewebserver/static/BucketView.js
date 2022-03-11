@@ -34,7 +34,7 @@ define([
               "<a href='#/buckets/{{bucketName}}/{{revisionStr}}/{{encodedName}}'>",
                 "<div class='name'>",
                   "<i class='icon fa fa-folder' aria-hidden='true'></i>",
-                  "{{name}} ({{nestedFileCount}})",
+                  "{{name}}",
                 "</div>",
               "</a>",
             "</div>",
