@@ -6,8 +6,8 @@ import (
 	"io"
 	"path/filepath"
 
-	"github.com/jamesrr39/goutil/excludesmatcher"
 	"github.com/jamesrr39/goutil/gofs"
+	"github.com/jamesrr39/goutil/patternmatcher"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 )
@@ -19,11 +19,11 @@ type LocalExporter struct {
 	BucketName      string
 	RevisionVersion *intelligentstore.RevisionVersion // nil = latest version
 	ExportDir       string
-	Matcher         excludesmatcher.Matcher
+	Matcher         patternmatcher.Matcher
 	fs              gofs.Fs
 }
 
-func NewLocalExporter(store *dal.IntelligentStoreDAL, bucketName string, exportDir string, revisionVersion *intelligentstore.RevisionVersion, matcher excludesmatcher.Matcher) *LocalExporter {
+func NewLocalExporter(store *dal.IntelligentStoreDAL, bucketName string, exportDir string, revisionVersion *intelligentstore.RevisionVersion, matcher patternmatcher.Matcher) *LocalExporter {
 	return &LocalExporter{
 		Store:           store,
 		BucketName:      bucketName,

@@ -9,7 +9,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/jamesrr39/goutil/excludesmatcher"
+	"github.com/jamesrr39/goutil/patternmatcher"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/storetest"
 	"github.com/jamesrr39/intelligent-backup-store-app/storewebserver"
@@ -40,7 +40,7 @@ func Test_WebClientUploadIntegration(t *testing.T) {
 	webhandler := storewebserver.NewStoreWebServer(store.Store)
 	server := httptest.NewServer(webhandler)
 
-	excludesMatcher, err := excludesmatcher.NewExcludesMatcherFromReader(bytes.NewBuffer([]byte("")))
+	excludesMatcher, err := patternmatcher.NewMatcherFromReader(bytes.NewBuffer([]byte("")))
 	require.Nil(t, err)
 
 	uploader := NewWebUploadClient(

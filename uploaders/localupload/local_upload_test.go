@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jamesrr39/goutil/excludesmatcher"
 	"github.com/jamesrr39/goutil/gofs/mockfs"
+	"github.com/jamesrr39/goutil/patternmatcher"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	"github.com/stretchr/testify/assert"
@@ -46,7 +46,7 @@ func Test_UploadToStore(t *testing.T) {
 	err = fs.WriteFile("/docs/excludeme/a.txt", []byte("file 1/c"), 0600)
 	require.Nil(t, err)
 
-	excludeMatcher, err := excludesmatcher.NewExcludesMatcherFromReader(
+	excludeMatcher, err := patternmatcher.NewMatcherFromReader(
 		bytes.NewBufferString("*exclude*"),
 	)
 	require.Nil(t, err)
@@ -59,6 +59,7 @@ func Test_UploadToStore(t *testing.T) {
 		store.Store,
 		"docs",
 		"/docs",
+		nil,
 		excludeMatcher,
 		fs,
 		false,

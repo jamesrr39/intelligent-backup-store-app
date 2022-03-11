@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jamesrr39/goutil/excludesmatcher"
 	"github.com/jamesrr39/goutil/gofs"
 	"github.com/jamesrr39/goutil/gofs/mockfs"
+	"github.com/jamesrr39/goutil/patternmatcher"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	"github.com/jamesrr39/intelligent-backup-store-app/storewebserver"
@@ -49,7 +49,7 @@ func Test_UploadToStore(t *testing.T) {
 	err = fs.WriteFile("/docs/excludeme/a.txt", []byte("file 1/c"), 0600)
 	require.Nil(t, err)
 
-	excludeMatcher, err := excludesmatcher.NewExcludesMatcherFromReader(
+	excludeMatcher, err := patternmatcher.NewMatcherFromReader(
 		bytes.NewBufferString("*exclude*"),
 	)
 	require.Nil(t, err)
@@ -70,6 +70,7 @@ func Test_UploadToStore(t *testing.T) {
 		storeServer.URL,
 		"docs",
 		"/docs",
+		nil,
 		excludeMatcher,
 		fs,
 		false,
@@ -106,14 +107,15 @@ func Test_UploadToStore(t *testing.T) {
 }
 
 func Test_NewWebUploadClient(t *testing.T) {
-	matcher, err := excludesmatcher.NewExcludesMatcherFromReader(bytes.NewBuffer(nil))
+	excludesMatcher, err := patternmatcher.NewMatcherFromReader(bytes.NewBuffer(nil))
 	require.Nil(t, err)
 
 	client := NewWebUploadClient(
 		"http://127.0.0.1:8080/test",
 		"docs",
 		"/docs",
-		matcher,
+		nil,
+		excludesMatcher,
 		false,
 	)
 

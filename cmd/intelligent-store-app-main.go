@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/jamesrr39/goutil/errorsx"
-	"github.com/jamesrr39/goutil/excludesmatcher"
+	"github.com/jamesrr39/goutil/patternmatcher"
 	"github.com/jamesrr39/intelligent-backup-store-app/exporters"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
@@ -129,9 +129,10 @@ func setupBackupIntoCommand() {
 	backupFromLocation := backupIntoCommand.Arg("backup from location", "location to backup from").Default(".").String()
 	backupDryRun := backupIntoCommand.Flag("dry-run", "Don't actually copy files or create a revision").Default("False").Bool()
 	profileFilePath := backupIntoCommand.Flag("profile", "file to write the profile to").String()
+	backupIncludesMatcherLocation := backupIntoCommand.Flag("include", "path to a file with glob-style patterns to include files").Default("").String()
 	backupExcludesMatcherLocation := backupIntoCommand.Flag("exclude", "path to a file with glob-style patterns to exclude files").Default("").String()
 	backupIntoCommand.Action(func(ctx *kingpin.ParseContext) error {
-		excludeMatcher := &excludesmatcher.ExcludesMatcher{}
+		excludeMatcher := &patternmatcher.PatternMatcher{}
 		if *backupExcludesMatcherLocation != "" {
 			excludeFile, err := os.Open(*backupExcludesMatcherLocation)
 			if nil != err {
@@ -139,7 +140,21 @@ func setupBackupIntoCommand() {
 			}
 			defer excludeFile.Close()
 
-			excludeMatcher, err = excludesmatcher.NewExcludesMatcherFromReader(excludeFile)
+			excludeMatcher, err = patternmatcher.NewMatcherFromReader(excludeFile)
+			if nil != err {
+				return err
+			}
+		}
+
+		includeMatcher := &patternmatcher.PatternMatcher{}
+		if *backupIncludesMatcherLocation != "" {
+			includeFile, err := os.Open(*backupIncludesMatcherLocation)
+			if nil != err {
+				return err
+			}
+			defer includeFile.Close()
+
+			includeMatcher, err = patternmatcher.NewMatcherFromReader(includeFile)
 			if nil != err {
 				return err
 			}
@@ -159,13 +174,13 @@ func setupBackupIntoCommand() {
 
 		var uploaderClient uploaders.Uploader
 		if strings.HasPrefix(*backupStoreLocation, "http://") || strings.HasPrefix(*backupStoreLocation, "https://") {
-			uploaderClient = webuploadclient.NewWebUploadClient(*backupStoreLocation, *backupBucketName, *backupFromLocation, excludeMatcher, *backupDryRun)
+			uploaderClient = webuploadclient.NewWebUploadClient(*backupStoreLocation, *backupBucketName, *backupFromLocation, includeMatcher, excludeMatcher, *backupDryRun)
 		} else {
 			backupStore, err := dal.NewIntelligentStoreConnToExisting(*backupStoreLocation)
 			if nil != err {
 				return err
 			}
-			uploaderClient = localupload.NewLocalUploader(backupStore, *backupBucketName, *backupFromLocation, excludeMatcher, *backupDryRun)
+			uploaderClient = localupload.NewLocalUploader(backupStore, *backupBucketName, *backupFromLocation, includeMatcher, excludeMatcher, *backupDryRun)
 		}
 
 		return uploaderClient.UploadToStore()
@@ -264,9 +279,9 @@ func setupExportCommand() {
 			version = &r
 		}
 
-		var prefixMatcher excludesmatcher.Matcher
+		var prefixMatcher patternmatcher.Matcher
 		if "" != *exportCommandFilePathPrefix {
-			prefixMatcher = excludesmatcher.NewSimplePrefixMatcher(*exportCommandFilePathPrefix)
+			prefixMatcher = patternmatcher.NewSimplePrefixMatcher(*exportCommandFilePathPrefix)
 		}
 
 		err = exporters.NewLocalExporter(store, *exportCommandBucketName, *exportCommandExportDir, version, prefixMatcher).Export()

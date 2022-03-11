@@ -8,7 +8,7 @@ import (
 	"io/ioutil"
 	"testing"
 
-	"github.com/jamesrr39/goutil/excludesmatcher"
+	"github.com/jamesrr39/goutil/patternmatcher"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/domain"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/storetest"
 	"github.com/stretchr/testify/assert"
@@ -35,7 +35,7 @@ func Test_LocalUploadIntegration(t *testing.T) {
 	bucket, err := store.Store.BucketDAL.CreateBucket("docs")
 	require.Nil(t, err)
 
-	excludesMatcher, err := excludesmatcher.NewExcludesMatcherFromReader(bytes.NewBuffer([]byte("")))
+	excludesMatcher, err := patternmatcher.NewMatcherFromReader(bytes.NewBuffer([]byte("")))
 	require.Nil(t, err)
 
 	uploader := NewLocalUploader(

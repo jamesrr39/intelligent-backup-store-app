@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jamesrr39/goutil/excludesmatcher"
 	"github.com/jamesrr39/goutil/gofs/mockfs"
+	"github.com/jamesrr39/goutil/patternmatcher"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	"github.com/stretchr/testify/assert"
@@ -26,7 +26,7 @@ func Test_BuildFileInfosMap(t *testing.T) {
 	fs.LstatFunc = func(path string) (os.FileInfo, error) {
 		return fs.Stat(path)
 	}
-	excludes, err := excludesmatcher.NewExcludesMatcherFromReader(bytes.NewBufferString("*exclude-me.txt"))
+	excludes, err := patternmatcher.NewMatcherFromReader(bytes.NewBufferString("*exclude-me.txt"))
 	require.Nil(t, err)
 
 	fileContents := []byte("123")
@@ -46,12 +46,12 @@ func Test_BuildFileInfosMap(t *testing.T) {
 	require.Nil(t, err)
 
 	t.Run("bad path", func(t *testing.T) {
-		_, err = BuildFileInfosMap(fs, "/bad_path", excludes)
+		_, err = BuildFileInfosMap(fs, "/bad_path", nil, excludes)
 		require.NotNil(t, err)
 	})
 
 	t.Run("good path", func(t *testing.T) {
-		fileInfosMap, err := BuildFileInfosMap(fs, "/test", excludes)
+		fileInfosMap, err := BuildFileInfosMap(fs, "/test", nil, excludes)
 		require.Nil(t, err)
 
 		require.Len(t, fileInfosMap, 1)

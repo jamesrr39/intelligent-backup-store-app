@@ -29,24 +29,7 @@ func (d *Dir) Attr(ctx context.Context, a *fuse.Attr) error {
 
 func (d *Dir) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 	log.Printf("reading dir name: '%s', entries: '%v'\n", d.name, d.dirEntries)
-	// for _, dirEntry := range d.dirEntries {
-	// 	log.Printf("entry: '%s', type: %v\n", dirEntry.Name, dirEntry.Type.String())
-	// }
 
-	// return []fuse.Dirent{
-	// 	fuse.Dirent{
-	// 		Name: "a",
-	// 		Type: fuse.DT_Dir,
-	// 	},
-	// 	fuse.Dirent{
-	// 		Name: "b",
-	// 		Type: fuse.DT_File,
-	// 	},
-	// }, nil
-	// d.dirEntries = append(d.dirEntries, fuse.Dirent{
-	// 	Name: "b",
-	// 	Type: fuse.DT_File,
-	// })
 	return d.dirEntries, nil
 }
 
@@ -101,8 +84,6 @@ func (d *Dir) Lookup(ctx context.Context, name string) (fs.Node, error) {
 
 	revision := intelligentstore.NewRevision(bucket, intelligentstore.RevisionVersion(revisionVersionStr))
 	searchRelativePath := intelligentstore.NewRelativePath(strings.Join(fragments[2:], sep))
-
-	println("bucket, rev, search path:", bucket.BucketName, revision, string(searchRelativePath))
 
 	fileDescriptor, err := d.fs.dal.RevisionDAL.GetFilesInRevisionWithPrefix(bucket, revision, searchRelativePath)
 	if nil != err {

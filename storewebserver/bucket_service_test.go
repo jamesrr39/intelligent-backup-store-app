@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	snapshot "github.com/jamesrr39/go-snapshot-testing"
 	"github.com/jamesrr39/goutil/gofs/mockfs"
-	"github.com/jamesrr39/goutil/snapshot"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	protofiles "github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/protobufs/proto_files"

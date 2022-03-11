@@ -11,9 +11,9 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/jamesrr39/goutil/errorsx"
-	"github.com/jamesrr39/goutil/excludesmatcher"
 	"github.com/jamesrr39/goutil/gofs"
 	"github.com/jamesrr39/goutil/httpextra"
+	"github.com/jamesrr39/goutil/patternmatcher"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	protofiles "github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/protobufs/proto_files"
 	"github.com/jamesrr39/intelligent-backup-store-app/uploaders"
@@ -24,7 +24,8 @@ type WebUploadClient struct {
 	storeURL       string
 	bucketName     string
 	folderPath     string
-	excludeMatcher *excludesmatcher.ExcludesMatcher
+	includeMatcher patternmatcher.Matcher
+	excludeMatcher patternmatcher.Matcher
 	fs             gofs.Fs
 	backupDryRun   bool
 }
@@ -34,7 +35,8 @@ func NewWebUploadClient(
 	storeURL,
 	bucketName,
 	folderPath string,
-	excludeMatcher *excludesmatcher.ExcludesMatcher,
+	includeMatcher patternmatcher.Matcher,
+	excludeMatcher patternmatcher.Matcher,
 	backupDryRun bool,
 ) *WebUploadClient {
 
@@ -42,6 +44,7 @@ func NewWebUploadClient(
 		storeURL,
 		bucketName,
 		folderPath,
+		includeMatcher,
 		excludeMatcher,
 		gofs.NewOsFs(),
 		backupDryRun,
@@ -50,7 +53,7 @@ func NewWebUploadClient(
 
 // UploadToStore backs up a directory on the local machine to the bucket in the store in the WebUploadClient
 func (c *WebUploadClient) UploadToStore() errorsx.Error {
-	fileInfosMap, err := uploaders.BuildFileInfosMap(c.fs, c.folderPath, c.excludeMatcher)
+	fileInfosMap, err := uploaders.BuildFileInfosMap(c.fs, c.folderPath, c.includeMatcher, c.excludeMatcher)
 	if nil != err {
 		return err
 	}
@@ -59,8 +62,6 @@ func (c *WebUploadClient) UploadToStore() errorsx.Error {
 	if nil != err {
 		return err
 	}
-
-	log.Printf("== requiredRelativePaths: %s\n", requiredRelativePaths)
 
 	var requiredRegularFileRelativePaths []intelligentstore.RelativePath
 	var requiredSymlinkRelativePaths []intelligentstore.RelativePath
