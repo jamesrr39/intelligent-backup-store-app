@@ -194,34 +194,18 @@ func (s *BucketService) handleGetRevision(w http.ResponseWriter, r *http.Request
 
 	rootDir := r.URL.Query().Get("rootDir")
 
-	descriptor, err := s.store.RevisionDAL.GetFilesInRevisionWithPrefix(revision.Bucket, revision, intelligentstore.NewRelativePath(rootDir))
-	if nil != err {
-		if os.IsNotExist(err) {
-			http.Error(w, err.Error(), 404)
-			return
-		}
-		http.Error(w, err.Error(), 500)
+	dirEntries, err := s.store.RevisionDAL.ReadDir(revision.Bucket, revision, intelligentstore.NewRelativePath(rootDir))
+	if err != nil {
+		errorsx.HTTPError(w, s.logger, errorsx.Wrap(err), http.StatusInternalServerError)
 		return
 	}
 
-	if descriptor.GetFileInfo().Type != intelligentstore.FileTypeDir {
-		http.Error(w, fmt.Sprintf("this endpoint serves directory listings, but you came to a different file type (%q)", descriptor.GetFileInfo().Type), 400)
-		return
-	}
-
-	dirDescriptor := descriptor.(*intelligentstore.DirectoryFileDescriptor)
-	println("1: ", dirDescriptor)
 	data := revisionInfoWithFiles{
 		LastRevisionTs: revision.VersionTimestamp,
 		Files:          []intelligentstore.FileDescriptor{},
 		Dirs:           []*subDirInfo{},
 	}
-	dirEntries, err := s.store.RevisionDAL.ReadDir(revision.Bucket, revision, dirDescriptor.GetFileInfo().RelativePath)
-	if err != nil {
-		errorsx.HTTPError(w, s.logger, errorsx.Wrap(err), http.StatusInternalServerError)
-		return
-	}
-	println("2", dirDescriptor, len(dirEntries))
+
 	for _, descriptor := range dirEntries {
 		switch descriptor.GetFileInfo().Type {
 		case intelligentstore.FileTypeDir:

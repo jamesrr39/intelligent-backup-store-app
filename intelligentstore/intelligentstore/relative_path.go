@@ -5,12 +5,6 @@ import (
 	"strings"
 )
 
-type RelativePath string
-
-func (rp RelativePath) String() string {
-	return string(rp)
-}
-
 const RelativePathSep = '/'
 
 func NewRelativePath(path string) RelativePath {
@@ -21,6 +15,16 @@ func NewRelativePath(path string) RelativePath {
 
 func NewRelativePathFromFragments(fragments ...string) RelativePath {
 	return NewRelativePath(trimAndJoinFragments(fragments))
+}
+
+type RelativePath string
+
+func (rp RelativePath) Fragments() []string {
+	return strings.Split(rp.String(), string(RelativePathSep))
+}
+
+func (rp RelativePath) String() string {
+	return string(rp)
 }
 
 func trimAndJoinFragments(fragments []string) string {

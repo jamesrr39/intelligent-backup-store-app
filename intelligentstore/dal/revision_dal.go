@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -18,6 +17,7 @@ import (
 
 type revisionReader interface {
 	ReadDir(relativePath intelligentstore.RelativePath) ([]intelligentstore.FileDescriptor, error)
+	Stat(relativePath intelligentstore.RelativePath) (intelligentstore.FileDescriptor, error)
 }
 
 type RevisionDAL struct {
@@ -69,64 +69,21 @@ func (r *RevisionDAL) ReadDir(bucket *intelligentstore.Bucket, revision *intelli
 	reader = &revisionJSONReader{revisionFile: revisionFile}
 	return reader.ReadDir(relativePath)
 }
+func (r *RevisionDAL) Stat(bucket *intelligentstore.Bucket, revision *intelligentstore.Revision, relativePath intelligentstore.RelativePath) (intelligentstore.FileDescriptor, error) {
+	var reader revisionReader
 
-func (r *RevisionDAL) GetFilesInRevisionWithPrefix(bucket *intelligentstore.Bucket, revision *intelligentstore.Revision, prefixPath intelligentstore.RelativePath) (intelligentstore.FileDescriptor, error) {
-	allDescriptors, err := r.GetFilesInRevision(bucket, revision)
-	if err != nil {
-		return nil, err
+	filePath := filepath.Join(
+		r.bucketPath(bucket),
+		"versions",
+		strconv.FormatInt(int64(revision.VersionTimestamp), 10))
+	revisionFile, err := r.fs.Open(filePath)
+	if nil != err {
+		return nil, errorsx.Wrap(err, "filePath", filePath)
 	}
+	defer revisionFile.Close()
 
-	prefixPathWithTrailingSlash := string(prefixPath)
-	if !strings.HasSuffix(prefixPathWithTrailingSlash, string(intelligentstore.RelativePathSep)) {
-		prefixPathWithTrailingSlash += string(intelligentstore.RelativePathSep)
-	}
-	prefixPathWithoutTrailingSlash := strings.TrimSuffix(prefixPathWithTrailingSlash, string(intelligentstore.RelativePathSep))
-
-	childFilesMap := make(intelligentstore.ChildFilesMap)
-
-	for _, descriptor := range allDescriptors {
-		descriptorRelativePath := descriptor.GetFileInfo().RelativePath
-		if descriptorRelativePath == prefixPath {
-			return descriptor, nil
-		}
-
-		if prefixPath != "" && !strings.HasPrefix(string(descriptorRelativePath), string(prefixPath)) {
-			continue
-		}
-
-		remainderOfRelativePath := strings.TrimPrefix(string(descriptorRelativePath), prefixPathWithTrailingSlash)
-		fragments := strings.Split(remainderOfRelativePath, string(intelligentstore.RelativePathSep))
-		fileName := fragments[0]
-
-		switch len(fragments) {
-		case 1:
-			// nothing (regular/symlink file)
-			childFilesMap[fileName] = &intelligentstore.ChildInfo{
-				Descriptor: descriptor,
-			}
-		default:
-			child, ok := childFilesMap[fileName]
-			if !ok {
-				child = &intelligentstore.ChildInfo{
-					Descriptor: intelligentstore.NewDirectoryFileDescriptor(
-						intelligentstore.NewRelativePath(fileName),
-						// nil, // TODO: add this in?
-					),
-				}
-				childFilesMap[fileName] = child
-			}
-			child.SubChildrenCount++
-		}
-	}
-
-	if len(childFilesMap) == 0 {
-		return nil, os.ErrNotExist
-	}
-
-	return intelligentstore.NewDirectoryFileDescriptor(
-		intelligentstore.NewRelativePath(prefixPathWithoutTrailingSlash),
-		// childFilesMap,
-	), nil
+	reader = &revisionJSONReader{revisionFile: revisionFile}
+	return reader.Stat(relativePath)
 }
 
 func (r *RevisionDAL) GetFileContentsInRevision(
@@ -223,18 +180,29 @@ func (r *RevisionDAL) verifyFile(i int, file intelligentstore.FileDescriptor, le
 	return nil
 }
 
-// isFileDescriptorChildOfRelativePath checks if a descriptor should be filtered in. Returns (filtered in, error)
-func isFileDescriptorChildOfRelativePath(descriptor intelligentstore.FileDescriptor, relativePathIncludingLastSlash string, relativePathFragments []string) (bool, errorsx.Error) {
-	if !strings.HasPrefix(string(descriptor.GetFileInfo().RelativePath), relativePathIncludingLastSlash) {
-		return false, nil
+// filterInDescriptorChildren checks if a descriptor should be filtered in. Returns (filtered in, error)
+func filterInDescriptorChildren(descriptor intelligentstore.FileDescriptor, relativePathFragments []string) (intelligentstore.FileDescriptor, errorsx.Error) {
+	descriptorFragments := strings.Split(string(descriptor.GetFileInfo().RelativePath), string(intelligentstore.RelativePathSep))
+
+	if len(descriptorFragments) < len(relativePathFragments)+1 {
+		// descriptor has less fragments than the relative path, so it is definitely not a child node
+		return nil, nil
 	}
 
-	// file is below the relative path in the file hierarchy, but how far below?
-	fileFragments := strings.Split(string(descriptor.GetFileInfo().RelativePath), string(intelligentstore.RelativePathSep))
-	if len(fileFragments) != len(relativePathFragments)+1 {
-		// file is not an immediate child of the directory, but rather is a grandchild, or further down
-		return false, nil
+	for i, relativePathFragment := range relativePathFragments {
+		if descriptorFragments[i] != relativePathFragment {
+			// paths do not match, it is not a child/grandchild etc
+			return nil, nil
+		}
 	}
 
-	return true, nil
+	if len(descriptorFragments) == len(relativePathFragments)+1 {
+		return descriptor, nil
+	}
+
+	// file is not an immediate child of the directory, but rather is a grandchild, or further down. So return the child directory
+	dirNameFragments := descriptorFragments[:len(relativePathFragments)+1]
+
+	return intelligentstore.NewDirectoryFileDescriptor(intelligentstore.NewRelativePathFromFragments(dirNameFragments...)), nil
+
 }

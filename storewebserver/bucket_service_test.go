@@ -99,7 +99,6 @@ func Test_handleGetRevision(t *testing.T) {
 	require.Len(t, revInfoWithFiles.Dirs, 1)
 
 	assert.Equal(t, "folder-1", revInfoWithFiles.Dirs[0].Name)
-	assert.Equal(t, int64(2), revInfoWithFiles.Dirs[0].NestedFileCount)
 
 	require.Len(t, revInfoWithFiles.Files, 2)
 

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 
 	"github.com/jamesrr39/goutil/errorsx"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
@@ -15,42 +14,83 @@ type revisionJSONReader struct {
 	revisionFile io.Reader
 }
 
-func (r *revisionJSONReader) ReadDir(relativePath intelligentstore.RelativePath) ([]intelligentstore.FileDescriptor, error) {
+func (r *revisionJSONReader) ReadDir(searchPath intelligentstore.RelativePath) ([]intelligentstore.FileDescriptor, error) {
 	filesInVersion, err := readFilesInRevisionJSON(r.revisionFile)
 	if err != nil {
 		return nil, errorsx.Wrap(err)
 	}
 
-	relativePathFragments := strings.Split(string(relativePath), string(intelligentstore.RelativePathSep))
-	relativePathIncludingLastSlash := fmt.Sprintf("%s%v", relativePath, intelligentstore.RelativePathSep)
+	var relativePathFragments []string
+	if searchPath != "" {
+		relativePathFragments = searchPath.Fragments()
+	}
 
-	var foundDir bool
-	descriptors := []intelligentstore.FileDescriptor{}
+	var foundDirDescriptor bool
+	if searchPath == "" {
+		foundDirDescriptor = true
+	}
+	descriptorMap := make(map[string]intelligentstore.FileDescriptor)
 
 	for _, descriptor := range filesInVersion {
-		if descriptor.GetFileInfo().RelativePath == relativePath {
-			foundDir = true
+		if descriptor.GetFileInfo().RelativePath == searchPath {
+			foundDirDescriptor = true
 		}
 
-		isFilteredIn, err := isFileDescriptorChildOfRelativePath(descriptor, relativePathIncludingLastSlash, relativePathFragments)
+		filteredInDescriptor, err := filterInDescriptorChildren(descriptor, relativePathFragments)
 		if err != nil {
 			return nil, errorsx.Wrap(err)
 		}
 
-		if isFilteredIn {
-			descriptors = append(descriptors, descriptor)
+		if filteredInDescriptor != nil {
+			descriptorMap[filteredInDescriptor.GetFileInfo().RelativePath.String()] = filteredInDescriptor
 		}
 	}
 
-	if !foundDir && len(descriptors) != 0 {
-		panic("didn't find dir, but found >0 sub-descriptors")
+	descriptors := []intelligentstore.FileDescriptor{}
+	for _, desc := range descriptorMap {
+		descriptors = append(descriptors, desc)
 	}
 
-	if !foundDir {
+	if !foundDirDescriptor && len(descriptors) == 0 {
 		return nil, os.ErrNotExist
 	}
 
 	return descriptors, nil
+}
+
+func (r *revisionJSONReader) Stat(searchPath intelligentstore.RelativePath) (intelligentstore.FileDescriptor, error) {
+	filesInVersion, err := readFilesInRevisionJSON(r.revisionFile)
+	if err != nil {
+		return nil, errorsx.Wrap(err)
+	}
+
+	var relativePathFragments []string
+	if searchPath != "" {
+		relativePathFragments = searchPath.Fragments()
+	}
+
+	for _, descriptor := range filesInVersion {
+		if descriptor.GetFileInfo().RelativePath == searchPath {
+			return descriptor, nil
+		}
+
+		descFragments := descriptor.GetFileInfo().RelativePath.Fragments()
+
+		var isDifferent bool
+		for i, relativePathFragment := range relativePathFragments {
+			if relativePathFragment != descFragments[i] {
+				isDifferent = true
+				break
+			}
+		}
+
+		if !isDifferent {
+			// "descriptor" is a file in a sub directory
+			return intelligentstore.NewDirectoryFileDescriptor(searchPath), nil
+		}
+	}
+
+	return nil, os.ErrNotExist
 }
 
 func readFilesInRevisionJSON(reader io.Reader) (intelligentstore.FileDescriptors, error) {

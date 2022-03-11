@@ -11,7 +11,7 @@ type ChildInfo struct {
 }
 
 type DirectoryFileDescriptor struct {
-	relativePath RelativePath
+	RelativePath RelativePath
 	// ChildFilesMap ChildFilesMap
 }
 
@@ -20,5 +20,5 @@ func NewDirectoryFileDescriptor(relativePath RelativePath) *DirectoryFileDescrip
 }
 
 func (fd *DirectoryFileDescriptor) GetFileInfo() *FileInfo {
-	return NewFileInfo(FileTypeDir, fd.relativePath, time.Unix(0, 0), 4*1024, 0700)
+	return NewFileInfo(FileTypeDir, fd.RelativePath, time.Unix(0, 0), 4*1024, 0700)
 }
