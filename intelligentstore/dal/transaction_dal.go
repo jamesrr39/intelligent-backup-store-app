@@ -8,7 +8,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"strconv"
 
 	"github.com/jamesrr39/goutil/dirtraversal"
 	"github.com/jamesrr39/goutil/errorsx"
@@ -214,7 +213,7 @@ func (dal *TransactionDAL) Commit(transaction *intelligentstore.Transaction) err
 		return err
 	}
 
-	if 0 != len(transaction.FileInfosMissingSymlinks) {
+	if len(transaction.FileInfosMissingSymlinks) != 0 {
 		return errorsx.Errorf(
 			"tried to commit the transaction but there are %d symlinks left to upload",
 			len(transaction.FileInfosMissingSymlinks))
@@ -227,10 +226,7 @@ func (dal *TransactionDAL) Commit(transaction *intelligentstore.Transaction) err
 			amountOfFilesRemainingToUpload)
 	}
 
-	filePath := filepath.Join(
-		dal.IntelligentStoreDAL.BucketDAL.bucketPath(transaction.Revision.Bucket),
-		"versions",
-		strconv.FormatInt(int64(transaction.Revision.VersionTimestamp), 10))
+	filePath := dal.IntelligentStoreDAL.RevisionDAL.getRevisionJSONFilePath(transaction.Revision.Bucket, transaction.Revision.VersionTimestamp)
 
 	versionContentsFile, err := dal.IntelligentStoreDAL.fs.Create(filePath)
 	if nil != err {

@@ -2,12 +2,15 @@ package dal
 
 import (
 	"compress/gzip"
+	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/jamesrr39/goutil/errorsx"
 	"github.com/jamesrr39/goutil/gofs"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	"github.com/pkg/errors"
@@ -45,6 +48,40 @@ func NewIntelligentStoreConnToExisting(pathToBase string) (*IntelligentStoreDAL,
 	return newIntelligentStoreConnToExisting(pathToBase, prodNowProvider, fs, nil)
 }
 
+func (s *IntelligentStoreDAL) Status() (*intelligentstore.Status, errorsx.Error) {
+	file, err := s.fs.Open(s.getStatusMetadataFilePath())
+	if err != nil {
+		return nil, errorsx.Wrap(err)
+	}
+	defer file.Close()
+
+	status := new(intelligentstore.Status)
+	err = json.NewDecoder(file).Decode(status)
+	if err != nil {
+		return nil, errorsx.Wrap(err)
+	}
+
+	return status, nil
+}
+
+func (s *IntelligentStoreDAL) UpdateStatus(status *intelligentstore.Status) errorsx.Error {
+	b, err := json.Marshal(status)
+	if err != nil {
+		return errorsx.Wrap(err)
+	}
+
+	err = s.fs.WriteFile(s.getStatusMetadataFilePath(), b, 0644)
+	if err != nil {
+		return errorsx.Wrap(err)
+	}
+
+	return nil
+}
+
+func (s *IntelligentStoreDAL) getStatusMetadataFilePath() string {
+	return filepath.Join(s.StoreBasePath, ".backup_data", "store_metadata", "status-metadata.json")
+}
+
 func checkStoreExists(pathToBase string, fs gofs.Fs) error {
 	fileInfo, err := fs.Stat(filepath.Join(pathToBase, BackupDataFolderName))
 	if nil != err {
@@ -56,6 +93,39 @@ func checkStoreExists(pathToBase string, fs gofs.Fs) error {
 
 	if !fileInfo.IsDir() {
 		return ErrStoreDirectoryNotDirectory
+	}
+
+	return nil
+}
+
+func (s *IntelligentStoreDAL) ensureStatusMetadataFile() error {
+	statusMetadataFilePath := s.getStatusMetadataFilePath()
+
+	_, err := s.fs.Stat(statusMetadataFilePath)
+	if nil != err {
+		if !os.IsNotExist(err) {
+			// unexpected error
+			return errorsx.Wrap(err)
+		}
+
+		// statusMetadata doesn't exist. Create it with version = 2 (the minimum version before versioning was introduced)
+		const minSchemaVersion = 2
+		log.Printf("didn't find %s. Creating this file with schemaVersion %d\n", statusMetadataFilePath, minSchemaVersion)
+
+		status := &intelligentstore.Status{
+			SchemaVersion: minSchemaVersion,
+		}
+
+		f, err := s.fs.Create(statusMetadataFilePath)
+		if err != nil {
+			return errorsx.Wrap(err)
+		}
+		defer f.Close()
+
+		err = json.NewEncoder(f).Encode(status)
+		if err != nil {
+			return errorsx.Wrap(err)
+		}
 	}
 
 	return nil
@@ -83,6 +153,11 @@ func newIntelligentStoreConnToExisting(pathToBase string, nowFunc NowProvider, f
 		StoreBasePath: pathToBase,
 		nowProvider:   nowFunc,
 		fs:            fs,
+	}
+
+	err = storeDAL.ensureStatusMetadataFile()
+	if err != nil {
+		return nil, err
 	}
 
 	storeDAL.BucketDAL = &BucketDAL{storeDAL}
@@ -122,7 +197,7 @@ func createStoreFoldersAndFiles(pathToBase string, fs gofs.Fs) error {
 		return fmt.Errorf("couldn't get a file listing for '%s'. Error: '%s'", pathToBase, err)
 	}
 
-	if 0 != len(fileInfos) {
+	if len(fileInfos) != 0 {
 		return fmt.Errorf(
 			"'%s' is not an empty folder. Creating a new store requires an empty folder. Please create a new folder and create the store in there",
 			pathToBase)

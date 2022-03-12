@@ -34,12 +34,16 @@ func NewRevisionDAL(
 	return &RevisionDAL{intelligentStoreDAL, bucketDAL, maxConcurrentOpenFiles}
 }
 
-// GetFilesInRevision gets a list of files in this revision
-func (r *RevisionDAL) GetFilesInRevision(bucket *intelligentstore.Bucket, revision *intelligentstore.Revision) ([]intelligentstore.FileDescriptor, errorsx.Error) {
-	filePath := filepath.Join(
+func (r *RevisionDAL) getRevisionJSONFilePath(bucket *intelligentstore.Bucket, revisionTimeStamp intelligentstore.RevisionVersion) string {
+	return filepath.Join(
 		r.bucketPath(bucket),
 		"versions",
-		strconv.FormatInt(int64(revision.VersionTimestamp), 10))
+		strconv.FormatInt(int64(revisionTimeStamp), 10)+".json")
+}
+
+// GetFilesInRevision gets a list of files in this revision
+func (r *RevisionDAL) GetFilesInRevision(bucket *intelligentstore.Bucket, revision *intelligentstore.Revision) ([]intelligentstore.FileDescriptor, errorsx.Error) {
+	filePath := r.getRevisionJSONFilePath(bucket, revision.VersionTimestamp)
 	revisionFile, err := r.fs.Open(filePath)
 	if nil != err {
 		return nil, errorsx.Wrap(err, "filePath", filePath)
@@ -56,10 +60,7 @@ func (r *RevisionDAL) GetFilesInRevision(bucket *intelligentstore.Bucket, revisi
 func (r *RevisionDAL) ReadDir(bucket *intelligentstore.Bucket, revision *intelligentstore.Revision, relativePath intelligentstore.RelativePath) ([]intelligentstore.FileDescriptor, error) {
 	var reader revisionReader
 
-	filePath := filepath.Join(
-		r.bucketPath(bucket),
-		"versions",
-		strconv.FormatInt(int64(revision.VersionTimestamp), 10))
+	filePath := r.getRevisionJSONFilePath(bucket, revision.VersionTimestamp)
 	revisionFile, err := r.fs.Open(filePath)
 	if nil != err {
 		return nil, errorsx.Wrap(err, "filePath", filePath)
@@ -72,10 +73,7 @@ func (r *RevisionDAL) ReadDir(bucket *intelligentstore.Bucket, revision *intelli
 func (r *RevisionDAL) Stat(bucket *intelligentstore.Bucket, revision *intelligentstore.Revision, relativePath intelligentstore.RelativePath) (intelligentstore.FileDescriptor, error) {
 	var reader revisionReader
 
-	filePath := filepath.Join(
-		r.bucketPath(bucket),
-		"versions",
-		strconv.FormatInt(int64(revision.VersionTimestamp), 10))
+	filePath := r.getRevisionJSONFilePath(bucket, revision.VersionTimestamp)
 	revisionFile, err := r.fs.Open(filePath)
 	if nil != err {
 		return nil, errorsx.Wrap(err, "filePath", filePath)
@@ -204,5 +202,4 @@ func filterInDescriptorChildren(descriptor intelligentstore.FileDescriptor, rela
 	dirNameFragments := descriptorFragments[:len(relativePathFragments)+1]
 
 	return intelligentstore.NewDirectoryFileDescriptor(intelligentstore.NewRelativePathFromFragments(dirNameFragments...)), nil
-
 }

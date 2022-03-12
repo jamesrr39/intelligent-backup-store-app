@@ -50,6 +50,7 @@ func main() {
 	setupRunMigrationsCommand()
 	setupFuseMountCommand()
 	setupVerifyCommand()
+	setupStatusCommand()
 
 	kingpin.MustParse(app.Parse(os.Args[1:]))
 }
@@ -321,22 +322,76 @@ func setupStartWebappCommand() {
 	})
 }
 
+type migrationType struct {
+	Name      string
+	Migration migrations.Migration
+}
+
+func setupStatusCommand() {
+	cmd := app.Command("status", "get store status information")
+	cmd.Action(func(ctx *kingpin.ParseContext) error {
+		store, err := dal.NewIntelligentStoreConnToExisting(*storeLocation)
+		if nil != err {
+			return err
+		}
+
+		status, err := store.Status()
+		if nil != err {
+			return err
+		}
+
+		err = json.NewEncoder(os.Stdout).Encode(status)
+		if nil != err {
+			return err
+		}
+
+		return nil
+	})
+}
+
 func setupRunMigrationsCommand() {
-	runMigrationsCommand := app.Command("run-migration", "run one-off migrations")
-	runMigrationsMigrationName := runMigrationsCommand.Arg("migration name", "name of the migtation you want to run").String()
+	runMigrationsCommand := app.Command("run-migrations", "run one-off migrations")
 	runMigrationsCommand.Action(func(ctx *kingpin.ParseContext) error {
-		migrationMap := map[string]migrations.Migration{
-			"1-gob-to-json-records":   migrations.Run1,
-			"2-gzip-files":            migrations.Run2,
-			"3-revision-contents-csv": migrations.Run3,
+		store, err := dal.NewIntelligentStoreConnToExisting(*storeLocation)
+		if nil != err {
+			return err
 		}
 
-		migration := migrationMap[*runMigrationsMigrationName]
-		if migration == nil {
-			return fmt.Errorf("migration %q not found", *runMigrationsMigrationName)
+		status, err := store.Status()
+		if nil != err {
+			return err
 		}
 
-		return migration(*storeLocation)
+		migrations := []migrationType{
+			{Name: "gob to json records", Migration: migrations.Run1},
+			{Name: "gzip files", Migration: migrations.Run2},
+			{Name: "rename revision contents with .json file extensions", Migration: migrations.Run3},
+		}
+
+		for i, migration := range migrations {
+			thisMigrationVersion := i + 1
+
+			if thisMigrationVersion <= status.SchemaVersion {
+				log.Printf("skipping migration version %d (schema version: %d)\n", thisMigrationVersion, status.SchemaVersion)
+				continue
+			}
+
+			log.Printf("starting to run migration %d: %q\n", thisMigrationVersion, migration.Name)
+			err := migration.Migration(*storeLocation)
+			if err != nil {
+				return err
+			}
+
+			status.SchemaVersion = thisMigrationVersion
+
+			err = store.UpdateStatus(status)
+			if err != nil {
+				return err
+			}
+
+			log.Printf("successfully finished running migration %d: %q\n", i+1, migration.Name)
+		}
+		return nil
 	})
 }
 

@@ -6,11 +6,12 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/jamesrr39/goutil/errorsx"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
 )
 
 // migrates file lists from gob to JSON
-func Run1(storeLocation string) error {
+func Run1(storeLocation string) errorsx.Error {
 	err := filepath.Walk(filepath.Join(storeLocation, ".backup_data", "buckets"), func(path string, fileInfo os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -44,5 +45,5 @@ func Run1(storeLocation string) error {
 		return nil
 	})
 
-	return err
+	return errorsx.Wrap(err)
 }

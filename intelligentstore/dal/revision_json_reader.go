@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
 
 	"github.com/jamesrr39/goutil/errorsx"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
@@ -54,6 +55,11 @@ func (r *revisionJSONReader) ReadDir(searchPath intelligentstore.RelativePath) (
 	if !foundDirDescriptor && len(descriptors) == 0 {
 		return nil, os.ErrNotExist
 	}
+
+	// sort for deterministic behaviour
+	sort.Slice(descriptors, func(i, j int) bool {
+		return descriptors[i].GetFileInfo().RelativePath < descriptors[j].GetFileInfo().RelativePath
+	})
 
 	return descriptors, nil
 }

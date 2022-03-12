@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/pkg/errors"
 
@@ -39,7 +40,7 @@ func (bucketDAL *BucketDAL) bucketPath(bucket *intelligentstore.Bucket) string {
 }
 
 func isValidBucketName(name string) error {
-	if "" == name {
+	if name == "" {
 		return ErrBucketRequiresAName
 	}
 
@@ -65,13 +66,13 @@ func (dal *BucketDAL) GetLatestRevision(bucket *intelligentstore.Bucket) (*intel
 		return nil, errorsx.Wrap(err)
 	}
 
-	if 0 == len(versionsFileInfos) {
+	if len(versionsFileInfos) == 0 {
 		return nil, errorsx.Wrap(ErrNoRevisionsForBucket)
 	}
 
 	var highestTs int64
 	for _, fileInfo := range versionsFileInfos {
-		ts, err := strconv.ParseInt(fileInfo.Name(), 10, 64)
+		ts, err := getVersionTsFromFileName(fileInfo.Name())
 		if nil != err {
 			return nil, errorsx.Errorf(
 				"couldn't understand revision '%s' of bucket '%s'. Error: '%s'",
@@ -87,7 +88,6 @@ func (dal *BucketDAL) GetLatestRevision(bucket *intelligentstore.Bucket) (*intel
 	}
 
 	return intelligentstore.NewRevision(bucket, intelligentstore.RevisionVersion(highestTs)), nil
-
 }
 
 // GetRevisions gets all revisions of this bucket
@@ -101,7 +101,7 @@ func (dal *BucketDAL) GetRevisions(bucket *intelligentstore.Bucket) ([]*intellig
 
 	var versions []*intelligentstore.Revision
 	for _, versionFileInfo := range versionsFileInfos {
-		revisionTs, err := strconv.ParseInt(versionFileInfo.Name(), 10, 64)
+		revisionTs, err := getVersionTsFromFileName(versionFileInfo.Name())
 		if nil != err {
 			return nil, errorsx.Wrap(err, "revision timestamp", versionFileInfo.Name())
 		}
@@ -115,12 +115,7 @@ var ErrRevisionDoesNotExist = errors.New("revision doesn't exist")
 
 // GetRevision gets a specific version of this bucket
 func (dal *BucketDAL) GetRevision(bucket *intelligentstore.Bucket, revisionTimeStamp intelligentstore.RevisionVersion) (*intelligentstore.Revision, error) {
-	versionsFolderPath := filepath.Join(dal.bucketPath(bucket), "versions")
-
-	_, err := dal.IntelligentStoreDAL.fs.Stat(
-		filepath.Join(
-			versionsFolderPath,
-			revisionTimeStamp.String()))
+	_, err := dal.IntelligentStoreDAL.fs.Stat(dal.RevisionDAL.getRevisionJSONFilePath(bucket, revisionTimeStamp))
 	if nil != err {
 		if os.IsNotExist(err) {
 			return nil, ErrRevisionDoesNotExist
@@ -210,4 +205,8 @@ func (s *BucketDAL) CreateBucket(bucketName string) (*intelligentstore.Bucket, e
 	}
 
 	return intelligentstore.NewBucket(id, bucketName), nil
+}
+
+func getVersionTsFromFileName(fileName string) (int64, error) {
+	return strconv.ParseInt(strings.TrimSuffix(fileName, filepath.Ext(fileName)), 10, 64)
 }

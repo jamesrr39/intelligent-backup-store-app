@@ -6,9 +6,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/jamesrr39/goutil/errorsx"
 )
 
-func Run2(storeLocation string) error {
+func Run2(storeLocation string) errorsx.Error {
 	err := filepath.Walk(filepath.Join(storeLocation, ".backup_data", "objects"), func(path string, fileInfo os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -59,7 +61,7 @@ func Run2(storeLocation string) error {
 		return nil
 	})
 	if err != nil {
-		return err
+		return errorsx.Wrap(err)
 	}
 
 	return nil
