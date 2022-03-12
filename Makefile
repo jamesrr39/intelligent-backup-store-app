@@ -49,4 +49,4 @@ setup_localenv_store:
 .PHONY: run_dev_webserver
 run_dev_webserver: ensure_localenv
 #go run cmd/intelligent-store-app-main.go -C ${LOCALENV_DIR} start-webapp
-	go run cmd/intelligent-store-app-main.go start-webapp --store-location=${LOCALENV_DIR}
+	go run cmd/intelligent-store-app-main.go --store-location=${LOCALENV_DIR} start-webapp

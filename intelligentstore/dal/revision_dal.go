@@ -160,9 +160,9 @@ func (r *RevisionDAL) VerifyRevision(
 }
 
 func (r *RevisionDAL) verifyFile(i int, file intelligentstore.FileDescriptor, lenFiles int) errorsx.Error {
-	if i%100 == 0 {
+	if i != 0 && i%100 == 0 {
 		percentageThrough := float64(i) * 100 / float64(lenFiles)
-		log.Printf("verified %d of %d files (%.02f%%)\n", i, lenFiles, percentageThrough)
+		log.Printf("progress update: verified %d of %d files (%.02f%%)\n", i, lenFiles, percentageThrough)
 	}
 	fileInfo := file.GetFileInfo()
 	switch fileInfo.Type {
