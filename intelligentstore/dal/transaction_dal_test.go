@@ -216,10 +216,7 @@ func Test_ProcessSymlinks(t *testing.T) {
 	assert.Equal(t, "tried to commit the transaction but there are 1 symlinks left to upload", err.Error())
 
 	err = tx.ProcessSymlinks([]*intelligentstore.SymlinkWithRelativePath{
-		&intelligentstore.SymlinkWithRelativePath{
-			RelativePath: symlinkDescriptor.RelativePath,
-			Dest:         symlinkDescriptor.Dest,
-		},
+		{RelativePath: symlinkDescriptor.RelativePath, Dest: symlinkDescriptor.Dest},
 	})
 	require.Nil(t, err)
 

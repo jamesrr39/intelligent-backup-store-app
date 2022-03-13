@@ -11,4 +11,4 @@ var ErrIllegalDirectoryTraversal = errors.New("filepath contains .. and is tryin
 var ErrBucketDoesNotExist = errors.New("bucket does not exist")
 
 // ErrNoFileWithThisRelativePathInRevision is an error signifying that a file with a given relative path couldn't be found in a given revision
-var ErrNoFileWithThisRelativePathInRevision = errors.New("No File With This Relative Path In Revision")
+var ErrNoFileWithThisRelativePathInRevision = errors.New("no File With This Relative Path In Revision")
