@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jamesrr39/goutil/errorsx"
 	"github.com/jamesrr39/goutil/gofs"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	"github.com/stretchr/testify/require"
@@ -80,4 +81,18 @@ func (m *MockStore) CreateRevision(t *testing.T, bucket *intelligentstore.Bucket
 	require.Nil(t, err)
 
 	return tx.Revision
+}
+
+func CreateTestStoreAndNewConn(pathToBase string, nowFunc NowProvider, fs gofs.Fs) (*IntelligentStoreDAL, error) {
+	storeDAL, err := createStoreAndNewConn(pathToBase, nowFunc, fs)
+	if err != nil {
+		return nil, errorsx.Wrap(err)
+	}
+
+	err = storeDAL.RunMigrations(GetAllMigrations())
+	if err != nil {
+		return nil, errorsx.Wrap(err)
+	}
+
+	return storeDAL, nil
 }

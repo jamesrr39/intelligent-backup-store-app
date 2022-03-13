@@ -23,11 +23,8 @@ var (
 
 const (
 	BackupDataFolderName = ".backup_data"
+	RequiredVersion      = 3
 )
-
-// type Fs interface {
-// 	WriteFile(filePath string, data []byte, permissions int32) error
-// }
 
 // IntelligentStoreDAL represents the object to interact with the underlying storage
 type IntelligentStoreDAL struct {
@@ -126,6 +123,23 @@ func (s *IntelligentStoreDAL) ensureStatusMetadataFile() error {
 		if err != nil {
 			return errorsx.Wrap(err)
 		}
+	} else {
+		// file exists
+		f, err := s.fs.Open(statusMetadataFilePath)
+		if err != nil {
+			return errorsx.Wrap(err)
+		}
+		defer f.Close()
+
+		status := new(intelligentstore.Status)
+		err = json.NewDecoder(f).Decode(status)
+		if err != nil {
+			return errorsx.Wrap(err)
+		}
+
+		if status.SchemaVersion != RequiredVersion {
+			return errorsx.Errorf("required schema version: %d, but store schema version: %d. Run the %q command to update the schema", RequiredVersion, status.SchemaVersion, intelligentstore.RunMigrationsCommandName)
+		}
 	}
 
 	return nil
@@ -176,10 +190,6 @@ func CreateIntelligentStoreAndNewConn(pathToBase string) (*IntelligentStoreDAL, 
 	fs := gofs.NewOsFs()
 
 	return createStoreAndNewConn(pathToBase, prodNowProvider, fs)
-}
-
-func CreateTestStoreAndNewConn(pathToBase string, nowFunc NowProvider, fs gofs.Fs) (*IntelligentStoreDAL, error) {
-	return createStoreAndNewConn(pathToBase, nowFunc, fs)
 }
 
 func createStoreAndNewConn(pathToBase string, nowFunc NowProvider, fs gofs.Fs) (*IntelligentStoreDAL, error) {

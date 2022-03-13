@@ -1,4 +1,4 @@
-package migrations
+package dal
 
 import (
 	"encoding/json"
@@ -7,12 +7,12 @@ import (
 	"path/filepath"
 
 	"github.com/jamesrr39/goutil/errorsx"
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
+	"github.com/jamesrr39/goutil/gofs"
 )
 
 // migrates file lists from gob to JSON
-func Run1(storeLocation string) errorsx.Error {
-	err := filepath.Walk(filepath.Join(storeLocation, ".backup_data", "buckets"), func(path string, fileInfo os.FileInfo, err error) error {
+func Run1(store *IntelligentStoreDAL) errorsx.Error {
+	err := gofs.Walk(store.fs, filepath.Join(store.StoreBasePath, ".backup_data", "buckets"), func(path string, fileInfo os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -27,7 +27,7 @@ func Run1(storeLocation string) errorsx.Error {
 		}
 		defer file.Close()
 
-		descriptors, err := dal.Legacy__GetFilesInGobEncodedRevision(file)
+		descriptors, err := Legacy__GetFilesInGobEncodedRevision(file)
 		if err != nil {
 			return err
 		}
@@ -43,7 +43,7 @@ func Run1(storeLocation string) errorsx.Error {
 		}
 
 		return nil
-	})
+	}, gofs.WalkOptions{})
 
 	return errorsx.Wrap(err)
 }

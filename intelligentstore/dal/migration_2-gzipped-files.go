@@ -1,4 +1,4 @@
-package migrations
+package dal
 
 import (
 	"compress/gzip"
@@ -8,10 +8,11 @@ import (
 	"strings"
 
 	"github.com/jamesrr39/goutil/errorsx"
+	"github.com/jamesrr39/goutil/gofs"
 )
 
-func Run2(storeLocation string) errorsx.Error {
-	err := filepath.Walk(filepath.Join(storeLocation, ".backup_data", "objects"), func(path string, fileInfo os.FileInfo, err error) error {
+func Run2(store *IntelligentStoreDAL) errorsx.Error {
+	err := gofs.Walk(store.fs, filepath.Join(store.StoreBasePath, ".backup_data", "objects"), func(path string, fileInfo os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -59,7 +60,7 @@ func Run2(storeLocation string) errorsx.Error {
 		}
 
 		return nil
-	})
+	}, gofs.WalkOptions{})
 	if err != nil {
 		return errorsx.Wrap(err)
 	}

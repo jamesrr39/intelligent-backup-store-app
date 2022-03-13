@@ -1,4 +1,4 @@
-package migrations
+package dal
 
 import (
 	"os"
@@ -6,16 +6,10 @@ import (
 	"strconv"
 
 	"github.com/jamesrr39/goutil/errorsx"
-	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
 )
 
 // Run3 takes all revision filepaths, and adds the .json extension to them
-func Run3(storeLocation string) errorsx.Error {
-	store, err := dal.NewIntelligentStoreConnToExisting(storeLocation)
-	if err != nil {
-		return errorsx.Wrap(err)
-	}
-
+func Run3(store *IntelligentStoreDAL) errorsx.Error {
 	allBuckets, err := store.RevisionDAL.BucketDAL.GetAllBuckets()
 	if err != nil {
 		return errorsx.Wrap(err)
@@ -28,7 +22,7 @@ func Run3(storeLocation string) errorsx.Error {
 		}
 
 		for _, revision := range revisions {
-			oldFilePath := filepath.Join(storeLocation, ".backup_data", "buckets", strconv.Itoa(bucket.ID), "versions", revision.VersionTimestamp.String())
+			oldFilePath := filepath.Join(store.StoreBasePath, ".backup_data", "buckets", strconv.Itoa(bucket.ID), "versions", revision.VersionTimestamp.String())
 			newFilePath := oldFilePath + ".json"
 
 			_, err := os.Stat(oldFilePath)

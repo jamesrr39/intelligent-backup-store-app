@@ -209,7 +209,7 @@ func (s *BucketService) handleGetRevision(w http.ResponseWriter, r *http.Request
 	for _, descriptor := range dirEntries {
 		switch descriptor.GetFileInfo().Type {
 		case intelligentstore.FileTypeDir:
-			data.Dirs = append(data.Dirs, &subDirInfo{descriptor.GetFileInfo().RelativePath.String()})
+			data.Dirs = append(data.Dirs, &subDirInfo{Name: descriptor.GetFileInfo().RelativePath.Name()})
 		case intelligentstore.FileTypeRegular, intelligentstore.FileTypeSymlink:
 			data.Files = append(data.Files, descriptor)
 		default:

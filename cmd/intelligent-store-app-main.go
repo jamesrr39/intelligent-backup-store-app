@@ -17,7 +17,6 @@ import (
 	"github.com/jamesrr39/intelligent-backup-store-app/exporters"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
-	"github.com/jamesrr39/intelligent-backup-store-app/migrations"
 	"github.com/jamesrr39/intelligent-backup-store-app/storefuse"
 	"github.com/jamesrr39/intelligent-backup-store-app/storewebserver"
 	"github.com/jamesrr39/intelligent-backup-store-app/uploaders"
@@ -322,11 +321,6 @@ func setupStartWebappCommand() {
 	})
 }
 
-type migrationType struct {
-	Name      string
-	Migration migrations.Migration
-}
-
 func setupStatusCommand() {
 	cmd := app.Command("status", "get store status information")
 	cmd.Action(func(ctx *kingpin.ParseContext) error {
@@ -350,48 +344,14 @@ func setupStatusCommand() {
 }
 
 func setupRunMigrationsCommand() {
-	runMigrationsCommand := app.Command("run-migrations", "run one-off migrations")
+	runMigrationsCommand := app.Command(intelligentstore.RunMigrationsCommandName, "run one-off migrations")
 	runMigrationsCommand.Action(func(ctx *kingpin.ParseContext) error {
 		store, err := dal.NewIntelligentStoreConnToExisting(*storeLocation)
-		if nil != err {
-			return err
+		if err != nil {
+			return errorsx.Wrap(err)
 		}
 
-		status, err := store.Status()
-		if nil != err {
-			return err
-		}
-
-		migrations := []migrationType{
-			{Name: "gob to json records", Migration: migrations.Run1},
-			{Name: "gzip files", Migration: migrations.Run2},
-			{Name: "rename revision contents with .json file extensions", Migration: migrations.Run3},
-		}
-
-		for i, migration := range migrations {
-			thisMigrationVersion := i + 1
-
-			if thisMigrationVersion <= status.SchemaVersion {
-				log.Printf("skipping migration version %d (schema version: %d)\n", thisMigrationVersion, status.SchemaVersion)
-				continue
-			}
-
-			log.Printf("starting to run migration %d: %q\n", thisMigrationVersion, migration.Name)
-			err := migration.Migration(*storeLocation)
-			if err != nil {
-				return err
-			}
-
-			status.SchemaVersion = thisMigrationVersion
-
-			err = store.UpdateStatus(status)
-			if err != nil {
-				return err
-			}
-
-			log.Printf("successfully finished running migration %d: %q\n", i+1, migration.Name)
-		}
-		return nil
+		return store.RunMigrations(dal.GetAllMigrations())
 	})
 }
 
