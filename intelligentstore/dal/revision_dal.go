@@ -1,15 +1,16 @@
 package dal
 
 import (
-	"encoding/gob"
 	"fmt"
 	"io"
 	"log"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 
 	"github.com/jamesrr39/goutil/errorsx"
+	"github.com/jamesrr39/goutil/gofs"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	"github.com/jamesrr39/semaphore"
 	"github.com/pkg/errors"
@@ -18,6 +19,14 @@ import (
 type revisionReader interface {
 	ReadDir(relativePath intelligentstore.RelativePath) ([]intelligentstore.FileDescriptor, error)
 	Stat(relativePath intelligentstore.RelativePath) (intelligentstore.FileDescriptor, error)
+	Iterator() (Iterator, errorsx.Error)
+	Close() errorsx.Error
+}
+
+type Iterator interface {
+	Next() bool
+	Scan() (intelligentstore.FileDescriptor, errorsx.Error)
+	Err() errorsx.Error
 }
 
 type RevisionDAL struct {
@@ -41,17 +50,74 @@ func (r *RevisionDAL) getRevisionJSONFilePath(bucket *intelligentstore.Bucket, r
 		strconv.FormatInt(int64(revisionTimeStamp), 10)+".json")
 }
 
-// GetFilesInRevision gets a list of files in this revision
-func (r *RevisionDAL) GetFilesInRevision(bucket *intelligentstore.Bucket, revision *intelligentstore.Revision) ([]intelligentstore.FileDescriptor, errorsx.Error) {
-	filePath := r.getRevisionJSONFilePath(bucket, revision.VersionTimestamp)
-	revisionFile, err := r.fs.Open(filePath)
-	if nil != err {
-		return nil, errorsx.Wrap(err, "filePath", filePath)
+func (r *RevisionDAL) getRevisionCSVFilePath(bucket *intelligentstore.Bucket, revisionTimeStamp intelligentstore.RevisionVersion) string {
+	return filepath.Join(
+		r.bucketPath(bucket),
+		"versions",
+		strconv.FormatInt(int64(revisionTimeStamp), 10)+".csv")
+}
+
+type revisionFilePathWithReaderCreator struct {
+	FilePath         string
+	CreateReaderFunc func(file gofs.File) revisionReader
+}
+
+func (r *RevisionDAL) createReader(revision *intelligentstore.Revision) (revisionReader, errorsx.Error) {
+	possibleReaders := []revisionFilePathWithReaderCreator{
+		{
+			FilePath:         r.getRevisionCSVFilePath(revision.Bucket, revision.VersionTimestamp),
+			CreateReaderFunc: func(file gofs.File) revisionReader { return &revisionCSVReader{file} },
+		},
+		{
+			FilePath:         r.getRevisionJSONFilePath(revision.Bucket, revision.VersionTimestamp),
+			CreateReaderFunc: func(file gofs.File) revisionReader { return &revisionJSONReader{file} },
+		},
 	}
 
-	filesInVersion, err := readFilesInRevisionJSON(revisionFile)
+	for _, reader := range possibleReaders {
+		_, err := r.fs.Stat(reader.FilePath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				// revision file for this type does not exist. Try the next type.
+				continue
+			}
+
+			return nil, errorsx.Wrap(err)
+		}
+
+		f, err := r.fs.Open(reader.FilePath)
+		if err != nil {
+			return nil, errorsx.Wrap(err)
+		}
+
+		return reader.CreateReaderFunc(f), nil
+	}
+
+	return nil, errorsx.Wrap(errors.Errorf("could not find a file"), "bucket", revision.Bucket.ID, "revision", revision.VersionTimestamp.String())
+}
+
+// GetFilesInRevision gets a list of files in this revision
+func (r *RevisionDAL) GetFilesInRevision(bucket *intelligentstore.Bucket, revision *intelligentstore.Revision) ([]intelligentstore.FileDescriptor, errorsx.Error) {
+	reader, err := r.createReader(revision)
 	if err != nil {
-		return nil, errorsx.Wrap(err, "filePath", filePath)
+		return nil, errorsx.Wrap(err, "bucket", revision.Bucket.ID, "revision", revision.ID)
+	}
+	defer reader.Close()
+
+	iterator, err := reader.Iterator()
+	if err != nil {
+		return nil, errorsx.Wrap(err, "bucket", revision.Bucket.ID, "revision", revision.ID)
+	}
+
+	filesInVersion := []intelligentstore.FileDescriptor{}
+
+	for iterator.Next() {
+		descriptor, err := iterator.Scan()
+		if err != nil {
+			return nil, errorsx.Wrap(err, "bucket", revision.Bucket.ID, "revision", revision.ID)
+		}
+
+		filesInVersion = append(filesInVersion, descriptor)
 	}
 
 	return filesInVersion, nil
@@ -118,16 +184,6 @@ func (r *RevisionDAL) GetFileContentsInRevision(
 	}
 
 	return nil, ErrNoFileWithThisRelativePathInRevision
-}
-
-func Legacy__GetFilesInGobEncodedRevision(revisionDataFile io.Reader) ([]intelligentstore.FileDescriptor, error) {
-	var filesInVersion []intelligentstore.FileDescriptor
-	err := gob.NewDecoder(revisionDataFile).Decode(&filesInVersion)
-	if nil != err {
-		return nil, err
-	}
-
-	return filesInVersion, nil
 }
 
 func (r *RevisionDAL) VerifyRevision(

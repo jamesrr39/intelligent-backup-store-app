@@ -4,15 +4,17 @@ bazil.org/fuse
 bazil.org/fuse/fs
 bazil.org/fuse/fuseutil
 # github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751
+## explicit
 github.com/alecthomas/template
 github.com/alecthomas/template/parse
 # github.com/alecthomas/units v0.0.0-20210208195552-ff826a37aa15
+## explicit; go 1.15
 github.com/alecthomas/units
 # github.com/davecgh/go-spew v1.1.1
 ## explicit
 github.com/davecgh/go-spew/spew
 # github.com/go-chi/chi/v5 v5.0.7
-## explicit
+## explicit; go 1.14
 github.com/go-chi/chi/v5
 github.com/go-chi/chi/v5/middleware
 # github.com/go-chi/render v1.0.1-0.20171231234154-8c8c7a43d054
@@ -29,17 +31,16 @@ github.com/gobwas/glob/syntax/lexer
 github.com/gobwas/glob/util/runes
 github.com/gobwas/glob/util/strings
 # github.com/golang/protobuf v1.5.2
-## explicit
+## explicit; go 1.9
 github.com/golang/protobuf/proto
-# github.com/gorilla/context v1.1.1
-## explicit
-# github.com/gorilla/mux v0.0.0-20160920230813-757bef944d0f
-## explicit
+# github.com/jamesrr39/csvx v0.0.0-20220405161707-4ca642ca7ca3
+## explicit; go 1.18
+github.com/jamesrr39/csvx
 # github.com/jamesrr39/go-snapshot-testing v0.0.0-20210417135521-a5ca70c087bc
-## explicit
+## explicit; go 1.15
 github.com/jamesrr39/go-snapshot-testing
 # github.com/jamesrr39/goutil v0.0.0-20220127172547-37a3bdc40f9a
-## explicit
+## explicit; go 1.16
 github.com/jamesrr39/goutil/dirtraversal
 github.com/jamesrr39/goutil/errorsx
 github.com/jamesrr39/goutil/gofs
@@ -52,31 +53,32 @@ github.com/jamesrr39/goutil/patternmatcher
 # github.com/jamesrr39/semaphore v0.0.0-20180521202200-0d5ddc396086
 ## explicit
 github.com/jamesrr39/semaphore
-# github.com/kr/pretty v0.1.0
-## explicit
 # github.com/pkg/errors v0.9.1
 ## explicit
 github.com/pkg/errors
 # github.com/pmezard/go-difflib v1.0.0
+## explicit
 github.com/pmezard/go-difflib/difflib
 # github.com/rakyll/statik v0.1.3
 ## explicit
 github.com/rakyll/statik/fs
 # github.com/spf13/afero v1.8.1
-## explicit
+## explicit; go 1.13
 github.com/spf13/afero
 github.com/spf13/afero/mem
-# github.com/stretchr/testify v1.7.0
-## explicit
+# github.com/stretchr/testify v1.7.1
+## explicit; go 1.13
 github.com/stretchr/testify/assert
 github.com/stretchr/testify/require
 # golang.org/x/net v0.0.0-20210226172049-e18ecbb05110
+## explicit; go 1.11
 golang.org/x/net/context
 # golang.org/x/text v0.3.7
-## explicit
+## explicit; go 1.17
 golang.org/x/text/transform
 golang.org/x/text/unicode/norm
 # google.golang.org/protobuf v1.26.0
+## explicit; go 1.9
 google.golang.org/protobuf/encoding/prototext
 google.golang.org/protobuf/encoding/protowire
 google.golang.org/protobuf/internal/descfmt
@@ -110,4 +112,5 @@ gopkg.in/alecthomas/kingpin.v2
 # gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15
 ## explicit
 # gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c
+## explicit
 gopkg.in/yaml.v3

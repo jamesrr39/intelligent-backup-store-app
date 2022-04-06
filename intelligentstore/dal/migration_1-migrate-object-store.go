@@ -27,7 +27,7 @@ func Run1(store *IntelligentStoreDAL) errorsx.Error {
 		}
 		defer file.Close()
 
-		descriptors, err := Legacy__GetFilesInGobEncodedRevision(file)
+		descriptors, err := legacy__GetFilesInGobEncodedRevision(file)
 		if err != nil {
 			return err
 		}

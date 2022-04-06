@@ -9,9 +9,17 @@ import (
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 )
 
+type readSeekCloserBytesReader struct {
+	*bytes.Reader
+}
+
+func (readSeekCloserBytesReader) Close() error {
+	return nil
+}
+
 func Test_revisionJSONReader_ReadDir(t *testing.T) {
 	type fields struct {
-		revisionFile io.Reader
+		revisionFile io.ReadSeekCloser
 	}
 	type args struct {
 		relativePath intelligentstore.RelativePath
@@ -26,7 +34,9 @@ func Test_revisionJSONReader_ReadDir(t *testing.T) {
 		{
 			name: "root dir",
 			fields: fields{
-				bytes.NewBufferString(`[{"path":"a.txt","type":1}, {"path":"dir1/b.txt","type":1}, {"path":"dir1/c.txt","type":1}]`),
+				readSeekCloserBytesReader{
+					bytes.NewReader([]byte(`[{"path":"a.txt","type":1}, {"path":"dir1/b.txt","type":1}, {"path":"dir1/c.txt","type":1}]`)),
+				},
 			},
 			args: args{
 				relativePath: "",
@@ -45,7 +55,9 @@ func Test_revisionJSONReader_ReadDir(t *testing.T) {
 		}, {
 			name: "sub dir",
 			fields: fields{
-				bytes.NewBufferString(`[{"path":"a.txt","type":1}, {"path":"dir1/b.txt","type":1}, {"path":"dir1/c.txt","type":1}, {"path":"dir1/dir2/d.txt","type":1}]`),
+				readSeekCloserBytesReader{
+					bytes.NewReader([]byte(`[{"path":"a.txt","type":1}, {"path":"dir1/b.txt","type":1}, {"path":"dir1/c.txt","type":1}, {"path":"dir1/dir2/d.txt","type":1}]`)),
+				},
 			},
 			args: args{
 				relativePath: "dir1",
