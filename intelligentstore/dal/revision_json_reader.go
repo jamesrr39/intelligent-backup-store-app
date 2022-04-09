@@ -133,7 +133,7 @@ func (r *revisionJSONReader) Iterator() (Iterator, errorsx.Error) {
 }
 
 func (r *JSONIterator) Next() bool {
-	if r.currentIndex >= len(r.jsonMessages) {
+	if r.currentIndex >= (len(r.jsonMessages) - 1) {
 		return false
 	}
 

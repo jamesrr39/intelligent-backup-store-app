@@ -92,6 +92,8 @@ func Test_CreateBucket(t *testing.T) {
 }
 
 func Test_GetGzippedObjectByHash(t *testing.T) {
+	var err error
+
 	fs := mockfs.NewMockFs()
 	mockStore := NewMockStore(t, MockNowProvider, fs)
 	bucket, err := mockStore.Store.BucketDAL.CreateBucket("docs")

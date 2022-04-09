@@ -3,7 +3,7 @@ package storefuse
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
@@ -31,6 +31,8 @@ func (f *File) Attr(ctx context.Context, attr *fuse.Attr) error {
 }
 
 func (f *File) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.ReadResponse) error {
+	var err error
+
 	log.Printf("reading at offset: %d\n", req.Offset)
 	if req.Offset >= f.descriptor.GetFileInfo().Size {
 		return nil
@@ -43,7 +45,7 @@ func (f *File) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.ReadR
 	}
 	defer object.Close()
 
-	fileBytes, err := ioutil.ReadAll(object) // TODO: better
+	fileBytes, err := io.ReadAll(object) // TODO: better
 	if nil != err {
 		return err
 	}

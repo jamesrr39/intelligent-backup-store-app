@@ -55,8 +55,8 @@ func main() {
 }
 
 func setupInitCommand() {
-	initCommand := app.Command("init", "create a new store")
-	initCommand.Action(func(ctx *kingpin.ParseContext) error {
+	cmd := app.Command("init", "create a new store")
+	runAction(cmd, func() errorsx.Error {
 		store, err := dal.CreateIntelligentStoreAndNewConn(*storeLocation)
 		if nil != err {
 			return err
@@ -68,9 +68,9 @@ func setupInitCommand() {
 }
 
 func setupInitBucketCommand() {
-	initBucketCommand := app.Command("create-bucket", "create a new bucket")
-	initBucketBucketName := initBucketCommand.Arg("bucket name", "name of the bucket").Required().String()
-	initBucketCommand.Action(func(ctx *kingpin.ParseContext) error {
+	cmd := app.Command("create-bucket", "create a new bucket")
+	initBucketBucketName := cmd.Arg("bucket name", "name of the bucket").Required().String()
+	runAction(cmd, func() errorsx.Error {
 		store, err := dal.NewIntelligentStoreConnToExisting(*storeLocation)
 		if nil != err {
 			return err
@@ -90,27 +90,29 @@ func setupBackupRemoteCommand() {
 	cmd := app.Command("backup-remote", "backup a new version of a remote site into the store")
 	bucketName := cmd.Arg("bucket name", "name of the bucket to back up into").Required().String()
 	configLocation := cmd.Arg("config location", "location to config file").Required().String()
-	cmd.Action(func(ctx *kingpin.ParseContext) error {
+	runAction(cmd, func() errorsx.Error {
+		var err error
+
 		backupStore, err := dal.NewIntelligentStoreConnToExisting(*storeLocation)
 		if nil != err {
-			return err
+			return errorsx.Wrap(err)
 		}
 
 		f, err := os.Open(*configLocation)
 		if err != nil {
-			return err
+			return errorsx.Wrap(err)
 		}
 		defer f.Close()
 
 		var conf *remotedownloader.Config
 		err = json.NewDecoder(f).Decode(&conf)
 		if err != nil {
-			return err
+			return errorsx.Wrap(err)
 		}
 
 		bucket, err := backupStore.BucketDAL.GetBucketByName(*bucketName)
 		if err != nil {
-			return err
+			return errorsx.Wrap(err)
 		}
 
 		variablesKeyValues := make(map[string]string)
@@ -128,25 +130,25 @@ func setupBackupRemoteCommand() {
 }
 
 func setupBackupIntoCommand() {
-	backupIntoCommand := app.Command("backup-to", "backup a new version of the folder into the store")
-	backupBucketName := backupIntoCommand.Arg("bucket name", "name of the bucket to back up into").Required().String()
-	backupFromLocation := backupIntoCommand.Arg("backup from location", "location to backup from").Default(".").String()
-	backupDryRun := backupIntoCommand.Flag("dry-run", "Don't actually copy files or create a revision").Short('n').Default("False").Bool()
-	profileFilePath := backupIntoCommand.Flag("profile", "file to write the profile to").String()
-	backupIncludesMatcherLocation := backupIntoCommand.Flag("include", "path to a file with glob-style patterns to include files").Default("").String()
-	backupExcludesMatcherLocation := backupIntoCommand.Flag("exclude", "path to a file with glob-style patterns to exclude files").Default("").String()
-	backupIntoCommand.Action(func(ctx *kingpin.ParseContext) error {
+	cmd := app.Command("backup-to", "backup a new version of the folder into the store")
+	backupBucketName := cmd.Arg("bucket name", "name of the bucket to back up into").Required().String()
+	backupFromLocation := cmd.Arg("backup from location", "location to backup from").Default(".").String()
+	backupDryRun := cmd.Flag("dry-run", "Don't actually copy files or create a revision").Short('n').Default("False").Bool()
+	profileFilePath := cmd.Flag("profile", "file to write the profile to").String()
+	backupIncludesMatcherLocation := cmd.Flag("include", "path to a file with glob-style patterns to include files").Default("").String()
+	backupExcludesMatcherLocation := cmd.Flag("exclude", "path to a file with glob-style patterns to exclude files").Default("").String()
+	runAction(cmd, func() errorsx.Error {
 		excludeMatcher := &patternmatcher.PatternMatcher{}
 		if *backupExcludesMatcherLocation != "" {
 			excludeFile, err := os.Open(*backupExcludesMatcherLocation)
 			if nil != err {
-				return err
+				return errorsx.Wrap(err)
 			}
 			defer excludeFile.Close()
 
 			excludeMatcher, err = patternmatcher.NewMatcherFromReader(excludeFile)
 			if nil != err {
-				return err
+				return errorsx.Wrap(err)
 			}
 		}
 
@@ -154,13 +156,13 @@ func setupBackupIntoCommand() {
 		if *backupIncludesMatcherLocation != "" {
 			includeFile, err := os.Open(*backupIncludesMatcherLocation)
 			if nil != err {
-				return err
+				return errorsx.Wrap(err)
 			}
 			defer includeFile.Close()
 
 			includeMatcher, err = patternmatcher.NewMatcherFromReader(includeFile)
 			if nil != err {
-				return err
+				return errorsx.Wrap(err)
 			}
 		}
 
@@ -168,7 +170,7 @@ func setupBackupIntoCommand() {
 			log.Printf("recording profile to %q\n", *profileFilePath)
 			memFile, err := recordMemStats(*profileFilePath)
 			if err != nil {
-				return err
+				return errorsx.Wrap(err)
 			}
 
 			defer memFile.Close()
@@ -192,8 +194,8 @@ func setupBackupIntoCommand() {
 }
 
 func setupListBucketsCommand() {
-	listBucketsCommand := app.Command("list-buckets", "produce a listing of all the buckets and the last backup time")
-	listBucketsCommand.Action(func(ctx *kingpin.ParseContext) error {
+	cmd := app.Command("list-buckets", "produce a listing of all the buckets and the last backup time")
+	runAction(cmd, func() errorsx.Error {
 		store, err := dal.NewIntelligentStoreConnToExisting(*storeLocation)
 		if nil != err {
 			return err
@@ -228,11 +230,11 @@ func setupListBucketsCommand() {
 }
 
 func setupListBucketRevisionsCommand() {
-	listBucketRevisionsCommand := app.Command("list-revisions", "produce a listing of all the revisions in a bucket")
-	listBucketRevisionsBucketName := listBucketRevisionsCommand.Arg("bucket name", "name of the bucket to back up into").Required().String()
-	listBucketRevisionsCommand.Action(func(ctx *kingpin.ParseContext) error {
-		store, err := dal.NewIntelligentStoreConnToExisting(
-			*storeLocation)
+	cmd := app.Command("list-revisions", "produce a listing of all the revisions in a bucket")
+	listBucketRevisionsBucketName := cmd.Arg("bucket name", "name of the bucket to back up into").Required().String()
+
+	runAction(cmd, func() errorsx.Error {
+		store, err := dal.NewIntelligentStoreConnToExisting(*storeLocation)
 
 		if nil != err {
 			return err
@@ -258,17 +260,17 @@ func setupListBucketRevisionsCommand() {
 }
 
 func setupExportCommand() {
-	exportCommand := app.Command("export", "export files from the store to the local file system")
-	exportCommandBucketName := exportCommand.Arg("bucket name", "name of the bucket to export from").Required().String()
-	exportCommandExportDir := exportCommand.Arg("export folder", "where to export files to").Required().String()
-	exportCommandRevisionVersion := exportCommand.Flag(
+	cmd := app.Command("export", "export files from the store to the local file system")
+	exportCommandBucketName := cmd.Arg("bucket name", "name of the bucket to export from").Required().String()
+	exportCommandExportDir := cmd.Arg("export folder", "where to export files to").Required().String()
+	exportCommandRevisionVersion := cmd.Flag(
 		"revision-version",
 		"specify a revision version to export. If left blank, the latest revision is used. See the program's help command for information about listing revisions",
 	).Int64()
-	exportCommandFilePathPrefix := exportCommand.Flag("with-prefix", "prefix of files to be exported").String()
-	exportCommand.Action(func(ctx *kingpin.ParseContext) error {
-		store, err := dal.NewIntelligentStoreConnToExisting(
-			*storeLocation)
+	exportCommandFilePathPrefix := cmd.Flag("with-prefix", "prefix of files to be exported").String()
+
+	runAction(cmd, func() errorsx.Error {
+		store, err := dal.NewIntelligentStoreConnToExisting(*storeLocation)
 
 		if nil != err {
 			return err
@@ -285,7 +287,8 @@ func setupExportCommand() {
 			prefixMatcher = patternmatcher.NewSimplePrefixMatcher(*exportCommandFilePathPrefix)
 		}
 
-		err = exporters.NewLocalExporter(store, *exportCommandBucketName, *exportCommandExportDir, version, prefixMatcher).Export()
+		exporter := exporters.NewLocalExporter(store, *exportCommandBucketName, *exportCommandExportDir, version, prefixMatcher)
+		err = exporter.Export()
 		if nil != err {
 			return err
 		}
@@ -295,12 +298,14 @@ func setupExportCommand() {
 }
 
 func setupStartWebappCommand() {
-	startWebappCommand := app.Command("start-webapp", "start a web application")
-	startWebappAddr := startWebappCommand.Flag("address", "custom address to expose the webapp to. Example: ':8081': expose to everyone on port 8081").Default("localhost:8080").String()
-	startWebappCommand.Action(func(ctx *kingpin.ParseContext) error {
+	cmd := app.Command("start-webapp", "start a web application")
+	startWebappAddr := cmd.Flag("address", "custom address to expose the webapp to. Example: ':8081': expose to everyone on port 8081").Default("localhost:8080").String()
+	runAction(cmd, func() errorsx.Error {
+		var err error
+
 		store, err := dal.NewIntelligentStoreConnToExisting(*storeLocation)
 		if nil != err {
-			return err
+			return errorsx.Wrap(err)
 		}
 
 		server := &http.Server{
@@ -314,7 +319,7 @@ func setupStartWebappCommand() {
 		log.Printf("starting server on %s\n", server.Addr)
 		err = server.ListenAndServe()
 		if nil != err {
-			return err
+			return errorsx.Wrap(err)
 		}
 
 		return nil
@@ -323,20 +328,22 @@ func setupStartWebappCommand() {
 
 func setupStatusCommand() {
 	cmd := app.Command("status", "get store status information")
-	cmd.Action(func(ctx *kingpin.ParseContext) error {
+	runAction(cmd, func() errorsx.Error {
+		var err error
+
 		store, err := dal.NewIntelligentStoreConnToExisting(*storeLocation)
 		if nil != err {
-			return err
+			return errorsx.Wrap(err)
 		}
 
 		status, err := store.Status()
 		if nil != err {
-			return err
+			return errorsx.Wrap(err)
 		}
 
 		err = json.NewEncoder(os.Stdout).Encode(status)
 		if nil != err {
-			return err
+			return errorsx.Wrap(err)
 		}
 
 		return nil
@@ -344,8 +351,8 @@ func setupStatusCommand() {
 }
 
 func setupRunMigrationsCommand() {
-	runMigrationsCommand := app.Command(intelligentstore.RunMigrationsCommandName, "run one-off migrations")
-	runMigrationsCommand.Action(func(ctx *kingpin.ParseContext) error {
+	cmd := app.Command(intelligentstore.RunMigrationsCommandName, "run one-off migrations")
+	runAction(cmd, func() errorsx.Error {
 		store, err := dal.NewIntelligentStoreConnToExisting(*storeLocation)
 		if err != nil {
 			return errorsx.Wrap(err)
@@ -358,7 +365,7 @@ func setupRunMigrationsCommand() {
 func setupFuseMountCommand() {
 	cmd := app.Command("mount", "mount the store as a filesystem (experimental, only linux supported)")
 	mountOnPathLocation := cmd.Arg("mount-at", "the path to mount the filesystem at").Required().String()
-	cmd.Action(func(ctx *kingpin.ParseContext) error {
+	runAction(cmd, func() errorsx.Error {
 		store, err := dal.NewIntelligentStoreConnToExisting(*storeLocation)
 		if nil != err {
 			return err
@@ -377,7 +384,7 @@ func setupVerifyCommand() {
 		"specify a revision version to export. If left blank, the latest revision is used. See the program's help command for information about listing revisions",
 	).Int64()
 
-	cmd.Action(func(ctx *kingpin.ParseContext) error {
+	runAction(cmd, func() errorsx.Error {
 		store, err := dal.NewIntelligentStoreConnToExisting(*storeLocation)
 		if nil != err {
 			return err
@@ -434,4 +441,15 @@ func recordMemStats(filePath string) (io.Closer, error) {
 	}()
 
 	return w, nil
+}
+
+func runAction(cmd *kingpin.CmdClause, fn func() errorsx.Error) {
+	cmd.Action(func(ctx *kingpin.ParseContext) error {
+		err := fn()
+		if err != nil {
+			return fmt.Errorf("%s. Stack trace:\n%s\n", err, err.Stack())
+		}
+
+		return nil
+	})
 }

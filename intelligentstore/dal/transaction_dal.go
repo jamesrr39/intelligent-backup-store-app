@@ -2,7 +2,6 @@ package dal
 
 import (
 	"compress/gzip"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -21,7 +20,8 @@ var (
 )
 
 type TransactionDAL struct {
-	IntelligentStoreDAL *IntelligentStoreDAL
+	IntelligentStoreDAL    *IntelligentStoreDAL
+	revisionManifestWriter revisionManifestWriter
 }
 
 // CreateTransaction starts a transaction. It is the first part of a transaction; after that, the files that are required must be backed up and then the transaction committed
@@ -207,10 +207,18 @@ func getRemainingFileCountToUpload(transaction *intelligentstore.Transaction) in
 	return count
 }
 
+type revisionManifestWriter interface {
+	GetManifestFilePath(storeBasePath string, revision *intelligentstore.Revision) string
+	Write(writer io.Writer, filesInVersion []intelligentstore.FileDescriptor) errorsx.Error
+}
+
 // Commit closes the transaction and writes the revision data to disk
 func (dal *TransactionDAL) Commit(transaction *intelligentstore.Transaction) errorsx.Error {
-	if err := transaction.CheckStage(intelligentstore.TransactionStageReadyToUploadFiles); nil != err {
-		return err
+	var err error
+
+	err = transaction.CheckStage(intelligentstore.TransactionStageReadyToUploadFiles)
+	if nil != err {
+		return errorsx.Wrap(err)
 	}
 
 	if len(transaction.FileInfosMissingSymlinks) != 0 {
@@ -226,20 +234,30 @@ func (dal *TransactionDAL) Commit(transaction *intelligentstore.Transaction) err
 			amountOfFilesRemainingToUpload)
 	}
 
-	filePath := dal.IntelligentStoreDAL.RevisionDAL.getRevisionJSONFilePath(transaction.Revision.Bucket, transaction.Revision.VersionTimestamp)
-
-	versionContentsFile, err := dal.IntelligentStoreDAL.fs.Create(filePath)
-	if nil != err {
-		return errorsx.Errorf("couldn't write version summary file at '%s'. Error: '%s'", filePath, err)
+	tmpFile, tmpFilePath, err := dal.IntelligentStoreDAL.TempStoreDAL.CreateTempRevisionManifestFile()
+	if err != nil {
+		return errorsx.Wrap(err)
 	}
-	defer versionContentsFile.Close()
+	defer tmpFile.Close()
 
-	err = json.NewEncoder(versionContentsFile).Encode(transaction.FilesInVersion)
+	err = dal.revisionManifestWriter.Write(tmpFile, transaction.FilesInVersion)
 	if nil != err {
 		return errorsx.Wrap(err)
 	}
 
-	err = versionContentsFile.Sync()
+	err = tmpFile.Sync()
+	if nil != err {
+		return errorsx.Wrap(err)
+	}
+
+	err = tmpFile.Close()
+	if nil != err {
+		return errorsx.Wrap(err)
+	}
+
+	revisionManifestFilePath := dal.revisionManifestWriter.GetManifestFilePath(dal.IntelligentStoreDAL.StoreBasePath, transaction.Revision)
+
+	err = dal.IntelligentStoreDAL.fs.Rename(tmpFilePath, revisionManifestFilePath)
 	if nil != err {
 		return errorsx.Wrap(err)
 	}

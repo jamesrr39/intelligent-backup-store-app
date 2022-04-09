@@ -59,6 +59,7 @@ func (d *Dir) lookupRevisionsDir(bucket *intelligentstore.Bucket) (fs.Node, erro
 
 //FIXME encode bucket/path names
 func (d *Dir) Lookup(ctx context.Context, name string) (fs.Node, error) {
+	var err error
 
 	pathInFs := filepath.Join(d.name, name)
 

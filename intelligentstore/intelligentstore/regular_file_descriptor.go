@@ -14,7 +14,7 @@ import (
 // RegularFileDescriptor represents a file and it's storage location metadata.
 type RegularFileDescriptor struct {
 	*FileInfo
-	Hash Hash `json:"hash"`
+	Hash Hash `json:"hash" csv:"hash"`
 }
 
 func init() {

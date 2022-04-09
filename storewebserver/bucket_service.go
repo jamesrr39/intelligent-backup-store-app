@@ -77,6 +77,7 @@ type revisionInfoWithFiles struct {
 // @Title Get Latest Buckets Information
 // @Success 200 {object} string &quot;Success&quot;
 func (s *BucketService) handleGetAllBuckets(w http.ResponseWriter, r *http.Request) {
+	var err error
 
 	buckets, err := s.store.BucketDAL.GetAllBuckets()
 	if nil != err {
@@ -150,6 +151,8 @@ func (s *BucketService) handleGetBucket(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *BucketService) getRevision(bucketName, revisionTsString string) (*intelligentstore.Revision, *HTTPError) {
+	var err error
+
 	bucket, err := s.store.BucketDAL.GetBucketByName(bucketName)
 	if nil != err {
 		if dal.ErrBucketDoesNotExist == err {
@@ -222,6 +225,8 @@ func (s *BucketService) handleGetRevision(w http.ResponseWriter, r *http.Request
 }
 
 func (s *BucketService) handleCreateRevision(w http.ResponseWriter, r *http.Request) {
+	var err error
+
 	bucketName := chi.URLParam(r, "bucketName")
 
 	bucket, err := s.store.BucketDAL.GetBucketByName(bucketName)
@@ -327,6 +332,8 @@ func fileTypeProtoToFileType(protoFileType protofiles.FileType) (intelligentstor
 }
 
 func (s *BucketService) handleUploadFile(w http.ResponseWriter, r *http.Request) {
+	var err error
+
 	bucketName := chi.URLParam(r, "bucketName")
 	revisionTsString := chi.URLParam(r, "revisionTs")
 
@@ -401,6 +408,8 @@ func (s *BucketService) handleCommitTransaction(w http.ResponseWriter, r *http.R
 }
 
 func (s *BucketService) handleGetFileContents(w http.ResponseWriter, r *http.Request) {
+	var err error
+
 	bucketName := chi.URLParam(r, "bucketName")
 	revisionTsString := chi.URLParam(r, "revisionTs")
 
@@ -430,6 +439,8 @@ func (s *BucketService) handleGetFileContents(w http.ResponseWriter, r *http.Req
 }
 
 func (s *BucketService) handleUploadHashes(w http.ResponseWriter, r *http.Request) {
+	var err error
+
 	bucketName := chi.URLParam(r, "bucketName")
 	revisionTsString := chi.URLParam(r, "revisionTs")
 
@@ -502,6 +513,8 @@ func (s *BucketService) handleUploadHashes(w http.ResponseWriter, r *http.Reques
 }
 
 func (s *BucketService) handleUploadSymlinks(w http.ResponseWriter, r *http.Request) {
+	var err error
+
 	bucketName := chi.URLParam(r, "bucketName")
 	revisionTsString := chi.URLParam(r, "revisionTs")
 

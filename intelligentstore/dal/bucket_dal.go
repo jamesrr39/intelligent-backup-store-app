@@ -114,13 +114,13 @@ func (dal *BucketDAL) GetRevisions(bucket *intelligentstore.Bucket) ([]*intellig
 var ErrRevisionDoesNotExist = errors.New("revision doesn't exist")
 
 // GetRevision gets a specific version of this bucket
-func (dal *BucketDAL) GetRevision(bucket *intelligentstore.Bucket, revisionTimeStamp intelligentstore.RevisionVersion) (*intelligentstore.Revision, error) {
+func (dal *BucketDAL) GetRevision(bucket *intelligentstore.Bucket, revisionTimeStamp intelligentstore.RevisionVersion) (*intelligentstore.Revision, errorsx.Error) {
 	_, err := dal.IntelligentStoreDAL.fs.Stat(dal.RevisionDAL.getRevisionJSONFilePath(bucket, revisionTimeStamp))
 	if nil != err {
 		if os.IsNotExist(err) {
-			return nil, ErrRevisionDoesNotExist
+			return nil, errorsx.Wrap(ErrRevisionDoesNotExist)
 		}
-		return nil, errors.Wrapf(err, "couldn't get revision '%d'", revisionTimeStamp)
+		return nil, errorsx.Wrap(err, "revision", revisionTimeStamp)
 	}
 
 	return intelligentstore.NewRevision(bucket, intelligentstore.RevisionVersion(revisionTimeStamp)), nil
@@ -130,17 +130,17 @@ func (s *BucketDAL) getBucketsInformationPath() string {
 	return filepath.Join(s.StoreBasePath, ".backup_data", "store_metadata", "buckets-data.json")
 }
 
-func (s *BucketDAL) GetAllBuckets() ([]*intelligentstore.Bucket, error) {
+func (s *BucketDAL) GetAllBuckets() ([]*intelligentstore.Bucket, errorsx.Error) {
 	file, err := s.fs.Open(s.getBucketsInformationPath())
 	if nil != err {
-		return nil, err
+		return nil, errorsx.Wrap(err)
 	}
 	defer file.Close()
 
 	var buckets []*intelligentstore.Bucket
 	err = json.NewDecoder(file).Decode(&buckets)
 	if nil != err {
-		return nil, err
+		return nil, errorsx.Wrap(err)
 	}
 
 	return buckets, nil
@@ -149,7 +149,7 @@ func (s *BucketDAL) GetAllBuckets() ([]*intelligentstore.Bucket, error) {
 // GetBucketByName gets a bucket by its name
 // If the bucket is not found, the error returned will be ErrBucketDoesNotExist
 // Otherwise, it will be an os/fs related error
-func (s *BucketDAL) GetBucketByName(bucketName string) (*intelligentstore.Bucket, error) {
+func (s *BucketDAL) GetBucketByName(bucketName string) (*intelligentstore.Bucket, errorsx.Error) {
 	buckets, err := s.GetAllBuckets()
 	if nil != err {
 		return nil, err
@@ -161,21 +161,23 @@ func (s *BucketDAL) GetBucketByName(bucketName string) (*intelligentstore.Bucket
 		}
 	}
 
-	return nil, ErrBucketDoesNotExist
+	return nil, errorsx.Wrap(ErrBucketDoesNotExist)
 }
 
 var ErrBucketNameAlreadyTaken = errors.New("This bucket name is already taken")
 
-func (s *BucketDAL) CreateBucket(bucketName string) (*intelligentstore.Bucket, error) {
+func (s *BucketDAL) CreateBucket(bucketName string) (*intelligentstore.Bucket, errorsx.Error) {
+	var err error
+
 	buckets, err := s.GetAllBuckets()
 	if nil != err {
-		return nil, err
+		return nil, errorsx.Wrap(err)
 	}
 
 	highestID := 0
 	for _, bucket := range buckets {
 		if bucketName == bucket.BucketName {
-			return nil, ErrBucketNameAlreadyTaken
+			return nil, errorsx.Wrap(ErrBucketNameAlreadyTaken)
 		}
 
 		if bucket.ID > highestID {
@@ -190,18 +192,18 @@ func (s *BucketDAL) CreateBucket(bucketName string) (*intelligentstore.Bucket, e
 	byteBuffer := bytes.NewBuffer(nil)
 	err = json.NewEncoder(byteBuffer).Encode(buckets)
 	if nil != err {
-		return nil, err
+		return nil, errorsx.Wrap(err)
 	}
 
 	err = s.fs.WriteFile(s.getBucketsInformationPath(), byteBuffer.Bytes(), 0600)
 	if nil != err {
-		return nil, err
+		return nil, errorsx.Wrap(err)
 	}
 
 	bucketVersionsPath := filepath.Join(s.StoreBasePath, ".backup_data", "buckets", strconv.Itoa(id), "versions")
 	err = s.fs.MkdirAll(bucketVersionsPath, 0700)
 	if nil != err {
-		return nil, err
+		return nil, errorsx.Wrap(err)
 	}
 
 	return intelligentstore.NewBucket(id, bucketName), nil

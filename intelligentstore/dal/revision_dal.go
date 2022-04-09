@@ -188,7 +188,7 @@ func (r *RevisionDAL) GetFileContentsInRevision(
 
 func (r *RevisionDAL) VerifyRevision(
 	bucket *intelligentstore.Bucket,
-	revision *intelligentstore.Revision) error {
+	revision *intelligentstore.Revision) errorsx.Error {
 	files, err := r.GetFilesInRevision(bucket, revision)
 	if err != nil {
 		return err

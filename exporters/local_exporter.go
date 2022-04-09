@@ -6,6 +6,7 @@ import (
 	"io"
 	"path/filepath"
 
+	"github.com/jamesrr39/goutil/errorsx"
 	"github.com/jamesrr39/goutil/gofs"
 	"github.com/jamesrr39/goutil/patternmatcher"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
@@ -34,10 +35,12 @@ func NewLocalExporter(store *dal.IntelligentStoreDAL, bucketName string, exportD
 	}
 }
 
-func (exporter *LocalExporter) Export() error {
+func (exporter *LocalExporter) Export() errorsx.Error {
+	var err error
+
 	bucket, err := exporter.Store.BucketDAL.GetBucketByName(exporter.BucketName)
 	if nil != err {
-		return err
+		return errorsx.Wrap(err)
 	}
 
 	var revision *intelligentstore.Revision
@@ -48,17 +51,17 @@ func (exporter *LocalExporter) Export() error {
 	}
 
 	if nil != err {
-		return err
+		return errorsx.Wrap(err)
 	}
 
 	err = exporter.fs.MkdirAll(filepath.Join(exporter.ExportDir, FilesExportSubDir), 0700)
 	if nil != err {
-		return err
+		return errorsx.Wrap(err)
 	}
 
 	filesInRevision, err := exporter.Store.RevisionDAL.GetFilesInRevision(bucket, revision)
 	if nil != err {
-		return err
+		return errorsx.Wrap(err)
 	}
 
 	for _, fileInRevision := range filesInRevision {
@@ -68,19 +71,19 @@ func (exporter *LocalExporter) Export() error {
 
 		err = exporter.writeFileToFs(fileInRevision)
 		if nil != err {
-			return err
+			return errorsx.Wrap(err)
 		}
 	}
 
 	return nil
 }
 
-func (exporter *LocalExporter) writeFileToFs(fileDescriptor intelligentstore.FileDescriptor) error {
+func (exporter *LocalExporter) writeFileToFs(fileDescriptor intelligentstore.FileDescriptor) errorsx.Error {
 	filePath := filepath.Join(exporter.ExportDir, FilesExportSubDir, string(fileDescriptor.GetFileInfo().RelativePath))
 	dirPath := filepath.Dir(filePath)
 	err := exporter.fs.MkdirAll(dirPath, 0700)
 	if nil != err {
-		return fmt.Errorf("couldn't make the directory for '%s'. Error: %s", dirPath, err)
+		return errorsx.Wrap(err)
 	}
 	switch fileDescriptor.GetFileInfo().Type {
 	case intelligentstore.FileTypeRegular:
@@ -88,22 +91,22 @@ func (exporter *LocalExporter) writeFileToFs(fileDescriptor intelligentstore.Fil
 		var reader io.ReadCloser
 		reader, err = exporter.Store.GetGzippedObjectByHash(regularFileDescriptor.Hash)
 		if nil != err {
-			return fmt.Errorf("couldn't get the file at '%s'. Error: %s", regularFileDescriptor.RelativePath, err)
+			return errorsx.Wrap(err)
 		}
 		defer reader.Close()
 
 		err = exporter.createNewFileAndCopy(reader, filePath)
 		if err != nil {
-			return err
+			return errorsx.Wrap(err)
 		}
 	case intelligentstore.FileTypeSymlink:
 		symlinkFileDescriptor := fileDescriptor.(*intelligentstore.SymlinkFileDescriptor)
 		err = exporter.fs.Symlink(symlinkFileDescriptor.Dest, filePath)
 		if nil != err {
-			return fmt.Errorf("couldn't create the symlink at '%s'. Error: %s", filePath, err)
+			return errorsx.Wrap(err, "filePath", filePath)
 		}
 	default:
-		return fmt.Errorf("file type %d (%s) unsupported when writing file to disk. File descriptor: '%v'",
+		return errorsx.Errorf("file type %d (%s) unsupported when writing file to disk. File descriptor: '%v'",
 			fileDescriptor.GetFileInfo().Type,
 			fileDescriptor.GetFileInfo().Type,
 			fileDescriptor)
@@ -111,7 +114,7 @@ func (exporter *LocalExporter) writeFileToFs(fileDescriptor intelligentstore.Fil
 
 	err = exporter.fs.Chmod(filePath, fileDescriptor.GetFileInfo().FileMode.Perm())
 	if nil != err {
-		return fmt.Errorf("couldn't chmod exported file at '%s'. Error: %s", filePath, err)
+		return errorsx.Wrap(err, "filePath", filePath, "perm", fileDescriptor.GetFileInfo().FileMode.Perm())
 	}
 	return nil
 }

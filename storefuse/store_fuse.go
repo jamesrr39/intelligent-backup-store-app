@@ -5,6 +5,7 @@ import (
 
 	"bazil.org/fuse"
 	"bazil.org/fuse/fs"
+	"github.com/jamesrr39/goutil/errorsx"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
 )
 
@@ -16,10 +17,10 @@ func NewStoreFUSE(dal *dal.IntelligentStoreDAL) *StoreFUSE {
 	return &StoreFUSE{dal}
 }
 
-func (f *StoreFUSE) Mount(onPath string) error {
+func (f *StoreFUSE) Mount(onPath string) errorsx.Error {
 	conn, err := fuse.Mount(onPath)
 	if nil != err {
-		return err
+		return errorsx.Wrap(err)
 	}
 	defer func() {
 		closeErr := conn.Close()
@@ -34,12 +35,12 @@ func (f *StoreFUSE) Mount(onPath string) error {
 
 	err = fs.Serve(conn, newStoreFS(f.dal))
 	if nil != err {
-		return err
+		return errorsx.Wrap(err)
 	}
 
 	<-conn.Ready
 	if err := conn.MountError; err != nil {
-		return err
+		return errorsx.Wrap(err)
 	}
 	return nil
 }

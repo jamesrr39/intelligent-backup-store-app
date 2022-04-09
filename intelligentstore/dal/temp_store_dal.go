@@ -23,19 +23,19 @@ type TempStoreDAL struct {
 	fs       gofs.Fs
 }
 
-// TODO is this used any more
-func NewTempStoreDAL(
-	storeBasePath string, fs gofs.Fs) (*TempStoreDAL, error) {
+func NewTempStoreDAL(storeBasePath string, fs gofs.Fs) (*TempStoreDAL, errorsx.Error) {
+	var err error
+
 	tempStoreDAL := &TempStoreDAL{0, filepath.Join(storeBasePath, BackupDataFolderName, "tmp"), fs}
 
-	err := tempStoreDAL.Clear()
+	err = tempStoreDAL.Clear()
 	if err != nil {
-		return nil, err
+		return nil, errorsx.Wrap(err)
 	}
 
 	err = fs.Mkdir(tempStoreDAL.basePath, 0700)
 	if err != nil {
-		return nil, err
+		return nil, errorsx.Wrap(err)
 	}
 
 	return tempStoreDAL, nil
@@ -64,6 +64,18 @@ func (dal *TempStoreDAL) CreateTempFileFromReader(reader io.Reader, hash intelli
 	return &TempFile{filePath, hash}, nil
 }
 
-func (dal *TempStoreDAL) Clear() error {
-	return dal.fs.RemoveAll(dal.basePath)
+func (dal *TempStoreDAL) CreateTempRevisionManifestFile() (gofs.File, string, errorsx.Error) {
+	newID := atomic.AddUint64(&dal.latestID, 1)
+	dal.latestID = newID
+	filePath := filepath.Join(dal.basePath, strconv.FormatUint(newID, 10))
+	file, err := dal.fs.Create(filePath)
+	if err != nil {
+		return nil, "", errorsx.Wrap(err)
+	}
+
+	return file, filePath, nil
+}
+
+func (dal *TempStoreDAL) Clear() errorsx.Error {
+	return errorsx.Wrap(dal.fs.RemoveAll(dal.basePath))
 }

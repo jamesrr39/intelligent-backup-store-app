@@ -17,6 +17,8 @@ import (
 )
 
 func Test_Export(t *testing.T) {
+	var err error
+
 	testStore := dal.NewMockStore(t, dal.MockNowProvider, mockfs.NewMockFs())
 
 	bucket := storetest.CreateBucket(t, testStore.Store, "docs")
@@ -38,7 +40,7 @@ func Test_Export(t *testing.T) {
 		fs:              testStore.Fs,
 	}
 
-	err := exporter.Export()
+	err = exporter.Export()
 	require.Nil(t, err)
 
 	contents, err := testStore.Fs.ReadFile(filepath.Join(exporter.ExportDir, FilesExportSubDir, "a.txt"))
@@ -79,6 +81,8 @@ func Test_Export(t *testing.T) {
 }
 
 func Test_writeFileToFs(t *testing.T) {
+	var err error
+
 	testStore := dal.NewMockStore(t, dal.MockNowProvider, mockfs.NewMockFs())
 
 	exporter := &LocalExporter{
@@ -98,7 +102,7 @@ func Test_writeFileToFs(t *testing.T) {
 		secondRegularFile,
 	})
 
-	err := exporter.writeFileToFs(regularFile.Descriptor)
+	err = exporter.writeFileToFs(regularFile.Descriptor)
 	require.Nil(t, err)
 
 	filePath := filepath.Join(exporter.ExportDir, FilesExportSubDir, string(regularFile.Descriptor.RelativePath))
