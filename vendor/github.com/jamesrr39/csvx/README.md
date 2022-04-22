@@ -18,7 +18,7 @@ type targetType struct {
 // decoding
 
 fields := []string{"name", "age"}
-decoder := NewDecoderWithDefaultOpts(fields)
+decoder := NewDecoder(fields)
 
 target := new(targetType)
 err := decoder.Decode([]string{"John Smith","40"}, target)
@@ -29,7 +29,7 @@ if err != nil {
 fmt.Printf("result: %#v\n", target)
 
 // encoding
-encoder := NewEncoderWithDefaultOpts(fields)
+encoder := NewEncoder(fields)
 records, err := encoder.Encode(target)
 if err != nil {
     panic(err)

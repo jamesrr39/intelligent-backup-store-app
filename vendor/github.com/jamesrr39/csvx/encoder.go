@@ -7,46 +7,53 @@ import (
 )
 
 type Encoder struct {
-	Fields                      []string
+	FieldsMap                   map[string]int
 	FloatFmt                    byte
 	NullText                    string
 	BoolTrueText, BoolFalseText string
 }
 
-func NewEncoderWithDefaultOpts(fields []string) *Encoder {
-	return &Encoder{fields, 'f', "null", "true", "false"}
+func NewEncoder(fields []string) *Encoder {
+	fieldsMap := make(map[string]int)
+	for i, field := range fields {
+		fieldsMap[field] = i
+	}
+
+	return &Encoder{fieldsMap, 'f', "null", "true", "false"}
 }
 
 func (e *Encoder) Encode(target interface{}) ([]string, error) {
-	var err error
+	fieldsMapLen := len(e.FieldsMap)
 
-	if len(e.Fields) == 0 {
+	if fieldsMapLen == 0 {
 		return nil, fmt.Errorf("no fields selected for encoding")
 	}
 
-	rv := reflect.ValueOf(target)
+	records := make([]string, fieldsMapLen)
 
-	elem := reflect.TypeOf(target)
+	onFieldFound := func(fieldCsvTag string, field reflect.Value) error {
+		var err error
 
-	fieldIndexByName := buildFieldIndexByName(rv, elem)
-
-	values := make([]string, len(fieldIndexByName))
-
-	for i, fieldName := range e.Fields {
-		fieldIndex, ok := fieldIndexByName[fieldName]
+		idx, ok := e.FieldsMap[fieldCsvTag]
 		if !ok {
-			return nil, fmt.Errorf("csv: could not find field %q in struct. Make sure the tag 'csv' is set.", fieldName)
+			// field not requested for scanning
+			return nil
 		}
 
-		field := getUnderlyingObject(rv).Field(fieldIndex)
-
-		values[i], err = e.toString(field)
+		records[idx], err = e.toString(field)
 		if err != nil {
-			return nil, fmt.Errorf("csvx: error getting string from field. Field: %v, field index: %d. Error: %s", field, i, err)
+			return fmt.Errorf("csvx: error getting string from field. Field: %q, field index: %d. Error: %s", fieldCsvTag, idx, err)
 		}
+
+		return nil
 	}
 
-	return values, nil
+	err := traverseFields(target, false, onFieldFound)
+	if err != nil {
+		return nil, err
+	}
+
+	return records, nil
 }
 
 func (e *Encoder) toString(field reflect.Value) (string, error) {

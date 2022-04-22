@@ -8,14 +8,19 @@ import (
 )
 
 type Decoder struct {
-	Fields                      []string
+	FieldsMap                   map[string]int
 	NullText                    string
 	BoolTrueText, BoolFalseText []string
 }
 
-func NewDecoderWithDefaultOpts(fields []string) *Decoder {
+func NewDecoder(fields []string) *Decoder {
+	fieldsMap := make(map[string]int)
+	for i, field := range fields {
+		fieldsMap[field] = i
+	}
+
 	return &Decoder{
-		Fields:        fields,
+		FieldsMap:     fieldsMap,
 		NullText:      "null",
 		BoolTrueText:  []string{"true", "yes", "1", "1.0"},
 		BoolFalseText: []string{"false", "no", "0", "0.0"},
@@ -26,36 +31,43 @@ func (d *Decoder) Decode(values []string, target interface{}) error {
 	// check target is a non-nil pointer
 	rv := reflect.ValueOf(target)
 	if rv.Kind() != reflect.Pointer || rv.IsNil() {
-		return &InvalidUnmarshalError{reflect.TypeOf(target)}
+		return fmt.Errorf("csvx: unmarshal target must be a non-nil pointer, but got %s", rv.Type())
 	}
 
-	if len(values) != len(d.Fields) {
-		return fmt.Errorf("csvx: amount of fields (%d) does not match amount of values passed in (%d)", len(d.Fields), len(values))
+	if len(values) != len(d.FieldsMap) {
+		return fmt.Errorf("csvx: amount of fields (%d) does not match amount of values passed in (%d)", len(d.FieldsMap), len(values))
 	}
 
-	elem := reflect.TypeOf(target).Elem()
-	fieldIndexByName := buildFieldIndexByName(rv, elem)
+	onFieldFound := func(fieldCsvTag string, field reflect.Value) error {
+		isPtr := field.Kind() == reflect.Pointer
 
-	for i, fieldName := range d.Fields {
-		fieldIndex, ok := fieldIndexByName[fieldName]
+		fieldIdx, ok := d.FieldsMap[fieldCsvTag]
 		if !ok {
-			return fmt.Errorf("csv: could not find field %q in struct. Make sure the tag 'csv' is set.", fieldName)
+			return fmt.Errorf("csvx: field not found: %q", fieldCsvTag)
 		}
 
-		field := rv.Elem().Field(fieldIndex)
+		valueStr := values[fieldIdx]
 
-		valueStr := values[i]
-
-		err := d.setField(field, field.Kind(), valueStr, false)
+		err := d.setField(field, field.Kind(), valueStr, isPtr)
 		if err != nil {
-			return fmt.Errorf("csvx: error setting field. Value: %q, field index: %d. Error: %s", valueStr, i, err)
+			return err
 		}
+
+		return nil
+	}
+
+	err := traverseFields(target, true, onFieldFound)
+	if err != nil {
+		return err
 	}
 
 	return nil
 }
 
 func (d *Decoder) setField(field reflect.Value, fieldKind reflect.Kind, valueStr string, isPtr bool) error {
+	if !field.CanSet() {
+		return fmt.Errorf("cannot set field: %q", field.Type().Name())
+	}
 	switch fieldKind {
 	case reflect.String:
 		if isPtr {
@@ -75,7 +87,12 @@ func (d *Decoder) setField(field reflect.Value, fieldKind reflect.Kind, valueStr
 			field.SetInt(int64(val))
 		}
 	case reflect.Int64, reflect.Int32, reflect.Int16, reflect.Int8:
-		val, err := strconv.ParseInt(valueStr, 10, bitSizeFromKind(fieldKind))
+		bitSize, err := bitSizeFromKind(fieldKind)
+		if err != nil {
+			return err
+		}
+
+		val, err := strconv.ParseInt(valueStr, 10, bitSize)
 		if err != nil {
 			return err
 		}
@@ -86,7 +103,12 @@ func (d *Decoder) setField(field reflect.Value, fieldKind reflect.Kind, valueStr
 			field.SetInt(int64(val))
 		}
 	case reflect.Uint64, reflect.Uint32, reflect.Uint16, reflect.Uint8:
-		val, err := strconv.ParseUint(valueStr, 10, bitSizeFromKind(fieldKind))
+		bitSize, err := bitSizeFromKind(fieldKind)
+		if err != nil {
+			return err
+		}
+
+		val, err := strconv.ParseUint(valueStr, 10, bitSize)
 		if err != nil {
 			return err
 		}
@@ -97,7 +119,12 @@ func (d *Decoder) setField(field reflect.Value, fieldKind reflect.Kind, valueStr
 			field.SetUint(val)
 		}
 	case reflect.Float64, reflect.Float32:
-		val, err := strconv.ParseFloat(valueStr, bitSizeFromKind(fieldKind))
+		bitSize, err := bitSizeFromKind(fieldKind)
+		if err != nil {
+			return err
+		}
+
+		val, err := strconv.ParseFloat(valueStr, bitSize)
 		if err != nil {
 			return err
 		}
@@ -123,7 +150,10 @@ func (d *Decoder) setField(field reflect.Value, fieldKind reflect.Kind, valueStr
 			return nil
 		}
 
-		d.setField(field, field.Type().Elem().Kind(), valueStr, true)
+		err := d.setField(field, field.Type().Elem().Kind(), valueStr, true)
+		if err != nil {
+			return err
+		}
 	default:
 		return fmt.Errorf("field type not implemented: %s", fieldKind)
 	}
@@ -143,19 +173,19 @@ func (d *Decoder) boolValueFromStr(valueStr string) (bool, error) {
 	return false, fmt.Errorf("couldn't understand value that should be a boolean field")
 }
 
-func bitSizeFromKind(kind reflect.Kind) int {
+func bitSizeFromKind(kind reflect.Kind) (int, error) {
 	switch kind {
 	case reflect.Int64, reflect.Float64:
-		return 64
+		return 64, nil
 	case reflect.Int32, reflect.Float32:
-		return 32
+		return 32, nil
 	case reflect.Int16:
-		return 16
+		return 16, nil
 	case reflect.Int8:
-		return 8
+		return 8, nil
 	}
 
-	panic(fmt.Sprintf("kind not handled: %s", kind))
+	return 0, fmt.Errorf("kind not handled: %s", kind)
 }
 
 func stringSliceContains(searchingIn []string, lookingFor string) bool {
