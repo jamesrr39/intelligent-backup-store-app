@@ -33,7 +33,7 @@ github.com/gobwas/glob/util/strings
 # github.com/golang/protobuf v1.5.2
 ## explicit; go 1.9
 github.com/golang/protobuf/proto
-# github.com/jamesrr39/csvx v0.0.0-20220422061602-39e7a180e461
+# github.com/jamesrr39/csvx v0.0.0-20220423061239-4dc71796879f
 ## explicit; go 1.18
 github.com/jamesrr39/csvx
 # github.com/jamesrr39/go-snapshot-testing v0.0.0-20210417135521-a5ca70c087bc

@@ -131,16 +131,16 @@ func setupBackupRemoteCommand() {
 
 func setupBackupIntoCommand() {
 	cmd := app.Command("backup-to", "backup a new version of the folder into the store")
-	backupBucketName := cmd.Arg("bucket name", "name of the bucket to back up into").Required().String()
-	backupFromLocation := cmd.Arg("backup from location", "location to backup from").Default(".").String()
-	backupDryRun := cmd.Flag("dry-run", "Don't actually copy files or create a revision").Short('n').Default("False").Bool()
+	bucketName := cmd.Arg("bucket name", "name of the bucket to back up into").Required().String()
+	fromLocation := cmd.Arg("backup from location", "location to backup from").Default(".").String()
+	dryRun := cmd.Flag("dry-run", "don't actually copy files or create a revision").Short('n').Default("False").Bool()
 	profileFilePath := cmd.Flag("profile", "file to write the profile to").String()
-	backupIncludesMatcherLocation := cmd.Flag("include", "path to a file with glob-style patterns to include files").Default("").String()
-	backupExcludesMatcherLocation := cmd.Flag("exclude", "path to a file with glob-style patterns to exclude files").Default("").String()
+	includesMatcherLocation := cmd.Flag("include", "path to a file with glob-style patterns to include files").Default("").String()
+	excludesMatcherLocation := cmd.Flag("exclude", "path to a file with glob-style patterns to exclude files").Default("").String()
 	runAction(cmd, func() errorsx.Error {
 		excludeMatcher := &patternmatcher.PatternMatcher{}
-		if *backupExcludesMatcherLocation != "" {
-			excludeFile, err := os.Open(*backupExcludesMatcherLocation)
+		if *excludesMatcherLocation != "" {
+			excludeFile, err := os.Open(*excludesMatcherLocation)
 			if nil != err {
 				return errorsx.Wrap(err)
 			}
@@ -153,8 +153,8 @@ func setupBackupIntoCommand() {
 		}
 
 		var includeMatcher patternmatcher.Matcher
-		if *backupIncludesMatcherLocation != "" {
-			includeFile, err := os.Open(*backupIncludesMatcherLocation)
+		if *includesMatcherLocation != "" {
+			includeFile, err := os.Open(*includesMatcherLocation)
 			if nil != err {
 				return errorsx.Wrap(err)
 			}
@@ -180,13 +180,13 @@ func setupBackupIntoCommand() {
 
 		var uploaderClient uploaders.Uploader
 		if strings.HasPrefix(*storeLocation, "http://") || strings.HasPrefix(*storeLocation, "https://") {
-			uploaderClient = webuploadclient.NewWebUploadClient(*storeLocation, *backupBucketName, *backupFromLocation, includeMatcher, excludeMatcher, *backupDryRun)
+			uploaderClient = webuploadclient.NewWebUploadClient(*storeLocation, *bucketName, *fromLocation, includeMatcher, excludeMatcher, *dryRun)
 		} else {
 			backupStore, err := dal.NewIntelligentStoreConnToExisting(*storeLocation)
 			if nil != err {
 				return err
 			}
-			uploaderClient = localupload.NewLocalUploader(backupStore, *backupBucketName, *backupFromLocation, includeMatcher, excludeMatcher, *backupDryRun)
+			uploaderClient = localupload.NewLocalUploader(backupStore, *bucketName, *fromLocation, includeMatcher, excludeMatcher, *dryRun)
 		}
 
 		return uploaderClient.UploadToStore()

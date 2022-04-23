@@ -1,6 +1,7 @@
 package csvx
 
 import (
+	"encoding"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -81,8 +82,21 @@ func (e *Encoder) toString(field reflect.Value) (string, error) {
 			return e.BoolTrueText, nil
 		}
 		return e.BoolFalseText, nil
+	case reflect.Struct:
+		val := field.Interface()
+		v, ok := val.(encoding.TextMarshaler)
+		if !ok {
+			return "", fmt.Errorf("encoding not implemented for kind %q (encoding.TextMarshaler not implemented, implement it to marshal this field)", kind)
+		}
+
+		text, err := v.MarshalText()
+		if err != nil {
+			return "", err
+		}
+
+		return string(text), nil
 	default:
-		return "", fmt.Errorf("toString not implemented for kind %q", kind)
+		return "", fmt.Errorf("encoding not implemented for kind %q", kind)
 	}
 
 }

@@ -17,16 +17,15 @@ type revisionCSVWriter struct{}
 
 func (w *revisionCSVWriter) Write(file io.Writer, files []intelligentstore.FileDescriptor) errorsx.Error {
 	csvWriter := csv.NewWriter(file)
-	csvWriter.Comma = '|'
 	err := csvWriter.Write(getCSVHeaders())
 	if err != nil {
 		return errorsx.Wrap(err)
 	}
 
-	regularFileEncoder := csvx.NewEncoderWithDefaultOpts([]string{"path", "type", "modTime", "size", "fileMode", "hash"})
-	symlinkEncoder := csvx.NewEncoderWithDefaultOpts([]string{"path", "type", "modTime", "size", "fileMode", "target"})
-	dirEncoder := csvx.NewEncoderWithDefaultOpts([]string{"path", "type", "modTime", "size", "fileMode"})
-
+	regularFileEncoder := csvx.NewEncoder([]string{"path", "type", "modTime", "size", "fileMode", "hash"})
+	symlinkEncoder := csvx.NewEncoder([]string{"path", "type", "modTime", "size", "fileMode", "target"})
+	dirEncoder := csvx.NewEncoder([]string{"path", "type", "modTime", "size", "fileMode"})
+	// panic("not implemented properly and not synchronized. See data/bad_csv.csv")
 	for _, file := range files {
 		var fields []string
 

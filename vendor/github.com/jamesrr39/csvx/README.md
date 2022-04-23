@@ -38,7 +38,7 @@ if err != nil {
 fmt.Printf("records: %#v\n", records)
 ```
 
-See also the example on [pkg.go.dev](https://pkg.go.dev/github.com/jamesrr39/csvx#example-package)
+See also the example on [pkg.go.dev](https://pkg.go.dev/github.com/jamesrr39/csvx#example-package) and the tests in this package for more examples.
 
 ## Implemented Types
 
@@ -55,11 +55,15 @@ See also the example on [pkg.go.dev](https://pkg.go.dev/github.com/jamesrr39/csv
 - [x] uint8
 - [x] float64
 - [x] float32
-- [x] bool (`true`, `yes`, `1`, `1.0` = true, `false`, `no`, `0`, `0.0` = false, other values result in an error)
-
+- [x] bool (`true`, `yes`, `1`, `1.0` = true, `false`, `no`, `0`, `0.0` = false, other values result in an error, customisable in the `Encoder` and `Decoder` fields)
+- [x] struct with encoding.TextUnmarshaler and encoding.TextMarshaler implemented on them
 - [x] Pointer types to above underlying types, e.g. `*string` (empty string and `null` result in `nil` being set on the Go struct)
 - [x] Custom non-struct types, e.g. `type Name string`, so long as the underlying type is in the list above.
 
 ## Performance
 
 The struct scanner uses `reflect` quite heavily, so this library will not be as fast as writing a specific parser for the struct. However, for the vast majority of cases, the performance hit will be acceptable and the development speed increase and simple client code will be worth it!
+
+## Auditability/readability
+
+This aims to be a simple, easy-to-audit library with stdlib-only dependencies (`github.com/stretchr/testify` is also used, but only for test files).

@@ -1,6 +1,7 @@
 package csvx
 
 import (
+	"encoding"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -154,6 +155,36 @@ func (d *Decoder) setField(field reflect.Value, fieldKind reflect.Kind, valueStr
 		if err != nil {
 			return err
 		}
+	case reflect.Struct:
+		val := field.Interface()
+
+		var isUsingPtrType bool
+		v, ok := val.(encoding.TextUnmarshaler)
+		if !ok {
+			// see if encoding.TextUnmarshaler is implemented on the pointer type of this struct. If it is, use that.
+			valPtr := reflect.New(reflect.Indirect(reflect.ValueOf(val)).Type()).Interface()
+			v, ok = valPtr.(encoding.TextUnmarshaler)
+			if !ok {
+				return fmt.Errorf("decoding not implemented for kind %q (type: %s). Encoding.TextUnmarshaler not implemented, implement it to unmarshal this field", fieldKind, field.Type().String())
+			}
+
+			isUsingPtrType = true
+		}
+
+		err := v.UnmarshalText([]byte(valueStr))
+		if err != nil {
+			return err
+		}
+
+		// get the reflect.Value to set on the field. If we have used a pointer type, extract the plain struct type from that.
+		objToSet := reflect.ValueOf(v)
+		if isUsingPtrType {
+			objToSet = objToSet.Elem()
+		}
+
+		field.Set(objToSet)
+
+		return nil
 	default:
 		return fmt.Errorf("field type not implemented: %s", fieldKind)
 	}

@@ -19,7 +19,7 @@ type revisionCSVReader struct {
 }
 
 func getCSVHeaders() []string {
-	return []string{"path", "type", "modTime", "size", "fileMode", "contents_hash_or_symlink_target"}
+	return []string{"path", "type", "modTime", "size", "fileMode_int", "contents_hash_or_symlink_target"}
 }
 
 func (r *revisionCSVReader) ReadDir(relativePath intelligentstore.RelativePath) ([]intelligentstore.FileDescriptor, error) {
@@ -35,7 +35,6 @@ func (r *revisionCSVReader) Iterator() (Iterator, errorsx.Error) {
 	}
 
 	csvReader := csv.NewReader(r.revisionFile)
-	csvReader.Comma = '|'
 
 	// header row
 	_, err = csvReader.Read()
@@ -89,7 +88,7 @@ func (c csvIteratorType) Scan() (intelligentstore.FileDescriptor, errorsx.Error)
 	case intelligentstore.FileTypeSymlink:
 		desc = new(intelligentstore.SymlinkFileDescriptor)
 	default:
-		panic("not implemented")
+		return nil, errorsx.Errorf("type not implemented: %d", fileTypeID)
 	}
 	err = c.decoder.Decode(c.nextRow, desc)
 	if err != nil {
