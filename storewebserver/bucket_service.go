@@ -155,7 +155,7 @@ func (s *BucketService) getRevision(bucketName, revisionTsString string) (*intel
 
 	bucket, err := s.store.BucketDAL.GetBucketByName(bucketName)
 	if nil != err {
-		if dal.ErrBucketDoesNotExist == err {
+		if dal.ErrBucketDoesNotExist == errorsx.Cause(err) {
 			return nil, NewHTTPError(fmt.Errorf("couldn't find bucket '%s'. Error: %s", bucketName, err), 404)
 		}
 		return nil, NewHTTPError(err, 500)
@@ -176,7 +176,7 @@ func (s *BucketService) getRevision(bucketName, revisionTsString string) (*intel
 		revision, err = s.store.RevisionDAL.GetRevision(bucket, intelligentstore.RevisionVersion(revisionTimestamp))
 	}
 	if nil != err {
-		if err == dal.ErrRevisionDoesNotExist {
+		if errorsx.Cause(err) == dal.ErrRevisionDoesNotExist {
 			return nil, NewHTTPError(err, 404)
 		}
 

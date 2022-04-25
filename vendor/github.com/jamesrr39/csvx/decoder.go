@@ -8,10 +8,13 @@ import (
 	"strings"
 )
 
+type CustomDecoderFunc func(val string) (interface{}, error)
+
 type Decoder struct {
 	FieldsMap                   map[string]int
 	NullText                    string
 	BoolTrueText, BoolFalseText []string
+	CustomDecoderMap            map[string]CustomDecoderFunc
 }
 
 func NewDecoder(fields []string) *Decoder {
@@ -49,7 +52,7 @@ func (d *Decoder) Decode(values []string, target interface{}) error {
 
 		valueStr := values[fieldIdx]
 
-		err := d.setField(field, field.Kind(), valueStr, isPtr)
+		err := d.setField(fieldCsvTag, field, field.Kind(), valueStr, isPtr)
 		if err != nil {
 			return err
 		}
@@ -65,10 +68,25 @@ func (d *Decoder) Decode(values []string, target interface{}) error {
 	return nil
 }
 
-func (d *Decoder) setField(field reflect.Value, fieldKind reflect.Kind, valueStr string, isPtr bool) error {
+func (d *Decoder) setField(fieldCsvTag string, field reflect.Value, fieldKind reflect.Kind, valueStr string, isPtr bool) error {
 	if !field.CanSet() {
 		return fmt.Errorf("cannot set field: %q", field.Type().Name())
 	}
+
+	if d.CustomDecoderMap != nil {
+		fn, ok := d.CustomDecoderMap[fieldCsvTag]
+		if ok {
+			val, err := fn(valueStr)
+			if err != nil {
+				return err
+			}
+
+			field.Set(reflect.ValueOf(val))
+
+			return nil
+		}
+	}
+
 	switch fieldKind {
 	case reflect.String:
 		if isPtr {
@@ -151,7 +169,7 @@ func (d *Decoder) setField(field reflect.Value, fieldKind reflect.Kind, valueStr
 			return nil
 		}
 
-		err := d.setField(field, field.Type().Elem().Kind(), valueStr, true)
+		err := d.setField(fieldCsvTag, field, field.Type().Elem().Kind(), valueStr, true)
 		if err != nil {
 			return err
 		}
@@ -206,13 +224,13 @@ func (d *Decoder) boolValueFromStr(valueStr string) (bool, error) {
 
 func bitSizeFromKind(kind reflect.Kind) (int, error) {
 	switch kind {
-	case reflect.Int64, reflect.Float64:
+	case reflect.Int64, reflect.Uint64, reflect.Float64:
 		return 64, nil
-	case reflect.Int32, reflect.Float32:
+	case reflect.Int32, reflect.Uint32, reflect.Float32:
 		return 32, nil
-	case reflect.Int16:
+	case reflect.Int16, reflect.Uint16:
 		return 16, nil
-	case reflect.Int8:
+	case reflect.Int8, reflect.Uint8:
 		return 8, nil
 	}
 

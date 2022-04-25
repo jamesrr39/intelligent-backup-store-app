@@ -115,7 +115,9 @@ var ErrRevisionDoesNotExist = errors.New("revision doesn't exist")
 
 // GetRevision gets a specific version of this bucket
 func (dal *BucketDAL) GetRevision(bucket *intelligentstore.Bucket, revisionTimeStamp intelligentstore.RevisionVersion) (*intelligentstore.Revision, errorsx.Error) {
-	_, err := dal.IntelligentStoreDAL.fs.Stat(dal.RevisionDAL.getRevisionJSONFilePath(bucket, revisionTimeStamp))
+	revision := intelligentstore.NewRevision(bucket, revisionTimeStamp)
+
+	_, err := dal.RevisionDAL.getRevisionReader(revision)
 	if nil != err {
 		if os.IsNotExist(err) {
 			return nil, errorsx.Wrap(ErrRevisionDoesNotExist)
@@ -123,7 +125,7 @@ func (dal *BucketDAL) GetRevision(bucket *intelligentstore.Bucket, revisionTimeS
 		return nil, errorsx.Wrap(err, "revision", revisionTimeStamp)
 	}
 
-	return intelligentstore.NewRevision(bucket, intelligentstore.RevisionVersion(revisionTimeStamp)), nil
+	return revision, nil
 }
 
 func (s *BucketDAL) getBucketsInformationPath() string {

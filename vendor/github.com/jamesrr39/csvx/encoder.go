@@ -7,11 +7,15 @@ import (
 	"strconv"
 )
 
+type CustomEncoderFunc func(val interface{}) (string, error)
+
 type Encoder struct {
 	FieldsMap                   map[string]int
 	FloatFmt                    byte
 	NullText                    string
 	BoolTrueText, BoolFalseText string
+	// map[csv tag name]encoder func
+	CustomEncoderMap map[string]CustomEncoderFunc
 }
 
 func NewEncoder(fields []string) *Encoder {
@@ -20,7 +24,7 @@ func NewEncoder(fields []string) *Encoder {
 		fieldsMap[field] = i
 	}
 
-	return &Encoder{fieldsMap, 'f', "null", "true", "false"}
+	return &Encoder{fieldsMap, 'f', "null", "true", "false", nil}
 }
 
 func (e *Encoder) Encode(target interface{}) ([]string, error) {
@@ -41,7 +45,7 @@ func (e *Encoder) Encode(target interface{}) ([]string, error) {
 			return nil
 		}
 
-		records[idx], err = e.toString(field)
+		records[idx], err = e.toString(fieldCsvTag, field)
 		if err != nil {
 			return fmt.Errorf("csvx: error getting string from field. Field: %q, field index: %d. Error: %s", fieldCsvTag, idx, err)
 		}
@@ -57,14 +61,21 @@ func (e *Encoder) Encode(target interface{}) ([]string, error) {
 	return records, nil
 }
 
-func (e *Encoder) toString(field reflect.Value) (string, error) {
+func (e *Encoder) toString(fieldCsvTag string, field reflect.Value) (string, error) {
 	kind := field.Kind()
 	if kind == reflect.Pointer {
 		if field.IsNil() {
 			return e.NullText, nil
 		}
 
-		return e.toString(field.Elem())
+		return e.toString(fieldCsvTag, field.Elem())
+	}
+
+	if e.CustomEncoderMap != nil {
+		customFunc, ok := e.CustomEncoderMap[fieldCsvTag]
+		if ok {
+			return customFunc(field.Interface())
+		}
 	}
 
 	switch kind {

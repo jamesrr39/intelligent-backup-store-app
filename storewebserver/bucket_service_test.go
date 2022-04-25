@@ -418,7 +418,6 @@ func Test_handleGetFileContents(t *testing.T) {
 	bucket := mockStore.CreateBucket(t, "docs")
 
 	bucketService := NewBucketService(logger, mockStore.Store)
-
 	fileContents := "my file contents"
 	fileName := "folder1/file a.txt"
 	descriptor, err := intelligentstore.NewRegularFileDescriptorFromReader(
@@ -428,78 +427,84 @@ func Test_handleGetFileContents(t *testing.T) {
 		bytes.NewBuffer([]byte(fileContents)))
 	require.Nil(t, err)
 
-	rBucketNotExist := &http.Request{
-		Method: "GET",
-		URL: &url.URL{
-			Path:     "/bad-bucket/1234/file",
-			RawQuery: fmt.Sprintf("relativePath=%s", fileName),
-		},
-	}
-	wBucketNotExist := httptest.NewRecorder()
+	t.Run("bucket doesn't exist", func(t *testing.T) {
+		rBucketNotExist := &http.Request{
+			Method: "GET",
+			URL: &url.URL{
+				Path:     "/bad-bucket/1234/file",
+				RawQuery: fmt.Sprintf("relativePath=%s", fileName),
+			},
+		}
+		wBucketNotExist := httptest.NewRecorder()
+		bucketService.ServeHTTP(wBucketNotExist, rBucketNotExist)
+		assert.Equal(t, 404, wBucketNotExist.Code)
+	})
 
-	bucketService.ServeHTTP(wBucketNotExist, rBucketNotExist)
-	assert.Equal(t, 404, wBucketNotExist.Code)
+	t.Run("revision doesn't exist", func(t *testing.T) {
+		rRevisionNotExist := &http.Request{
+			Method: "GET",
+			URL: &url.URL{
+				Path:     "/docs/1234/file",
+				RawQuery: fmt.Sprintf("relativePath=%s", fileName),
+			},
+		}
+		wRevisionNotExist := httptest.NewRecorder()
 
-	rRevisionNotExist := &http.Request{
-		Method: "GET",
-		URL: &url.URL{
-			Path:     "/docs/1234/file",
-			RawQuery: fmt.Sprintf("relativePath=%s", fileName),
-		},
-	}
-	wRevisionNotExist := httptest.NewRecorder()
+		bucketService.ServeHTTP(wRevisionNotExist, rRevisionNotExist)
+		assert.Equal(t, 404, wRevisionNotExist.Code)
+	})
 
-	bucketService.ServeHTTP(wRevisionNotExist, rRevisionNotExist)
-	assert.Equal(t, 404, wRevisionNotExist.Code)
+	t.Run("create revision, and get file from it", func(t *testing.T) {
 
-	fileInfos := []*intelligentstore.FileInfo{descriptor.FileInfo}
+		fileInfos := []*intelligentstore.FileInfo{descriptor.FileInfo}
 
-	tx, err := mockStore.Store.TransactionDAL.CreateTransaction(bucket, fileInfos)
-	require.Nil(t, err)
+		tx, err := mockStore.Store.TransactionDAL.CreateTransaction(bucket, fileInfos)
+		require.Nil(t, err)
 
-	relativePathsWithHashes := []*intelligentstore.RelativePathWithHash{
-		&intelligentstore.RelativePathWithHash{
-			RelativePath: descriptor.RelativePath,
-			Hash:         descriptor.Hash,
-		},
-	}
+		relativePathsWithHashes := []*intelligentstore.RelativePathWithHash{
+			{
+				RelativePath: descriptor.RelativePath,
+				Hash:         descriptor.Hash,
+			},
+		}
 
-	_, err = tx.ProcessUploadHashesAndGetRequiredHashes(relativePathsWithHashes)
-	require.Nil(t, err)
+		_, err = tx.ProcessUploadHashesAndGetRequiredHashes(relativePathsWithHashes)
+		require.Nil(t, err)
 
-	err = mockStore.Store.TransactionDAL.BackupFile(tx, bytes.NewReader([]byte(fileContents)))
-	require.Nil(t, err)
+		err = mockStore.Store.TransactionDAL.BackupFile(tx, bytes.NewReader([]byte(fileContents)))
+		require.Nil(t, err)
 
-	err = mockStore.Store.TransactionDAL.Commit(tx)
-	require.Nil(t, err)
+		err = mockStore.Store.TransactionDAL.Commit(tx)
+		require.Nil(t, err)
 
-	file, err := mockStore.Store.GetGzippedObjectByHash(descriptor.Hash)
-	require.Nil(t, err)
-	defer file.Close()
+		file, err := mockStore.Store.GetGzippedObjectByHash(descriptor.Hash)
+		require.Nil(t, err)
+		defer file.Close()
 
-	rRevisionExistsButFileDoesNotExist := &http.Request{
-		Method: http.MethodGet,
-		URL: &url.URL{
-			Path:     fmt.Sprintf("/docs/%d/file", tx.Revision.VersionTimestamp),
-			RawQuery: fmt.Sprintf("relativePath=notexist_%s", fileName),
-		},
-	}
-	wRevisionExistsButFileDoesNotExist := httptest.NewRecorder()
+		rRevisionExistsButFileDoesNotExist := &http.Request{
+			Method: http.MethodGet,
+			URL: &url.URL{
+				Path:     fmt.Sprintf("/docs/%d/file", tx.Revision.VersionTimestamp),
+				RawQuery: fmt.Sprintf("relativePath=notexist_%s", fileName),
+			},
+		}
+		wRevisionExistsButFileDoesNotExist := httptest.NewRecorder()
 
-	bucketService.ServeHTTP(wRevisionExistsButFileDoesNotExist, rRevisionExistsButFileDoesNotExist)
-	assert.Equal(t, 404, wRevisionExistsButFileDoesNotExist.Code)
+		bucketService.ServeHTTP(wRevisionExistsButFileDoesNotExist, rRevisionExistsButFileDoesNotExist)
+		assert.Equal(t, 404, wRevisionExistsButFileDoesNotExist.Code)
 
-	rExists := &http.Request{
-		Method: http.MethodGet,
-		URL: &url.URL{
-			Path:     fmt.Sprintf("/docs/%d/file", tx.Revision.VersionTimestamp),
-			RawQuery: fmt.Sprintf("relativePath=%s", url.QueryEscape(fileName)),
-		},
-	}
-	wExists := httptest.NewRecorder()
+		rExists := &http.Request{
+			Method: http.MethodGet,
+			URL: &url.URL{
+				Path:     fmt.Sprintf("/docs/%d/file", tx.Revision.VersionTimestamp),
+				RawQuery: fmt.Sprintf("relativePath=%s", url.QueryEscape(fileName)),
+			},
+		}
+		wExists := httptest.NewRecorder()
 
-	bucketService.ServeHTTP(wExists, rExists)
-	require.Equal(t, 200, wExists.Code)
+		bucketService.ServeHTTP(wExists, rExists)
+		require.Equal(t, 200, wExists.Code)
 
-	require.Equal(t, fileContents, wExists.Body.String())
+		assert.Equal(t, fileContents, wExists.Body.String())
+	})
 }

@@ -55,10 +55,10 @@ func Test_Export(t *testing.T) {
 	exporter.RevisionVersion = &firstRevision.VersionTimestamp
 
 	err = exporter.Export()
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	contents, err = testStore.Fs.ReadFile(filepath.Join(exporter.ExportDir, FilesExportSubDir, "a.txt"))
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	assert.Equal(t, regularFile1.Contents, contents)
 

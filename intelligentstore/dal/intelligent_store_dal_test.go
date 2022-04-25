@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jamesrr39/goutil/errorsx"
 	"github.com/jamesrr39/goutil/gofs/mockfs"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	"github.com/stretchr/testify/assert"
@@ -21,7 +22,7 @@ func Test_newIntelligentStoreConnToExisting(t *testing.T) {
 
 	// try to connect to a not existing dir
 	_, err = newIntelligentStoreConnToExisting("/err", MockNowProvider, fs, nil)
-	assert.Equal(t, ErrStoreNotInitedYet, err)
+	assert.Equal(t, ErrStoreNotInitedYet, errorsx.Cause(err))
 
 	_, err = CreateTestStoreAndNewConn("/ab", MockNowProvider, fs)
 	require.Nil(t, err)
@@ -35,7 +36,7 @@ func Test_newIntelligentStoreConnToExisting(t *testing.T) {
 	require.Nil(t, fs.WriteFile("/bad/.backup_data", []byte("abc"), 0700))
 
 	_, err = newIntelligentStoreConnToExisting("/bad", MockNowProvider, fs, nil)
-	assert.Equal(t, ErrStoreDirectoryNotDirectory, err)
+	assert.Equal(t, ErrStoreDirectoryNotDirectory, errorsx.Cause(err))
 }
 
 func Test_createIntelligentStoreAndNewConn(t *testing.T) {
@@ -43,8 +44,7 @@ func Test_createIntelligentStoreAndNewConn(t *testing.T) {
 
 	// test directory not existing yet
 	store, err := CreateTestStoreAndNewConn("/ab", MockNowProvider, fs)
-	require.Nil(t, store)
-	assert.Equal(t, "couldn't get a file listing for '/ab'. Error: 'open /ab: file does not exist'", err.Error())
+	require.Error(t, err)
 
 	err = fs.MkdirAll("/ab", 0700)
 	require.Nil(t, err)
@@ -88,7 +88,7 @@ func Test_CreateBucket(t *testing.T) {
 
 	bucket3, err := mockStore.Store.BucketDAL.CreateBucket("test bucket")
 	require.Nil(t, bucket3)
-	assert.Equal(t, ErrBucketNameAlreadyTaken, err)
+	assert.Equal(t, ErrBucketNameAlreadyTaken, errorsx.Cause(err))
 }
 
 func Test_GetGzippedObjectByHash(t *testing.T) {

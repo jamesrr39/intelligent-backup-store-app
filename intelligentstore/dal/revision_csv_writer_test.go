@@ -43,7 +43,7 @@ func Test_revisionCSVWriter_Write(t *testing.T) {
 	assert.Equal(t, expected, writer.String())
 }
 
-const expected = `path|type|modTime|size|fileMode_int|contents_hash_or_symlink_target
-/a/b.txt|1|1970-01-01T03:46:40+01:00|1024|420|abcdef
-/a/c.txt|1|1970-01-01T03:46:40+01:00|1024|420|abcdefg
+const expected = `path,type,modTime_unix_ms,size,fileMode,contents_hash_or_symlink_target
+/a/b.txt,1,10000000,1024,644,abcdef
+/a/c.txt,1,10000000,1024,644,abcdefg
 `

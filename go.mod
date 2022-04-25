@@ -7,7 +7,7 @@ require (
 	github.com/go-chi/chi/v5 v5.0.7
 	github.com/go-chi/render v1.0.1-0.20171231234154-8c8c7a43d054
 	github.com/golang/protobuf v1.5.2
-	github.com/jamesrr39/csvx v0.0.0-20220423061239-4dc71796879f
+	github.com/jamesrr39/csvx v0.0.0-20220425062802-aae8b2ba2d24
 	github.com/jamesrr39/go-snapshot-testing v0.0.0-20210417135521-a5ca70c087bc
 	github.com/jamesrr39/goutil v0.0.0-20220127172547-37a3bdc40f9a
 	github.com/jamesrr39/semaphore v0.0.0-20180521202200-0d5ddc396086

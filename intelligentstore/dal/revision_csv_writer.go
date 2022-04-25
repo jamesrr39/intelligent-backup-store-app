@@ -3,8 +3,10 @@ package dal
 import (
 	"encoding/csv"
 	"io"
+	"os"
 	"path/filepath"
 	"strconv"
+	"time"
 
 	"github.com/jamesrr39/csvx"
 	"github.com/jamesrr39/goutil/errorsx"
@@ -22,10 +24,23 @@ func (w *revisionCSVWriter) Write(file io.Writer, files []intelligentstore.FileD
 		return errorsx.Wrap(err)
 	}
 
+	customEncoderMap := map[string]csvx.CustomEncoderFunc{
+		"fileMode": func(val interface{}) (string, error) {
+			v := val.(os.FileMode)
+			return strconv.FormatInt(int64(v.Perm()), 8), nil
+
+		},
+		"modTime": func(val interface{}) (string, error) {
+			v := val.(time.Time)
+			return strconv.FormatInt(v.UnixMilli(), 10), nil
+		},
+	}
+
 	regularFileEncoder := csvx.NewEncoder([]string{"path", "type", "modTime", "size", "fileMode", "hash"})
+	regularFileEncoder.CustomEncoderMap = customEncoderMap
 	symlinkEncoder := csvx.NewEncoder([]string{"path", "type", "modTime", "size", "fileMode", "target"})
-	dirEncoder := csvx.NewEncoder([]string{"path", "type", "modTime", "size", "fileMode"})
-	// panic("not implemented properly and not synchronized. See data/bad_csv.csv")
+	symlinkEncoder.CustomEncoderMap = customEncoderMap
+
 	for _, file := range files {
 		var fields []string
 
@@ -40,15 +55,8 @@ func (w *revisionCSVWriter) Write(file io.Writer, files []intelligentstore.FileD
 			if err != nil {
 				return errorsx.Wrap(err)
 			}
-		case *intelligentstore.DirectoryFileDescriptor:
-			fields, err = dirEncoder.Encode(fd)
-			if err != nil {
-				return errorsx.Wrap(err)
-			}
-			// add on one field as no hash/target
-			fields = append(fields, "")
 		default:
-			panic("not implemented type...")
+			return errorsx.Errorf("not implemented type: %d", file.GetFileInfo().Type)
 		}
 
 		err = csvWriter.Write(fields)

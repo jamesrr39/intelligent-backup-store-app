@@ -4,7 +4,7 @@ import "encoding/gob"
 
 type SymlinkFileDescriptor struct {
 	*FileInfo
-	Dest string `json:"dest"`
+	Dest string `json:"dest" csv:"dest"`
 }
 
 func init() {

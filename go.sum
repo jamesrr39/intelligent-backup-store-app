@@ -149,6 +149,10 @@ github.com/jamesrr39/csvx v0.0.0-20220422075605-6e9d2760b1c5 h1:3ac9LJQDEGh7MWZ9
 github.com/jamesrr39/csvx v0.0.0-20220422075605-6e9d2760b1c5/go.mod h1:Fkfey8+kwItx2sU1JHv4vny3F1MlcZrBKUFA7Fg9+Sc=
 github.com/jamesrr39/csvx v0.0.0-20220423061239-4dc71796879f h1:Kiw++O1fXe3M5x0g8c0LzELEPl789jwgX8cjnnf0U3Q=
 github.com/jamesrr39/csvx v0.0.0-20220423061239-4dc71796879f/go.mod h1:Fkfey8+kwItx2sU1JHv4vny3F1MlcZrBKUFA7Fg9+Sc=
+github.com/jamesrr39/csvx v0.0.0-20220423173838-5106f59a1c97 h1:7YK8JiTarymIKp/TD1UXpQs5rRH3qiD33VVomfKzdx4=
+github.com/jamesrr39/csvx v0.0.0-20220423173838-5106f59a1c97/go.mod h1:Fkfey8+kwItx2sU1JHv4vny3F1MlcZrBKUFA7Fg9+Sc=
+github.com/jamesrr39/csvx v0.0.0-20220425062802-aae8b2ba2d24 h1:M6AKfwMqc/DJf5nYMO4uYfsp3oJ4UD2h06OR57sJL3Q=
+github.com/jamesrr39/csvx v0.0.0-20220425062802-aae8b2ba2d24/go.mod h1:Fkfey8+kwItx2sU1JHv4vny3F1MlcZrBKUFA7Fg9+Sc=
 github.com/jamesrr39/go-snapshot-testing v0.0.0-20210417135521-a5ca70c087bc h1:ScOp0DQXsdiQlmCRZq9xJRIO/2TCuIABb6qAjWpfx1w=
 github.com/jamesrr39/go-snapshot-testing v0.0.0-20210417135521-a5ca70c087bc/go.mod h1:E8tE89vHRUnqpU8y7DmXOD7PHv9XuepKsM4/RcCHfnY=
 github.com/jamesrr39/goutil v0.0.0-20210414154457-33b6c6a1358f/go.mod h1:g59B990MlwW4KoGM0uLnztHM++R/s1ULKQjoOngttwU=

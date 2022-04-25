@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -62,7 +63,7 @@ type revisionFilePathWithReaderCreator struct {
 	CreateReaderFunc func(file gofs.File) revisionReader
 }
 
-func (r *RevisionDAL) createReader(revision *intelligentstore.Revision) (revisionReader, errorsx.Error) {
+func (r *RevisionDAL) getRevisionReader(revision *intelligentstore.Revision) (revisionFilePathWithReaderCreator, errorsx.Error) {
 	possibleReaders := []revisionFilePathWithReaderCreator{
 		{
 			FilePath:         r.getRevisionCSVFilePath(revision.Bucket, revision.VersionTimestamp),
@@ -82,18 +83,25 @@ func (r *RevisionDAL) createReader(revision *intelligentstore.Revision) (revisio
 				continue
 			}
 
-			return nil, errorsx.Wrap(err)
+			return revisionFilePathWithReaderCreator{}, errorsx.Wrap(err)
 		}
 
-		f, err := r.fs.Open(reader.FilePath)
-		if err != nil {
-			return nil, errorsx.Wrap(err)
-		}
-
-		return reader.CreateReaderFunc(f), nil
+		return reader, nil
 	}
 
-	return nil, errorsx.Wrap(errors.Errorf("could not find a file"), "bucket", revision.Bucket.ID, "revision", revision.VersionTimestamp.String())
+	return revisionFilePathWithReaderCreator{}, errorsx.Wrap(ErrRevisionDoesNotExist)
+}
+
+func (r *RevisionDAL) createReader(revision *intelligentstore.Revision) (revisionReader, errorsx.Error) {
+	var err error
+	revisionReader, err := r.getRevisionReader(revision)
+
+	f, err := r.fs.Open(revisionReader.FilePath)
+	if err != nil {
+		return nil, errorsx.Wrap(err)
+	}
+
+	return revisionReader.CreateReaderFunc(f), nil
 }
 
 // GetFilesInRevision gets a list of files in this revision
@@ -124,29 +132,19 @@ func (r *RevisionDAL) GetFilesInRevision(bucket *intelligentstore.Bucket, revisi
 }
 
 func (r *RevisionDAL) ReadDir(bucket *intelligentstore.Bucket, revision *intelligentstore.Revision, relativePath intelligentstore.RelativePath) ([]intelligentstore.FileDescriptor, error) {
-	var reader revisionReader
-
-	filePath := r.getRevisionJSONFilePath(bucket, revision.VersionTimestamp)
-	revisionFile, err := r.fs.Open(filePath)
-	if nil != err {
-		return nil, errorsx.Wrap(err, "filePath", filePath)
+	reader, err := r.createReader(revision)
+	if err != nil {
+		return nil, err
 	}
-	defer revisionFile.Close()
 
-	reader = &revisionJSONReader{revisionFile: revisionFile}
 	return reader.ReadDir(relativePath)
 }
 func (r *RevisionDAL) Stat(bucket *intelligentstore.Bucket, revision *intelligentstore.Revision, relativePath intelligentstore.RelativePath) (intelligentstore.FileDescriptor, error) {
-	var reader revisionReader
-
-	filePath := r.getRevisionJSONFilePath(bucket, revision.VersionTimestamp)
-	revisionFile, err := r.fs.Open(filePath)
-	if nil != err {
-		return nil, errorsx.Wrap(err, "filePath", filePath)
+	reader, err := r.createReader(revision)
+	if err != nil {
+		return nil, err
 	}
-	defer revisionFile.Close()
 
-	reader = &revisionJSONReader{revisionFile: revisionFile}
 	return reader.Stat(relativePath)
 }
 
@@ -258,4 +256,89 @@ func filterInDescriptorChildren(descriptor intelligentstore.FileDescriptor, rela
 	dirNameFragments := descriptorFragments[:len(relativePathFragments)+1]
 
 	return intelligentstore.NewDirectoryFileDescriptor(intelligentstore.NewRelativePathFromFragments(dirNameFragments...)), nil
+}
+
+func iteratorReadDir(iterator Iterator, searchPath intelligentstore.RelativePath) ([]intelligentstore.FileDescriptor, error) {
+
+	var relativePathFragments []string
+	if searchPath != "" {
+		relativePathFragments = searchPath.Fragments()
+	}
+
+	var foundDirDescriptor bool
+	if searchPath == "" {
+		foundDirDescriptor = true
+	}
+	descriptorMap := make(map[string]intelligentstore.FileDescriptor)
+
+	for iterator.Next() {
+		descriptor, err := iterator.Scan()
+		if err != nil {
+			return nil, errorsx.Wrap(err)
+		}
+
+		if descriptor.GetFileInfo().RelativePath == searchPath {
+			foundDirDescriptor = true
+		}
+
+		filteredInDescriptor, err := filterInDescriptorChildren(descriptor, relativePathFragments)
+		if err != nil {
+			return nil, errorsx.Wrap(err)
+		}
+
+		if filteredInDescriptor != nil {
+			descriptorMap[filteredInDescriptor.GetFileInfo().RelativePath.String()] = filteredInDescriptor
+		}
+	}
+
+	descriptors := []intelligentstore.FileDescriptor{}
+	for _, desc := range descriptorMap {
+		descriptors = append(descriptors, desc)
+	}
+
+	if !foundDirDescriptor && len(descriptors) == 0 {
+		return nil, os.ErrNotExist
+	}
+
+	// sort for deterministic behaviour
+	sort.Slice(descriptors, func(i, j int) bool {
+		return descriptors[i].GetFileInfo().RelativePath < descriptors[j].GetFileInfo().RelativePath
+	})
+
+	return descriptors, nil
+}
+
+func iteratorStat(iterator Iterator, searchPath intelligentstore.RelativePath) (intelligentstore.FileDescriptor, error) {
+	var relativePathFragments []string
+	if searchPath != "" {
+		relativePathFragments = searchPath.Fragments()
+	}
+
+	for iterator.Next() {
+		descriptor, err := iterator.Scan()
+		if err != nil {
+			return nil, errorsx.Wrap(err)
+		}
+
+		if descriptor.GetFileInfo().RelativePath == searchPath {
+			return descriptor, nil
+		}
+
+		descFragments := descriptor.GetFileInfo().RelativePath.Fragments()
+
+		var isDifferent bool
+		for i, relativePathFragment := range relativePathFragments {
+			if relativePathFragment != descFragments[i] {
+				isDifferent = true
+				break
+			}
+		}
+
+		if !isDifferent {
+			// "descriptor" is a file in a sub directory
+			return intelligentstore.NewDirectoryFileDescriptor(searchPath), nil
+		}
+	}
+
+	return nil, os.ErrNotExist
 }
