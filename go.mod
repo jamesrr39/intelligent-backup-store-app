@@ -12,7 +12,6 @@ require (
 	github.com/jamesrr39/goutil v0.0.0-20220127172547-37a3bdc40f9a
 	github.com/jamesrr39/semaphore v0.0.0-20180521202200-0d5ddc396086
 	github.com/pkg/errors v0.9.1
-	github.com/rakyll/statik v0.1.3
 	github.com/stretchr/testify v1.7.1
 	gopkg.in/alecthomas/kingpin.v2 v2.2.6
 )

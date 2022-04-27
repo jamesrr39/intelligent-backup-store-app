@@ -39,6 +39,14 @@ type IntelligentStoreDAL struct {
 	TempStoreDAL   *TempStoreDAL
 }
 
+func NewIntelligentStoreConnToExistingForMigrationUpgrades(pathToBase string) (*IntelligentStoreDAL, errorsx.Error) {
+	fs := gofs.NewOsFs()
+
+	return newIntelligentStoreConnToExisting(pathToBase, prodNowProvider, fs, &StoreConnOptions{
+		IgnoreMigrationsNotUpToDate: true,
+	})
+}
+
 func NewIntelligentStoreConnToExisting(pathToBase string) (*IntelligentStoreDAL, errorsx.Error) {
 	fs := gofs.NewOsFs()
 
@@ -95,7 +103,7 @@ func checkStoreExists(pathToBase string, fs gofs.Fs) errorsx.Error {
 	return nil
 }
 
-func (s *IntelligentStoreDAL) ensureStatusMetadataFile() errorsx.Error {
+func (s *IntelligentStoreDAL) ensureMigrationsUpToDate() errorsx.Error {
 	statusMetadataFilePath := s.getStatusMetadataFilePath()
 
 	_, err := s.fs.Stat(statusMetadataFilePath)
@@ -146,7 +154,8 @@ func (s *IntelligentStoreDAL) ensureStatusMetadataFile() errorsx.Error {
 }
 
 type StoreConnOptions struct {
-	MaxOpenFiles uint
+	MaxOpenFiles                uint
+	IgnoreMigrationsNotUpToDate bool
 }
 
 var defaultStoreConnOptions = &StoreConnOptions{
@@ -169,7 +178,7 @@ func newIntelligentStoreConnToExisting(pathToBase string, nowFunc NowProvider, f
 		fs:            fs,
 	}
 
-	err = storeDAL.ensureStatusMetadataFile()
+	err = storeDAL.ensureMigrationsUpToDate()
 	if err != nil {
 		return nil, err
 	}

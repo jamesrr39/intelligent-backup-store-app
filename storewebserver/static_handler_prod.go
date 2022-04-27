@@ -1,21 +1,23 @@
-// +build prod
+//go:build prod
 
 package storewebserver
 
 import (
-	"log"
+	"embed"
+	"io/fs"
 	"net/http"
 
-	_ "github.com/jamesrr39/intelligent-backup-store-app/build/client/statik"
-
-	"github.com/rakyll/statik/fs"
+	"github.com/jamesrr39/goutil/errorsx"
 )
 
-func NewClientHandler() http.Handler {
-	statikFS, err := fs.New()
+//go:embed static
+var staticAssets embed.FS
+
+func NewClientHandler() (http.Handler, errorsx.Error) {
+	clientHandler, err := fs.Sub(staticAssets, "static")
 	if err != nil {
-		log.Fatal(err)
+		return nil, errorsx.Wrap(err)
 	}
 
-	return http.FileServer(statikFS)
+	return http.FileServer(http.FS(clientHandler)), nil
 }

@@ -62,8 +62,10 @@ func Test_UploadToStore(t *testing.T) {
 
 	bucket := remoteStore.CreateBucket(t, "docs")
 
-	storeServer := httptest.NewServer(
-		storewebserver.NewStoreWebServer(logger, remoteStore.Store))
+	webServer, err := storewebserver.NewStoreWebServer(logger, remoteStore.Store)
+	require.NoError(t, err)
+
+	storeServer := httptest.NewServer(webServer)
 	defer storeServer.Close()
 
 	log.Printf("store URL: %s\n", storeServer.URL)

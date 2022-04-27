@@ -7,6 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/render"
+	"github.com/jamesrr39/goutil/errorsx"
 	"github.com/jamesrr39/goutil/logpkg"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/dal"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
@@ -19,7 +20,12 @@ type StoreWebServer struct {
 }
 
 // NewStoreWebServer creates a StoreWebServer and sets up the routing for the services it provides.
-func NewStoreWebServer(logger *logpkg.Logger, store *dal.IntelligentStoreDAL) *StoreWebServer {
+func NewStoreWebServer(logger *logpkg.Logger, store *dal.IntelligentStoreDAL) (*StoreWebServer, errorsx.Error) {
+	staticFilesHandler, err := NewClientHandler()
+	if err != nil {
+		return nil, err
+	}
+
 	router := chi.NewRouter()
 	router.Use(middleware.Logger)
 	storeHandler := &StoreWebServer{store, router}
@@ -27,9 +33,9 @@ func NewStoreWebServer(logger *logpkg.Logger, store *dal.IntelligentStoreDAL) *S
 	router.Get("/api/search", storeHandler.handleSearch)
 
 	router.Mount("/api/buckets/", NewBucketService(logger, store))
-	router.Mount("/", NewClientHandler())
+	router.Mount("/", staticFilesHandler)
 
-	return storeHandler
+	return storeHandler, nil
 }
 
 func (s *StoreWebServer) handleSearch(w http.ResponseWriter, r *http.Request) {

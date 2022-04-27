@@ -308,12 +308,17 @@ func setupStartWebappCommand() {
 			return errorsx.Wrap(err)
 		}
 
+		webServer, err := storewebserver.NewStoreWebServer(logger, store)
+		if nil != err {
+			return errorsx.Wrap(err)
+		}
+
 		server := &http.Server{
 			ReadTimeout:       5 * time.Second,
 			WriteTimeout:      10 * time.Second,
 			ReadHeaderTimeout: 5 * time.Second,
 			Addr:              *startWebappAddr,
-			Handler:           storewebserver.NewStoreWebServer(logger, store),
+			Handler:           webServer,
 		}
 
 		log.Printf("starting server on %s\n", server.Addr)
@@ -353,7 +358,7 @@ func setupStatusCommand() {
 func setupRunMigrationsCommand() {
 	cmd := app.Command(intelligentstore.RunMigrationsCommandName, "run one-off migrations")
 	runAction(cmd, func() errorsx.Error {
-		store, err := dal.NewIntelligentStoreConnToExisting(*storeLocation)
+		store, err := dal.NewIntelligentStoreConnToExistingForMigrationUpgrades(*storeLocation)
 		if err != nil {
 			return errorsx.Wrap(err)
 		}

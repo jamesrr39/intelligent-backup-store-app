@@ -2,16 +2,12 @@
 clean:
 	rm -rf build
 
-.PHONY: bundle_static_assets
-bundle_static_assets:
-	go run vendor/github.com/rakyll/statik/statik.go -src=storewebserver/static -dest=build/client
-
 .PHONY: build
-build: clean bundle_static_assets
+build: clean
 	go build -tags "prod" -o build/bin/default/intelligent-store cmd/intelligent-store-app-main.go
 
 .PHONY: build_prod_linux_x86_64
-build_prod_linux_x86_64: clean bundle_static_assets
+build_prod_linux_x86_64: clean
 	env GOOS=linux GOARCH=amd64 go build -tags "prod" -o build/bin/linux_amd64/intelligent-store cmd/intelligent-store-app-main.go
 
 .PHONY: test
