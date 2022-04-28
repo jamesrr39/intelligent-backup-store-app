@@ -178,9 +178,11 @@ func newIntelligentStoreConnToExisting(pathToBase string, nowFunc NowProvider, f
 		fs:            fs,
 	}
 
-	err = storeDAL.ensureMigrationsUpToDate()
-	if err != nil {
-		return nil, err
+	if !options.IgnoreMigrationsNotUpToDate {
+		err = storeDAL.ensureMigrationsUpToDate()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	storeDAL.BucketDAL = &BucketDAL{storeDAL}
