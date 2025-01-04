@@ -1,4 +1,4 @@
-// +build integration
+//go:build integration
 
 package localupload
 
@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/jamesrr39/goutil/patternmatcher"
+	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/intelligentstore"
 	"github.com/jamesrr39/intelligent-backup-store-app/intelligentstore/storetest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

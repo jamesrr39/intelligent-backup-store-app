@@ -28,6 +28,7 @@ type WebUploadClient struct {
 	excludeMatcher patternmatcher.Matcher
 	fs             gofs.Fs
 	backupDryRun   bool
+	maxConcurrency uint
 }
 
 // NewWebUploadClient creates a new WebUploadClient
@@ -38,6 +39,7 @@ func NewWebUploadClient(
 	includeMatcher patternmatcher.Matcher,
 	excludeMatcher patternmatcher.Matcher,
 	backupDryRun bool,
+	maxConcurrency uint,
 ) *WebUploadClient {
 
 	return &WebUploadClient{
@@ -48,12 +50,13 @@ func NewWebUploadClient(
 		excludeMatcher,
 		gofs.NewOsFs(),
 		backupDryRun,
+		maxConcurrency,
 	}
 }
 
 // UploadToStore backs up a directory on the local machine to the bucket in the store in the WebUploadClient
 func (c *WebUploadClient) UploadToStore() errorsx.Error {
-	fileInfosMap, err := uploaders.BuildFileInfosMap(c.fs, c.folderPath, c.includeMatcher, c.excludeMatcher)
+	fileInfosMap, err := uploaders.BuildFileInfosMap(c.fs, c.folderPath, c.includeMatcher, c.excludeMatcher, c.maxConcurrency)
 	if nil != err {
 		return err
 	}

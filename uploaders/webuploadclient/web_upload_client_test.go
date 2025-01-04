@@ -79,6 +79,7 @@ func Test_UploadToStore(t *testing.T) {
 		excludeMatcher,
 		fs,
 		false,
+		1,
 	}
 
 	err = uploadClient.UploadToStore()
@@ -122,6 +123,7 @@ func Test_NewWebUploadClient(t *testing.T) {
 		nil,
 		excludesMatcher,
 		false,
+		1,
 	)
 
 	assert.Equal(t, gofs.NewOsFs(), client.fs)

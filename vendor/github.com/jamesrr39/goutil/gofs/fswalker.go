@@ -1,6 +1,7 @@
 package gofs
 
 import (
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -45,7 +46,7 @@ func Walk(fs Fs, path string, walkFunc filepath.WalkFunc, options WalkOptions) e
 		processSema:     semaphore.NewSemaphore(maxConcurrency),
 		errChan:         make(chan error),
 		addToQueueWg:    new(sync.WaitGroup),
-		processPathChan: make(chan string),
+		processPathChan: make(chan string, maxConcurrency),
 	}
 
 	doneChan := make(chan error)
@@ -58,18 +59,28 @@ func Walk(fs Fs, path string, walkFunc filepath.WalkFunc, options WalkOptions) e
 				return
 
 			case path := <-wt.processPathChan:
-
+				slog.Debug("picking up new path", "path", path)
 				wt.processSema.Add()
-				go func(path string) {
+				slog.Debug("picked up new path", "path", path)
+				func(path string) {
 					defer wt.addToQueueWg.Done()
+					defer func() {
+						slog.Debug("fswalker: about to call Done", "path", path)
+						wt.processSema.Done()
+						slog.Debug("fswalker: Done called. Now: %d\n", path, wt.processSema.CurrentlyRunning())
+					}()
 					fileInfo, err := wt.processPath(path)
-					wt.processSema.Done()
 					if err != nil {
 						wt.errChan <- err
 						return
 					}
 
-					if fileInfo != nil && fileInfo.IsDir() {
+					if fileInfo == nil {
+						// path was excluded, nothing more to do
+						return
+					}
+
+					if fileInfo.IsDir() {
 						err = wt.walkDir(path)
 						if err != nil {
 							wt.errChan <- err
@@ -127,11 +138,15 @@ func (wt *walkerType) walkDir(path string) error {
 		return err
 	}
 
+	slog.Debug("about to put in dirEntryInfos", "items in directory", len(dirEntryInfos), "items in channel count", len(wt.processPathChan), "path", path)
+
+	wt.addToQueueWg.Add(len(dirEntryInfos))
 	for _, dirEntryInfo := range dirEntryInfos {
 		childPath := filepath.Join(path, dirEntryInfo.Name())
 
-		wt.addToQueueWg.Add(1)
-		wt.processPathChan <- childPath
+		go func(childPath string) {
+			wt.processPathChan <- childPath
+		}(childPath)
 	}
 
 	return nil

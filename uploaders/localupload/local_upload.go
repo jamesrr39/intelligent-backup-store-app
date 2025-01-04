@@ -20,8 +20,9 @@ type LocalUploader struct {
 	backupFromLocation string
 	includeMatcher,
 	excludeMatcher patternmatcher.Matcher
-	fs           gofs.Fs
-	backupDryRun bool
+	fs             gofs.Fs
+	backupDryRun   bool
+	maxConcurrency uint
 }
 
 // NewLocalUploader connects to the upload store and returns a LocalUploader
@@ -32,6 +33,7 @@ func NewLocalUploader(
 	includeMatcher,
 	excludeMatcher patternmatcher.Matcher,
 	backupDryRun bool,
+	maxConcurrency uint,
 ) *LocalUploader {
 
 	return &LocalUploader{
@@ -42,12 +44,13 @@ func NewLocalUploader(
 		excludeMatcher,
 		gofs.NewOsFs(),
 		backupDryRun,
+		maxConcurrency,
 	}
 }
 
 // UploadToStore uses the LocalUploader configurations to backup to a store
 func (uploader *LocalUploader) UploadToStore() errorsx.Error {
-	fileInfosMap, err := uploaders.BuildFileInfosMap(uploader.fs, uploader.backupFromLocation, uploader.includeMatcher, uploader.excludeMatcher)
+	fileInfosMap, err := uploaders.BuildFileInfosMap(uploader.fs, uploader.backupFromLocation, uploader.includeMatcher, uploader.excludeMatcher, uploader.maxConcurrency)
 	if nil != err {
 		return err
 	}

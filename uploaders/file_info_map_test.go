@@ -46,12 +46,12 @@ func Test_BuildFileInfosMap(t *testing.T) {
 	require.Nil(t, err)
 
 	t.Run("bad path", func(t *testing.T) {
-		_, err = BuildFileInfosMap(fs, "/bad_path", nil, excludes)
+		_, err = BuildFileInfosMap(fs, "/bad_path", nil, excludes, 1)
 		require.NotNil(t, err)
 	})
 
 	t.Run("good path", func(t *testing.T) {
-		fileInfosMap, err := BuildFileInfosMap(fs, "/test", nil, excludes)
+		fileInfosMap, err := BuildFileInfosMap(fs, "/test", nil, excludes, 1)
 		require.Nil(t, err)
 
 		require.Len(t, fileInfosMap, 1)

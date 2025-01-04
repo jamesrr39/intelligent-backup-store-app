@@ -79,7 +79,7 @@ func (s *LockDAL) removeStoreLock() errorsx.Error {
 }
 
 func (s *LockDAL) getLockFilePath() string {
-	return filepath.Join(s.storeDAL.StoreBasePath, ".backup_data", "locks", "store_lock.txt")
+	return filepath.Join(s.storeDAL.StoreBasePath, ".backup_data", "locks", "store_lock.json")
 }
 
 type StoreLock struct {

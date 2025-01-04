@@ -4,7 +4,7 @@ import (
 	"compress/gzip"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -191,7 +191,7 @@ func (dal *TransactionDAL) backupFile(transaction *intelligentstore.Transaction,
 	defer transaction.Mu.Unlock()
 	transaction.UploadStatusMap[hash] = intelligentstore.UploadStatusCompleted
 
-	log.Printf("file uploaded: %q\n", hash)
+	slog.Debug("file uploaded", "hash", hash)
 
 	return nil
 

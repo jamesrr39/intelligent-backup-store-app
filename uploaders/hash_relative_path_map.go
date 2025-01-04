@@ -2,7 +2,9 @@ package uploaders
 
 import (
 	"log"
+	"log/slog"
 	"path/filepath"
+	"time"
 
 	"github.com/jamesrr39/goutil/errorsx"
 	"github.com/jamesrr39/goutil/gofs"
@@ -27,21 +29,49 @@ func (m HashRelativePathMap) ToSlice() []*intelligentstore.RelativePathWithHash 
 
 func BuildRelativePathsWithHashes(fs gofs.Fs, backupFromLocation string, requiredRelativePaths []intelligentstore.RelativePath) (HashRelativePathMap, errorsx.Error) {
 	hashRelativePathMap := make(HashRelativePathMap)
-	log.Printf("%d relative paths required\n", len(requiredRelativePaths))
+	totalRequiredHashes := len(requiredRelativePaths)
+	log.Printf("%d relative paths required\n", totalRequiredHashes)
+
+
+	// TODO inject channel into function
+	go func() {
+		for {
+			time.Sleep(time.Second * 5)
+			totalCalculated := len(hashRelativePathMap)
+			slog.Info("calculating hashes",
+				"total calculated", totalCalculated,
+				"total", totalRequiredHashes,
+				"progress %", (float64(totalCalculated) * 100 / float64(totalRequiredHashes)),
+			)
+		}
+	}()
+
 	for _, requiredRelativePath := range requiredRelativePaths {
+
 		filePath := filepath.Join(backupFromLocation, string(requiredRelativePath))
-		file, err := fs.Open(filePath)
+
+		hash, err := calculateHash(fs, filePath)
 		if nil != err {
 			return nil, errorsx.Wrap(err, "filePath", filePath)
 		}
-		hash, err := intelligentstore.NewHash(file)
-		if nil != err {
-			return nil, errorsx.Wrap(err, "filePath", filePath)
-		}
-		file.Close()
 
 		hashRelativePathMap[hash] = append(hashRelativePathMap[hash], requiredRelativePath)
 	}
 
 	return hashRelativePathMap, nil
+}
+
+func calculateHash(fs gofs.Fs, filePath string) (intelligentstore.Hash, errorsx.Error) {
+	file, err := fs.Open(filePath)
+	if nil != err {
+		return "", errorsx.Wrap(err)
+	}
+	defer file.Close()
+
+	hash, err := intelligentstore.NewHash(file)
+	if nil != err {
+		return "", errorsx.Wrap(err)
+	}
+
+	return hash, nil
 }

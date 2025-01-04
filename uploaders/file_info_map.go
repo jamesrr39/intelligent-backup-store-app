@@ -4,6 +4,8 @@ import (
 	"log"
 	"os"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/jamesrr39/goutil/errorsx"
 	"github.com/jamesrr39/goutil/gofs"
@@ -24,13 +26,33 @@ func (m FileInfoMap) ToSlice() []*intelligentstore.FileInfo {
 	return fileInfos
 }
 
-func BuildFileInfosMap(fs gofs.Fs, backupFromLocation string, includeMatcher, excludeMatcher patternmatcher.Matcher) (FileInfoMap, errorsx.Error) {
+type fileInfoChanDataType struct {
+	RelativePath intelligentstore.RelativePath
+	FileInfo     *intelligentstore.FileInfo
+}
+
+func BuildFileInfosMap(fs gofs.Fs, backupFromLocation string, includeMatcher, excludeMatcher patternmatcher.Matcher, maxConcurrency uint) (FileInfoMap, errorsx.Error) {
 	_, err := fs.Stat(backupFromLocation)
 	if err != nil {
 		return nil, errorsx.Wrap(err)
 	}
 
 	fileInfosMap := make(FileInfoMap)
+	var pathsFoundCount int64
+
+	var mu sync.Mutex
+	var finished bool
+
+	// TODO inject channel instead of call here
+	go func() {
+		for {
+			if finished {
+				return
+			}
+			log.Printf("Building file map. Paths scanned: %d\n", pathsFoundCount)
+			time.Sleep(time.Second)
+		}
+	}()
 
 	walkFunc := func(path string, osFileInfo os.FileInfo, err error) error {
 		if nil != err {
@@ -59,19 +81,28 @@ func BuildFileInfosMap(fs gofs.Fs, backupFromLocation string, includeMatcher, ex
 
 		fileInfo := intelligentstore.NewFileInfo(fileType, relativePath, osFileInfo.ModTime(), osFileInfo.Size(), osFileInfo.Mode())
 
+		mu.Lock()
 		fileInfosMap[relativePath] = fileInfo
+		pathsFoundCount++
+		mu.Unlock()
+
 		return nil
 	}
 
 	walkOptions := gofs.WalkOptions{
 		IncludesMatcher: includeMatcher,
 		ExcludesMatcher: excludeMatcher,
-		MaxConcurrency:  1000,
+		MaxConcurrency:  maxConcurrency,
 	}
 	err = gofs.Walk(fs, backupFromLocation, walkFunc, walkOptions)
 	if nil != err {
 		return nil, errorsx.Wrap(err)
 	}
+
+	finished = true
+	log.Printf("finished building file map. %d paths found\n", pathsFoundCount)
+
+	// wg.Wait()
 
 	return fileInfosMap, nil
 }

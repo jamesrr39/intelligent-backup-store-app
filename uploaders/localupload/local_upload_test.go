@@ -63,6 +63,7 @@ func Test_UploadToStore(t *testing.T) {
 		excludeMatcher,
 		fs,
 		false,
+		1,
 	}
 
 	err = uploader.UploadToStore()

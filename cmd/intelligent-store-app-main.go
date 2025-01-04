@@ -137,6 +137,7 @@ func setupBackupIntoCommand() {
 	profileFilePath := cmd.Flag("profile", "file to write the profile to").String()
 	includesMatcherLocation := cmd.Flag("include", "path to a file with glob-style patterns to include files").Default("").String()
 	excludesMatcherLocation := cmd.Flag("exclude", "path to a file with glob-style patterns to exclude files").Default("").String()
+	maxConcurrency := cmd.Flag("max-concurrency", "maximum amount of open files at once").Default("100").Uint()
 	runAction(cmd, func() errorsx.Error {
 		excludeMatcher := &patternmatcher.PatternMatcher{}
 		if *excludesMatcherLocation != "" {
@@ -180,13 +181,13 @@ func setupBackupIntoCommand() {
 
 		var uploaderClient uploaders.Uploader
 		if strings.HasPrefix(*storeLocation, "http://") || strings.HasPrefix(*storeLocation, "https://") {
-			uploaderClient = webuploadclient.NewWebUploadClient(*storeLocation, *bucketName, *fromLocation, includeMatcher, excludeMatcher, *dryRun)
+			uploaderClient = webuploadclient.NewWebUploadClient(*storeLocation, *bucketName, *fromLocation, includeMatcher, excludeMatcher, *dryRun, *maxConcurrency)
 		} else {
 			backupStore, err := dal.NewIntelligentStoreConnToExisting(*storeLocation)
 			if nil != err {
 				return err
 			}
-			uploaderClient = localupload.NewLocalUploader(backupStore, *bucketName, *fromLocation, includeMatcher, excludeMatcher, *dryRun)
+			uploaderClient = localupload.NewLocalUploader(backupStore, *bucketName, *fromLocation, includeMatcher, excludeMatcher, *dryRun, *maxConcurrency)
 		}
 
 		return uploaderClient.UploadToStore()
@@ -212,7 +213,7 @@ func setupListBucketsCommand() {
 
 			latestRevision, err := store.BucketDAL.GetLatestRevision(bucket)
 			if nil != err {
-				if dal.ErrNoRevisionsForBucket == err {
+				if dal.ErrNoRevisionsForBucket == errorsx.Cause(err) {
 					latestRevDisplay = err.Error()
 				} else {
 					return err
