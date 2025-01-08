@@ -32,7 +32,6 @@ var (
 	storeLocation *string
 )
 
-//go:generate swagger generate spec
 func main() {
 	logger = logpkg.NewLogger(os.Stderr, logpkg.LogLevelInfo)
 	app = kingpin.New("intelligent-store", "")

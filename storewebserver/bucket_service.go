@@ -43,14 +43,7 @@ func NewBucketService(logger *logpkg.Logger, store *dal.IntelligentStoreDAL) *Bu
 	router := chi.NewRouter()
 	bucketService := &BucketService{logger, store, router, make(openTransactionsMap)}
 
-	// swagger:route GET /api/buckets/ bucket listBuckets
-	//     Produces:
-	//     - application/json
 	router.Get("/", bucketService.handleGetAllBuckets)
-
-	// swagger:route GET /api/buckets/{bucketName} bucket getBucket
-	//     Produces:
-	//     - application/json
 	router.Get("/{bucketName}", bucketService.handleGetBucket)
 	router.Post("/{bucketName}/upload", bucketService.handleCreateRevision)
 	router.Post("/{bucketName}/upload/{revisionTs}/symlinks", bucketService.handleUploadSymlinks)
